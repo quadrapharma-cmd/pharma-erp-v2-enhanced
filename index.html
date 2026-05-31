@@ -485,9 +485,9 @@ function sel(id,opts,val){
 }
 function txa(id,val=''){ return `<textarea id="${id}" rows="3">${val||''}</textarea>`; }
 
-function tbl(headers,rows){
+function tbl(headers,rows,tableId){
   if(!rows.length) return '<div class="empty">\u{1F4ED} \u0644\u0627 \u062a\u0648\u062c\u062f \u0628\u064a\u0627\u0646\u0627\u062a \u0628\u0639\u062f</div>';
-  var tid='tbl'+Math.random().toString(36).slice(2,6);
+  var tid=tableId||(window.currentPage?'tbl_'+window.currentPage+'_'+headers.length:'tbl'+Math.random().toString(36).slice(2,6));
   var total=rows.length;
   var out='';
   if(total>6){
@@ -663,6 +663,29 @@ function go(page){
     if(typeof _filterNav === 'function') _filterNav();
     const alerts = typeof getDashboardAlerts === 'function' ? getDashboardAlerts() : null;
     if(alerts){const b=document.getElementById('alerts-badge');if(b){b.textContent=alerts.length||'';b.style.display=alerts.length?'flex':'none';}}
+    // Column preferences buttons
+    document.querySelectorAll('.tbl-wrap table[id]').forEach(function(t){ if(t.id && typeof addColPrefButton==='function') addColPrefButton(t.id); });
+    // Infinite scroll for tables > 50 rows
+    document.querySelectorAll('.tbl-wrap table tbody').forEach(function(tb){
+      if(tb.rows.length > 50 && !tb.dataset.is){
+        tb.dataset.is = '1';
+        var all = Array.from(tb.rows), shown = 50;
+        all.slice(shown).forEach(function(r){ r.style.display='none'; });
+        var sent = document.createElement('tr');
+        sent.innerHTML = '<td colspan="20" style="text-align:center;padding:8px;color:var(--muted);font-size:12px">▼ تحميل المزيد...</td>';
+        tb.appendChild(sent);
+        var obs = new IntersectionObserver(function(en){
+          en.forEach(function(e){
+            if(e.isIntersecting){
+              all.slice(shown, shown+50).forEach(function(r){ r.style.display=''; });
+              shown += 50;
+              if(shown >= all.length){ sent.style.display='none'; obs.disconnect(); }
+            }
+          });
+        }, {threshold:0.1});
+        obs.observe(sent);
+      }
+    });
   },200);
 }
 
@@ -765,7 +788,7 @@ materials(){
       `<span class="${isLow?'text-amber fw7':''}">${fmt(m.currentStock||0)} ${m.unit}</span>`,
       m.reorderLevel?`${fmt(m.reorderLevel)} ${m.unit}`:'-',
       m.unitCost?`${fmt(m.unitCost)} ج.م`:'-', m.supplier||'-', badge(m.status||'active'),
-      `<div class="action-bar"><button class="icon-btn edit" onclick="editMaterial(${m.id})">${ic.edit}</button><button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('materials',${m.id});go('materials')}">${ic.del}</button></div>`
+      `<div class="action-bar"><button class="icon-btn edit" onclick="editMaterial(${m.id})">${ic.edit}</button><button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('materials',${m.id});go('materials')}">${ic.del}</button><button class="icon-btn" onclick="cloneRecord('materials',${m.id})" style="color:var(--amber)" title="نسخ">📋</button></div>`
     );
   };
   setPage('المواد الخام والتغليف',`${raw.length} خام · ${pkg.length} تغليف`,
@@ -876,7 +899,7 @@ distributors(){
       rows.map(d=>tr(`<strong>${escapeHtml(d.name)}</strong>`,d.contactPerson||'-',d.phone||'-',d.email||'-',
         d.creditLimit?`<span class="text-blue fw7">${fmt(d.creditLimit)} ج.م</span>`:'-',
         badge(d.status||'active'),
-        `<div class="action-bar"><button class="icon-btn edit" onclick="editDistributor(${d.id})">${ic.edit}</button><button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('distributors',${d.id});go('distributors')}">${ic.del}</button><button class="icon-btn" onclick="sendDistributorWhatsApp(${d.id})" style="color:#25d366" title="واتساب">💬</button></div>`
+        `<div class="action-bar"><button class="icon-btn edit" onclick="editDistributor(${d.id})">${ic.edit}</button><button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('distributors',${d.id});go('distributors')}">${ic.del}</button><button class="icon-btn" onclick="cloneRecord('distributors',${d.id})" style="color:var(--amber)" title="نسخ">📋</button><button class="icon-btn" onclick="sendDistributorWhatsApp(${d.id})" style="color:#25d366" title="واتساب">💬</button></div>`
       ))
     )}</div>`);
 },
@@ -934,7 +957,7 @@ employees(){
       rows.map(e=>tr(`<strong>${escapeHtml(e.name)}</strong>`,e.department,e.position,
         e.salary?`<span class="fw7">${fmt(e.salary)} ج.م</span>`:'-',
         e.hireDate||'-', e.phone||'-', badge(e.status||'active'),
-        `<div class="action-bar"><button class="icon-btn edit" onclick="editEmployee(${e.id})">${ic.edit}</button><button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('employees',${e.id});go('employees')}">${ic.del}</button></div>`
+        `<div class="action-bar"><button class="icon-btn edit" onclick="editEmployee(${e.id})">${ic.edit}</button><button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('employees',${e.id});go('employees')}">${ic.del}</button><button class="icon-btn" onclick="cloneRecord('employees',${e.id})" style="color:var(--amber)" title="نسخ">📋</button></div>`
       ))
     )}</div>`);
 },
@@ -1104,7 +1127,7 @@ function renderExpTbl(type){
     rows.map(e=>tr(`<strong>${e.description}</strong>`,
       `<span class="${e.expenseType==='direct'?'text-blue':'text-purple'} fw7">${fmt(e.amount)} ج.م</span>`,
       badge(e.expenseType),e.category,e.department||'-',e.expenseDate||'-',e.reference||'-',
-      `<div class="action-bar"><button class="icon-btn edit" onclick="editExpense(${e.id})">${ic.edit}</button><button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('expenses',${e.id});go('expenses')}">${ic.del}</button></div>`
+      `<div class="action-bar"><button class="icon-btn edit" onclick="editExpense(${e.id})">${ic.edit}</button><button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('expenses',${e.id});go('expenses')}">${ic.del}</button><button class="icon-btn" onclick="cloneRecord('expenses',${e.id})" style="color:var(--amber)" title="نسخ">📋</button></div>`
     ))
   ));
 }
@@ -1545,50 +1568,6 @@ function saveCampaign(id){
 // ═══════════════════════════════════════════════
 // EXCEL EXPORT
 // ═══════════════════════════════════════════════
-function exportExcel(){
-  if(typeof XLSX==='undefined'){alert('جاري تحميل المكتبة، حاول مرة أخرى');return;}
-  const wb=XLSX.utils.book_new();
-  const sheets=[
-    ['المنتجات',getAll('products').map(p=>({'اسم المنتج':p.name,'الاسم العلمي':p.scientificName||'','الشكل':p.dosageForm,'التركيز':p.strength||'','الوحدة':p.unit||'','سعر البيع':Number(p.sellingPrice||0),'الحالة':p.status||''}))],
-    ['المواد الخام',getAll('materials').map(m=>({'اسم المادة':m.name,'النوع':m.materialType==='raw_material'?'خام':'تغليف','الوحدة':m.unit,'المخزون':Number(m.currentStock||0),'سعر الوحدة':Number(m.unitCost||0),'المورد':m.supplier||''}))],
-    ['أوامر الإنتاج',getAll('productionOrders').map(o=>({'رقم الأمر':o.orderNumber||'PO-'+o.id,'المنتج':getAll('products').find(p=>p.id===o.productId)?.name||'','المصنع':getAll('cmos').find(c=>c.id===o.cmoId)?.name||'','الكمية':Number(o.quantity||0),'الإجمالي':Number(o.totalCost||0),'الحالة':o.status||''}))],
-    ['المخزون',getAll('inventory').map(i=>({'المنتج':getAll('products').find(p=>p.id===i.productId)?.name||'','الكمية':Number(i.quantity||0),'تكلفة الوحدة':Number(i.unitCost||0),'القيمة الإجمالية':Number(i.quantity||0)*Number(i.unitCost||0),'تاريخ الانتهاء':i.expiryDate||''}))],
-    ['الموزعون',getAll('distributors').map(d=>({'اسم الشركة':d.name,'المسؤول':d.contactPerson||'','الهاتف':d.phone||'','حد الائتمان':Number(d.creditLimit||0),'الحالة':d.status||''}))],
-    ['المبيعات',getAll('deliveryOrders').map(o=>({'رقم الأمر':o.orderNumber||'DO-'+o.id,'الموزع':getAll('distributors').find(d=>d.id===o.distributorId)?.name||'','التاريخ':o.orderDate||'','المبلغ':Number(o.totalAmount||0),'الحالة':o.status||''}))],
-    ['المصروفات',getAll('expenses').map(e=>({'الوصف':e.description,'المبلغ':Number(e.amount||0),'النوع':e.expenseType==='direct'?'مباشر':'غير مباشر','الفئة':e.category,'القسم':e.department||'','التاريخ':e.expenseDate||''}))],
-    ['الموظفون',getAll('employees').map(e=>({'الاسم':e.name,'القسم':e.department,'المنصب':e.position,'الراتب الشهري':Number(e.salary||0),'الراتب السنوي':Number(e.salary||0)*12,'الحالة':e.status||''}))],
-    ['الحسابات والذمم',getAll('receivables').map(r=>({'الموزع':getAll('distributors').find(d=>d.id===r.distributorId)?.name||r.distributorName||'','رقم الفاتورة':r.invoiceNumber||'','المبلغ':Number(r.amount||0),'تاريخ الاستحقاق':r.dueDate||'','الحالة':r.status||''}))],
-    ['المشتريات',getAll('purchaseOrders').map(o=>({'رقم الطلب':o.poNumber||'','المادة':o.materialName||'','المورد':o.supplier||'','الكمية':Number(o.quantity||0),'الإجمالي':Number(o.totalAmount||0),'الحالة':o.status||''}))],
-    ['ضبط الجودة',getAll('qualityChecks').map(r=>({'المنتج':getAll('products').find(p=>p.id===r.productId)?.name||'','رقم الدفعة':r.batchNumber||'','تاريخ الفحص':r.checkDate||'','الكيميائي':r.analyst||'','النتيجة':r.result||''}))],
-    ['المرتجعات',getAll('returns').map(r=>({'الموزع':getAll('distributors').find(d=>d.id===r.distributorId)?.name||'','المنتج':getAll('products').find(p=>p.id===r.productId)?.name||'','الكمية':Number(r.quantity||0),'السبب':r.reason||'','الإجراء':r.action||'','التاريخ':r.returnDate||''}))],
-    ['العقود',getAll('contracts').map(c=>({'الطرف الثاني':c.partyName,'نوع العقد':c.contractType||'','تاريخ البداية':c.startDate||'','تاريخ الانتهاء':c.endDate||'','القيمة':Number(c.value||0)}))],
-  ];
-  const dels=getAll('deliveryOrders'),exps=getAll('expenses'),pos=getAll('productionOrders'),inv=getAll('inventory');
-  const rev=dels.filter(d=>d.status==='delivered').reduce((s,d)=>s+Number(d.totalAmount||0),0);
-  const dc=exps.filter(e=>e.expenseType==='direct').reduce((s,e)=>s+Number(e.amount||0),0);
-  const ic=exps.filter(e=>e.expenseType==='indirect').reduce((s,e)=>s+Number(e.amount||0),0);
-  const pc=pos.reduce((s,p)=>s+Number(p.totalCost||0),0);
-  const np=rev-dc-ic-pc,iv=inv.reduce((s,i)=>s+Number(i.quantity||0)*Number(i.unitCost||0),0);
-  sheets.push(['التقرير المالي',[
-    {'البيان':'إجمالي الإيرادات','القيمة (ج.م)':rev},
-    {'البيان':'تكاليف الإنتاج CMO','القيمة (ج.م)':pc},
-    {'البيان':'تكاليف مباشرة','القيمة (ج.م)':dc},
-    {'البيان':'تكاليف غير مباشرة','القيمة (ج.م)':ic},
-    {'البيان':'صافي الربح / الخسارة','القيمة (ج.م)':np},
-    {'البيان':'قيمة المخزون','القيمة (ج.م)':iv},
-    {'البيان':'هامش الربح %','القيمة (ج.م)':rev>0?((np/rev)*100).toFixed(2)+'%':'0%'},
-  ]]);
-  sheets.push(['الأصول الثابتة',getAll('assets').map(a=>({
-    'اسم الأصل':a.name,'الفئة':a.category||'','تاريخ الشراء':a.purchaseDate||'',
-    'تكلفة الشراء':Number(a.purchaseCost||0),'العمر الإنتاجي':Number(a.usefulLife||0),
-    'معدل الإهلاك %':Number(a.depRate||0),'مجمع الإهلاك':Number(a.accDepreciation||0),
-    'القيمة الدفترية':Number(a.purchaseCost||0)-Number(a.accDepreciation||0),
-    'الحالة':a.status||''
-  }))]);
-  sheets.forEach(([name,data])=>XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(data),name));
-  XLSX.writeFile(wb,`ERP-Report-${new Date().toISOString().slice(0,10)}.xlsx`);
-}
-
 // ═══════════════════════════════════════════════
 // NEW PAGES — 10 وحدات جديدة
 // ═══════════════════════════════════════════════
@@ -1770,7 +1749,7 @@ PAGES.contracts=function(){
           `<span class="${days<0?'text-red':days<=90?'text-amber':'text-green'} fw7">${days<0?'منتهي':days+' يوم'}</span>`,
           r.value?fmt(r.value)+' ج.م':'-',
           badge(days<0?'expired':days<=90?'pending':'active'),
-          `<div class="action-bar"><button class="icon-btn edit" onclick="editContract(${r.id})">${ic.edit}</button><button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('contracts',${r.id});go('contracts')}">${ic.del}</button></div>`);
+          `<div class="action-bar"><button class="icon-btn edit" onclick="editContract(${r.id})">${ic.edit}</button><button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('contracts',${r.id});go('contracts')}">${ic.del}</button><button class="icon-btn" onclick="cloneRecord('contracts',${r.id})" style="color:var(--amber)" title="نسخ">📋</button></div>`);
       })
     )}</div>`);
 };
