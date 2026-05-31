@@ -302,6 +302,7 @@ aside.sidebar-collapsed .nav-item { justify-content: center !important; }
 
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -402,13 +403,14 @@ const defaultDB = {
   registrations:[], distributors:[], deliveryOrders:[], deliveryItems:[],
   expenses:[], employees:[], budgetLines:[], campaigns:[], salesTargets:[],
   receivables:[], payrollRuns:[], purchaseOrders:[], qualityChecks:[],
-  returns:[], contracts:[], assets:[], eInvoices:[], taxLines:[], batchMaterials:[], productIngredients:[], partnerAccounts:[], partnerEntries:[], journalEntries:[], chartOfAccounts:[], historicalBalances:[], appUsers:[], auditLogs:[],
+  returns:[], contracts:[], assets:[], eInvoices:[], taxLines:[], batchMaterials:[], productIngredients:[], partnerAccounts:[], partnerEntries:[], journalEntries:[], chartOfAccounts:[], historicalBalances:[], appUsers:[], auditLogs:[], leaveRequests:[], appraisals:[], equipment:[],
+  deviations:[], stabilityStudies:[], supplierRatings:[],
   _seq:{}
 };
 
 let DB = loadDB();
 // Migration guard: ensure all tables exist
-['productIngredients','historicalBalances','appUsers','chartOfAccounts','auditLogs',
+['productIngredients','historicalBalances','appUsers','chartOfAccounts','auditLogs','leaveRequests','appraisals','equipment','deviations','stabilityStudies','supplierRatings',
  'partnerAccounts','partnerEntries','journalEntries','receivables',
  'purchaseOrders','payrollRuns','qualityChecks','salesTargets'].forEach(function(t){
   if(!Array.isArray(DB[t])) DB[t]=[];
@@ -621,6 +623,13 @@ const navItems=[
   {id:'taxes',icon:'🏦',label:'الضرائب العامة',sec:'الضرائب'},
   {id:'users',icon:'⚙️',label:'الإعدادات والمستخدمون',sec:'الإعدادات'},
   {id:'auditlog',icon:'📋',label:'سجل التدقيق',sec:'الإعدادات'},
+  {id:'stability',icon:'🔬',label:'دراسات الثبات',sec:'الجودة والتسجيل'},
+  {id:'equipment',icon:'⚙️',label:'معايرة المعدات',sec:'الجودة والتسجيل'},
+  {id:'deviations',icon:'⚠️',label:'إدارة الانحرافات',sec:'الجودة والتسجيل'},
+  {id:'attendance',icon:'📅',label:'الحضور والإجازات',sec:'الموظفون'},
+  {id:'appraisals',icon:'📊',label:'تقييم الأداء',sec:'الموظفون'},
+  {id:'salarystructure',icon:'💲',label:'هيكل الرواتب',sec:'الموظفون'},
+  {id:'supplierrating',icon:'⭐',label:'تقييم الموردين',sec:'المشتريات'},
 ];
 
 function renderNav(){
@@ -862,7 +871,7 @@ distributors(){
       rows.map(d=>tr(`<strong>${escapeHtml(d.name)}</strong>`,d.contactPerson||'-',d.phone||'-',d.email||'-',
         d.creditLimit?`<span class="text-blue fw7">${fmt(d.creditLimit)} ج.م</span>`:'-',
         badge(d.status||'active'),
-        `<div class="action-bar"><button class="icon-btn edit" onclick="editDistributor(${d.id})">${ic.edit}</button><button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('distributors',${d.id});go('distributors')}">${ic.del}</button></div>`
+        `<div class="action-bar"><button class="icon-btn edit" onclick="editDistributor(${d.id})">${ic.edit}</button><button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('distributors',${d.id});go('distributors')}">${ic.del}</button><button class="icon-btn" onclick="sendDistributorWhatsApp(${d.id})" style="color:#25d366" title="واتساب">💬</button></div>`
       ))
     )}</div>`);
 },
@@ -879,7 +888,7 @@ deliveries(){
         o.orderDate||'-',
         o.totalAmount?`<span class="text-green fw7">${fmt(o.totalAmount)} ج.م</span>`:'-',
         badge(o.status||'pending'),
-        `<div class="action-bar">${o.status==='pending'?`<button class="icon-btn" style="color:var(--green)" onclick="if(confirm('تأكيد التسليم؟')){update('deliveryOrders',${o.id},{status:'delivered'});go('deliveries')}" title="تأكيد التسليم">${ic.check}</button>`:''}<button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('deliveryOrders',${o.id});go('deliveries')}">${ic.del}</button><button class="icon-btn edit" onclick="editDelivery(${o.id})">${ic.edit}</button></div>`
+        `<div class="action-bar">${o.status==='pending'?`<button class="icon-btn" style="color:var(--green)" onclick="if(confirm('تأكيد التسليم؟')){update('deliveryOrders',${o.id},{status:'delivered'});go('deliveries')}" title="تأكيد التسليم">${ic.check}</button>`:''}<button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('deliveryOrders',${o.id});go('deliveries')}">${ic.del}</button><button class="icon-btn edit" onclick="editDelivery(${o.id})">${ic.edit}</button><button class="icon-btn" onclick="showInvoiceWithQR(${o.id})" style="color:var(--purple)" title="QR الفاتورة">🔲</button></div>`
       ))
     )}</div>`);
 },
@@ -7857,7 +7866,7 @@ PAGES.vat = function(){
   const netVat    = totalOut - totalIn;
 
   setPage('ضريبة القيمة المضافة (VAT)','حساب ضريبة المبيعات والمشتريات',
-    `<button class="btn btn-green" onclick="addVATEntry()">${ic.plus} إضافة قيد ضريبي يدوي</button>`,
+    `<div style="display:flex;gap:8px"><button class="btn btn-green" onclick="addVATEntry()">${ic.plus} إضافة قيد يدوي</button><button class="btn btn-white" onclick="exportVATReturn()">📤 تصدير إقرار VAT</button></div>`,
     `<div class="stats-grid g4" style="margin-bottom:16px">
       <div class="stat-card"><div class="lbl">مخرجات VAT (المبيعات)</div><div class="val text-red">${fmt(totalOut)} ج.م</div></div>
       <div class="stat-card"><div class="lbl">مدخلات VAT (المشتريات)</div><div class="val text-green">${fmt(totalIn)} ج.م</div></div>
@@ -10145,6 +10154,1124 @@ if(_origGo3){
     }, 150);
   };
 }
+
+// ════════════════════════════════════════════════════════════════
+// REMAINING FEATURES — كل التوصيات المتبقية
+// ════════════════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════
+// أمان — SECURITY
+// ══════════════════════════════════════════
+
+// 2. تشفير كلمات المرور بـ SHA-256 مع salt
+async function hashPasswordSecure(password){
+  const salt = 'pharma_erp_2024_salt_' + password.length;
+  const combined = salt + password;
+  const msgUint8 = new TextEncoder().encode(combined);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return 'sha256:' + hashArray.map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+async function verifyPassword(password, storedHash){
+  if(!storedHash) return false;
+  if(storedHash.startsWith('sha256:')){
+    const computed = await hashPasswordSecure(password);
+    return computed === storedHash;
+  }
+  // Fallback for old simple hash
+  return _authHash(password) === storedHash;
+}
+
+// Override _doLogin to use secure hash
+const _origDoLogin = window._doLogin;
+window._doLogin = async function(){
+  const u = (document.getElementById('_au')?.value||'').trim();
+  const p = document.getElementById('_ap')?.value||'';
+  const errEl = document.getElementById('_aerr');
+  const showErr = msg => { if(errEl){errEl.textContent=msg;errEl.style.display='block';} document.getElementById('_ap').value=''; };
+  if(!u||!p){ showErr('يرجى تعبئة الحقلين'); return; }
+  const users = getAll('appUsers');
+  if(users.length===0&&u==='admin'&&p==='admin123'){
+    const hashed = await hashPasswordSecure('admin123');
+    insert('appUsers',{username:'admin',password:hashed,name:'مدير النظام',role:'admin',active:true});
+    _loginSuccess({username:'admin',name:'مدير النظام',role:'admin'});
+    return;
+  }
+  const user = users.find(x=>x.username===u&&x.active!==false);
+  if(!user){ showErr('اسم المستخدم غير موجود'); return; }
+  const valid = await verifyPassword(p, user.password);
+  if(!valid){ document.getElementById('_ap').value=''; showErr('كلمة المرور غير صحيحة'); return; }
+  _loginSuccess({username:user.username,name:user.name,role:user.role,id:user.id});
+};
+
+// Override _saveUser to use secure hash
+const _origSaveUser = window._saveUser;
+window._saveUser = async function(id){
+  const uname=(document.getElementById('_uu')?.value||'').trim();
+  const uname_full=(document.getElementById('_un')?.value||'').trim();
+  const pass=document.getElementById('_up')?.value||'';
+  const pass2=document.getElementById('_up2')?.value||'';
+  const role=document.getElementById('_ur')?.value||'viewer';
+  if(!uname||!uname_full){alert('يرجى تعبئة اسم الدخول والاسم الكامل');return;}
+  if(!id&&!pass){alert('يرجى إدخال كلمة المرور');return;}
+  if(pass&&pass!==pass2){alert('كلمة المرور غير متطابقة');return;}
+  if(pass&&pass.length<6){alert('كلمة المرور يجب أن تكون 6 أحرف على الأقل');return;}
+  const dup=getAll('appUsers').find(x=>x.username===uname&&(!id||x.id!==id));
+  if(dup){alert('اسم الدخول موجود بالفعل');return;}
+  const d={username:uname,name:uname_full,role,active:true};
+  if(pass) d.password = await hashPasswordSecure(pass);
+  id?update('appUsers',id,d):insert('appUsers',d);
+  closeModal();go('users');
+};
+
+// 3. صلاحيات على insert/update/remove للـ readonly users
+(function patchDBForReadonly(){
+  const _origInsert = window.insert;
+  const _origUpdate = window.update;
+  const _origRemove = window.remove;
+  window.insert = function(t,obj){
+    if(window._authUser && _ROLES[window._authUser.role]?.readonly){
+      showNotif&&showNotif('⛔ ليس لديك صلاحية تعديل البيانات','error');
+      return null;
+    }
+    return _origInsert(t,obj);
+  };
+  window.update = function(t,id,patch){
+    if(window._authUser && _ROLES[window._authUser.role]?.readonly){
+      showNotif&&showNotif('⛔ ليس لديك صلاحية تعديل البيانات','error');
+      return null;
+    }
+    return _origUpdate(t,id,patch);
+  };
+  window.remove = function(t,id){
+    if(window._authUser && _ROLES[window._authUser.role]?.readonly){
+      showNotif&&showNotif('⛔ ليس لديك صلاحية حذف البيانات','error');
+      return;
+    }
+    return _origRemove(t,id);
+  };
+})();
+
+
+// ══════════════════════════════════════════
+// رسوم بيانية — CHARTS (Chart.js)
+// ══════════════════════════════════════════
+
+// 5. رسوم بيانية في التقارير
+function renderChart(canvasId, type, labels, datasets, options={}){
+  const canvas = document.getElementById(canvasId);
+  if(!canvas || typeof Chart === 'undefined') return;
+  // Destroy existing
+  if(canvas._chart) canvas._chart.destroy();
+  canvas._chart = new Chart(canvas, {
+    type, data:{labels, datasets},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{labels:{color:'#e6edf3',font:{family:'Cairo'}}},
+        tooltip:{titleFont:{family:'Cairo'},bodyFont:{family:'Cairo'}} },
+      scales: type!=='pie'&&type!=='doughnut' ? {
+        x:{ticks:{color:'#8b949e'},grid:{color:'#30363d'}},
+        y:{ticks:{color:'#8b949e'},grid:{color:'#30363d'}}
+      } : {},
+      ...options }
+  });
+}
+
+function getChartColors(n){
+  const colors=['#2ea043','#388bfd','#f85149','#e3b341','#bc8cff','#3fb950','#58a6ff','#ff7b72','#d29922','#a371f7'];
+  return Array.from({length:n},(_,i)=>colors[i%colors.length]);
+}
+
+// Patch dashboard to include charts
+const _origDashboard2 = PAGES.dashboard;
+PAGES.dashboard = function(){
+  _origDashboard2();
+  setTimeout(renderDashboardCharts, 200);
+};
+
+function renderDashboardCharts(){
+  const content = document.getElementById('pg-content');
+  if(!content || typeof Chart === 'undefined') return;
+
+  // Check if charts section already added
+  if(document.getElementById('dashboard-charts')) return;
+
+  const F = typeof calcFinancials === 'function' ? calcFinancials() : {};
+  const months = MONTHS.slice(0,new Date().getMonth()+1);
+
+  // Revenue by month (from deliveries)
+  const deliveries = getAll('deliveryOrders').filter(d=>d.status==='delivered');
+  const revByMonth = new Array(12).fill(0);
+  deliveries.forEach(d=>{
+    const m = new Date(d.orderDate||'').getMonth();
+    if(!isNaN(m)) revByMonth[m] += Number(d.totalAmount||0);
+  });
+
+  // Expenses by category
+  const expenses = getAll('expenses');
+  const expByCat = {};
+  expenses.forEach(e=>{ expByCat[e.category]=(expByCat[e.category]||0)+Number(e.amount||0); });
+
+  // Products by type/form
+  const products = getAll('products');
+  const prodByForm = {};
+  products.forEach(p=>{ prodByForm[p.dosageForm||'أخرى']=(prodByForm[p.dosageForm||'أخرى']||0)+1; });
+
+  const chartsDiv = document.createElement('div');
+  chartsDiv.id = 'dashboard-charts';
+  chartsDiv.style.marginTop = '16px';
+  chartsDiv.innerHTML = `
+    <div class="stats-grid g3" style="margin-bottom:16px">
+      <div class="card" style="padding:16px">
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text)">📈 الإيرادات الشهرية (ج.م)</h3>
+        <div style="height:180px"><canvas id="chart-rev"></canvas></div>
+      </div>
+      <div class="card" style="padding:16px">
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text)">🧾 المصروفات بالفئة</h3>
+        <div style="height:180px"><canvas id="chart-exp"></canvas></div>
+      </div>
+      <div class="card" style="padding:16px">
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text)">💊 المنتجات بالشكل الدوائي</h3>
+        <div style="height:180px"><canvas id="chart-prod"></canvas></div>
+      </div>
+    </div>`;
+  content.appendChild(chartsDiv);
+
+  // Revenue chart
+  const revColors = getChartColors(months.length);
+  renderChart('chart-rev','bar',months,
+    [{label:'الإيرادات',data:revByMonth.slice(0,months.length),backgroundColor:revColors,borderRadius:4}]);
+
+  // Expenses chart
+  const catKeys = Object.keys(expByCat);
+  renderChart('chart-exp','doughnut',catKeys,
+    [{data:catKeys.map(k=>expByCat[k]),backgroundColor:getChartColors(catKeys.length)}]);
+
+  // Products chart
+  const formKeys = Object.keys(prodByForm);
+  renderChart('chart-prod','pie',formKeys,
+    [{data:formKeys.map(k=>prodByForm[k]),backgroundColor:getChartColors(formKeys.length)}]);
+}
+
+
+// ══════════════════════════════════════════
+// استيراد Excel — EXCEL IMPORT
+// ══════════════════════════════════════════
+
+// 6. استيراد Excel للمنتجات والمواد والموظفين والمصروفات
+function showImportExcelPanel(){
+  showModal(modal('📥 استيراد من Excel', `
+    <div style="padding:12px;background:rgba(56,139,253,.08);border:1px solid rgba(56,139,253,.2);border-radius:8px;margin-bottom:14px;font-size:12px">
+      💡 حمّل قالب Excel أولاً، امله بالبيانات، ثم ارفعه هنا
+    </div>
+    <div class="form-row">
+      ${fg('نوع البيانات',sel('imp-type',[
+        {v:'products',l:'المنتجات 💊'},
+        {v:'materials',l:'المواد الخام 🧪'},
+        {v:'employees',l:'الموظفون 👥'},
+        {v:'expenses',l:'المصروفات 🧾'},
+        {v:'distributors',l:'الموزعون 🚚'},
+      ],'products'))}
+    </div>
+    <div style="margin:12px 0">
+      <button class="btn btn-white btn-sm" onclick="downloadImportTemplate()">⬇️ تحميل قالب Excel</button>
+    </div>
+    <div style="border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer" onclick="document.getElementById('excel-file-input').click()">
+      <div style="font-size:32px;margin-bottom:8px">📂</div>
+      <div style="font-size:13px;color:var(--muted)">اضغط لاختيار ملف Excel (.xlsx)</div>
+      <input type="file" id="excel-file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="processExcelFile(this)">
+    </div>
+    <div id="import-preview" style="margin-top:12px"></div>
+    <div class="form-actions">
+      <button class="btn btn-green" id="import-confirm-btn" style="display:none" onclick="confirmImport()">✅ تأكيد الاستيراد</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+let _importData = [];
+
+function downloadImportTemplate(){
+  const type = document.getElementById('imp-type')?.value || 'products';
+  const templates = {
+    products: [['اسم المنتج','الشكل الدوائي','التركيز','رقم التسجيل','الشركة المصنعة','الحالة']],
+    materials: [['اسم المادة','النوع','الوحدة','المخزون الحالي','حد إعادة الطلب','تكلفة الوحدة','المورد']],
+    employees: [['الاسم','القسم','المسمى الوظيفي','الراتب الأساسي','رقم الهاتف','تاريخ التعيين']],
+    expenses: [['تاريخ المصروف','النوع','الفئة','الوصف','القسم','المبلغ']],
+    distributors: [['اسم الموزع','المحافظة','العنوان','رقم الهاتف','البريد الإلكتروني','نوع التوزيع']],
+  };
+  const headers = templates[type] || templates.products;
+  if(typeof XLSX === 'undefined'){ alert('مكتبة Excel غير محملة'); return; }
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(headers);
+  XLSX.utils.book_append_sheet(wb, ws, 'البيانات');
+  XLSX.writeFile(wb, `template_${type}.xlsx`);
+}
+
+function processExcelFile(input){
+  const file = input.files[0];
+  if(!file){ return; }
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1});
+      if(rows.length < 2){ document.getElementById('import-preview').innerHTML = '<div class="alert alert-warn">الملف فارغ أو لا يحتوي على بيانات</div>'; return; }
+      const headers = rows[0];
+      const dataRows = rows.slice(1).filter(r=>r.some(c=>c));
+      _importData = {headers, rows:dataRows, type:document.getElementById('imp-type')?.value};
+      const preview = document.getElementById('import-preview');
+      if(preview){
+        preview.innerHTML = `<div style="padding:10px;background:rgba(46,160,67,.08);border:1px solid rgba(46,160,67,.2);border-radius:8px;font-size:12px;margin-bottom:8px">
+          ✅ تم قراءة ${dataRows.length} سجل — ${headers.length} عمود
+        </div>
+        <div style="max-height:150px;overflow-y:auto;font-size:11px">
+          ${dataRows.slice(0,5).map(r=>'<div style="padding:3px 0;border-bottom:1px solid var(--border)">' + r.slice(0,4).join(' | ') + '</div>').join('')}
+          ${dataRows.length>5?`<div style="color:var(--muted)">... و ${dataRows.length-5} سجل آخر</div>`:''}
+        </div>`;
+      }
+      const btn = document.getElementById('import-confirm-btn');
+      if(btn) btn.style.display = 'block';
+    } catch(err){
+      document.getElementById('import-preview').innerHTML = '<div style="color:var(--red)">خطأ في قراءة الملف: ' + err.message + '</div>';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function confirmImport(){
+  if(!_importData || !_importData.rows) return;
+  const {headers, rows, type} = _importData;
+  let imported = 0;
+  const fieldMap = {
+    products: {'اسم المنتج':'name','الشكل الدوائي':'dosageForm','التركيز':'strength','رقم التسجيل':'registrationNumber','الشركة المصنعة':'manufacturer','الحالة':'status'},
+    materials: {'اسم المادة':'name','النوع':'materialType','الوحدة':'unit','المخزون الحالي':'currentStock','حد إعادة الطلب':'reorderLevel','تكلفة الوحدة':'unitCost','المورد':'approvedSupplier'},
+    employees: {'الاسم':'name','القسم':'department','المسمى الوظيفي':'position','الراتب الأساسي':'salary','رقم الهاتف':'phone','تاريخ التعيين':'hireDate'},
+    expenses: {'تاريخ المصروف':'expenseDate','النوع':'expenseType','الفئة':'category','الوصف':'description','القسم':'department','المبلغ':'amount'},
+    distributors: {'اسم الموزع':'name','المحافظة':'governorate','العنوان':'address','رقم الهاتف':'phone','البريد الإلكتروني':'email','نوع التوزيع':'distributionType'},
+  };
+  const map = fieldMap[type] || {};
+  rows.forEach(row=>{
+    const obj = {};
+    headers.forEach((h,i)=>{ const field=map[h]; if(field&&row[i]!==undefined) obj[field]=String(row[i]).trim(); });
+    if(Object.keys(obj).length > 0){ insert(type, obj); imported++; }
+  });
+  closeModal();
+  showNotif&&showNotif(`✅ تم استيراد ${imported} سجل من Excel`, 'success');
+  if(window.currentPage&&PAGES[currentPage]) PAGES[currentPage]();
+}
+
+
+// ══════════════════════════════════════════
+// تصدير VAT للـ ETA — VAT RETURN EXPORT
+// ══════════════════════════════════════════
+
+// 21. تصدير إقرار VAT بتنسيق ETA
+function exportVATReturn(){
+  const dels = getAll('deliveryOrders').filter(d=>d.status==='delivered');
+  const purs = getAll('purchaseOrders').filter(p=>p.status==='مستلم');
+  const now = new Date();
+  const period = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+
+  const vatReturn = {
+    returnPeriod: period,
+    submissionDate: now.toISOString(),
+    outputVAT: dels.reduce((s,d)=>s+Number(d.vatAmount||0),0),
+    inputVAT: purs.reduce((s,p)=>s+Number(p.vatAmount||0),0),
+    netVATDue: 0,
+    salesDetails: dels.map(d=>({
+      invoiceNumber: d.orderNumber||('DO-'+d.id),
+      invoiceDate: d.orderDate,
+      customerName: getById('distributors',d.distributorId)?.name||'—',
+      taxableAmount: Number(d.totalAmount||0) - Number(d.vatAmount||0),
+      vatRate: 14,
+      vatAmount: Number(d.vatAmount||0),
+      totalAmount: Number(d.totalAmount||0)
+    })),
+    purchaseDetails: purs.map(p=>({
+      invoiceNumber: p.invoiceNumber||('PO-'+p.id),
+      invoiceDate: p.orderDate,
+      supplierName: p.supplier||'—',
+      taxableAmount: Number(p.totalAmount||0) - Number(p.vatAmount||0),
+      vatRate: Number(p.vatPct||14),
+      vatAmount: Number(p.vatAmount||0),
+      totalAmount: Number(p.totalAmount||0)
+    }))
+  };
+  vatReturn.netVATDue = vatReturn.outputVAT - vatReturn.inputVAT;
+
+  // Export as JSON (ETA-compatible format)
+  const blob = new Blob([JSON.stringify(vatReturn, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `vat_return_${period}.json`; a.click();
+  URL.revokeObjectURL(url);
+  showNotif&&showNotif('✅ تم تصدير إقرار VAT بنجاح','success');
+}
+
+
+// ══════════════════════════════════════════
+// QR Code للفواتير — QR CODE
+// ══════════════════════════════════════════
+
+// 8/22. QR Code للفواتير الإلكترونية
+function generateQRCode(text, containerId){
+  const container = document.getElementById(containerId);
+  if(!container) return;
+  // Simple QR using Google Charts API
+  const img = document.createElement('img');
+  img.src = `https://chart.googleapis.com/chart?chs=120x120&cht=qr&chl=${encodeURIComponent(text)}&choe=UTF-8`;
+  img.alt = 'QR Code';
+  img.style.cssText = 'width:120px;height:120px;border:4px solid white;border-radius:8px';
+  container.innerHTML = '';
+  container.appendChild(img);
+}
+
+function showInvoiceWithQR(invoiceId){
+  const inv = getById('eInvoices', invoiceId) || getById('deliveryOrders', invoiceId);
+  if(!inv) return;
+  const qrData = JSON.stringify({
+    id: inv.id, number: inv.orderNumber||inv.id,
+    amount: inv.totalAmount, date: inv.orderDate,
+    vat: inv.vatAmount
+  });
+  const modal_html = modal('🧾 الفاتورة مع QR Code', `
+    <div style="display:flex;gap:16px;align-items:flex-start">
+      <div style="flex:1">
+        <div style="font-size:13px;line-height:2">
+          <div><strong>رقم الفاتورة:</strong> ${inv.orderNumber||'—'}</div>
+          <div><strong>التاريخ:</strong> ${inv.orderDate||'—'}</div>
+          <div><strong>المبلغ:</strong> ${fmt(inv.totalAmount||0)} ج.م</div>
+          <div><strong>VAT:</strong> ${fmt(inv.vatAmount||0)} ج.م</div>
+          <div><strong>الإجمالي:</strong> ${fmt((Number(inv.totalAmount||0)+Number(inv.vatAmount||0)))} ج.م</div>
+        </div>
+      </div>
+      <div style="text-align:center">
+        <div id="invoice-qr" style="margin-bottom:8px"></div>
+        <div style="font-size:10px;color:var(--muted)">امسح للتحقق</div>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-white" onclick="window.print()">🖨️ طباعة</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إغلاق</button>
+    </div>`);
+  showModal(modal_html);
+  setTimeout(()=>generateQRCode(qrData, 'invoice-qr'), 100);
+}
+
+
+// ══════════════════════════════════════════
+// HR — الموارد البشرية
+// ══════════════════════════════════════════
+
+// 24. إدارة الإجازات والحضور
+PAGES.attendance = function(){
+  const employees = getAll('employees').filter(e=>e.status==='active');
+  const leaves    = getAll('leaveRequests');
+  const today_str = today();
+
+  setPage('الحضور والإجازات','إدارة حضور الموظفين وطلبات الإجازة',
+    `<div style="display:flex;gap:8px">
+      <button class="btn btn-green" onclick="addLeaveRequest()">${ic.plus} طلب إجازة</button>
+      <button class="btn btn-white" onclick="go('employees')">👥 الموظفون</button>
+    </div>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">الموظفون النشطون</div><div class="val text-green">${employees.length}</div></div>
+      <div class="stat-card"><div class="lbl">طلبات إجازة معلقة</div><div class="val text-amber">${leaves.filter(l=>l.status==='pending').length}</div></div>
+      <div class="stat-card"><div class="lbl">في إجازة اليوم</div><div class="val text-blue">${leaves.filter(l=>l.status==='approved'&&today_str>=l.startDate&&today_str<=l.endDate).length}</div></div>
+      <div class="stat-card"><div class="lbl">طلبات مرفوضة</div><div class="val text-red">${leaves.filter(l=>l.status==='rejected').length}</div></div>
+    </div>
+    <div class="card">${tbl(
+      ['الموظف','القسم','نوع الإجازة','من','إلى','الأيام','الحالة',''],
+      leaves.sort((a,b)=>(b.createdAt||'')>(a.createdAt||'')?1:-1).map(l=>{
+        const emp = getById('employees',l.employeeId);
+        const days = l.startDate&&l.endDate ? Math.ceil((new Date(l.endDate)-new Date(l.startDate))/86400000)+1 : '—';
+        return tr(
+          emp?.name||'—', emp?.department||'—',
+          l.leaveType||'سنوية',
+          l.startDate||'—', l.endDate||'—',
+          days,
+          l.status==='approved'?'<span class="badge b-green">موافق</span>':l.status==='rejected'?'<span class="badge b-red">مرفوض</span>':'<span class="badge b-amber">معلق</span>',
+          _authUser?.role==='admin'||_authUser?.role==='finance'?
+          `<div class="action-bar">
+            ${l.status==='pending'?`<button class="btn btn-green btn-sm" onclick="approveLeave(${l.id})">✅ موافقة</button>
+            <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="rejectLeave(${l.id})">❌ رفض</button>`:''}
+            <button class="icon-btn del" onclick="if(confirm('حذف الطلب؟')){remove('leaveRequests',${l.id});go('attendance')}">${ic.del}</button>
+          </div>`:'—'
+        );
+      })
+    )}</div>`
+  );
+};
+
+function addLeaveRequest(){
+  const emps = getAll('employees').filter(e=>e.status==='active');
+  showModal(modal('➕ طلب إجازة جديد',`
+    ${fg('الموظف *',sel('lr-emp',[{v:0,l:'اختر موظف...'},...emps.map(e=>({v:e.id,l:e.name}))],0))}
+    ${fg('نوع الإجازة',sel('lr-type',[{v:'سنوية',l:'إجازة سنوية'},{v:'مرضية',l:'إجازة مرضية'},{v:'عارضة',l:'إجازة عارضة'},{v:'بدون راتب',l:'إجازة بدون راتب'},{v:'أمومة',l:'إجازة أمومة'}],'سنوية'))}
+    <div class="form-row">
+      ${fg('من تاريخ *',inp('lr-start','date',today()))}
+      ${fg('إلى تاريخ *',inp('lr-end','date',today()))}
+    </div>
+    ${fg('ملاحظات',inp('lr-notes','text',''))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveLeaveRequest()">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+function saveLeaveRequest(){
+  const empId=numVal('lr-emp'),start=val('lr-start'),end=val('lr-end');
+  if(!empId||!start||!end){alert('يرجى تعبئة الموظف والتاريخ');return;}
+  insert('leaveRequests',{employeeId:empId,leaveType:val('lr-type'),startDate:start,endDate:end,notes:val('lr-notes')||null,status:'pending'});
+  closeModal();go('attendance');
+}
+function approveLeave(id){update('leaveRequests',id,{status:'approved',approvedBy:_authUser?.name});go('attendance');}
+function rejectLeave(id){update('leaveRequests',id,{status:'rejected',rejectedBy:_authUser?.name});go('attendance');}
+
+
+// 25. تقييم الأداء
+PAGES.appraisals = function(){
+  const appraisals = getAll('appraisals');
+  const emps = getAll('employees').filter(e=>e.status==='active');
+  setPage('تقييم الأداء','التقييم السنوي والنصف سنوي للموظفين',
+    `<button class="btn btn-green" onclick="addAppraisal()">${ic.plus} تقييم جديد</button>`,
+    `<div class="card">${tbl(
+      ['الموظف','القسم','فترة التقييم','الدرجة الإجمالية','التوصية','تاريخ التقييم',''],
+      appraisals.map(a=>{
+        const emp = getById('employees',a.employeeId);
+        const score = Number(a.overallScore||0);
+        const scoreColor = score>=90?'text-green':score>=75?'text-blue':score>=60?'text-amber':'text-red';
+        return tr(
+          emp?.name||'—',emp?.department||'—',a.period||'—',
+          `<span class="${scoreColor} fw7">${score}%</span>`,
+          a.recommendation||'—',a.appraisalDate||'—',
+          `<div class="action-bar">
+            <button class="icon-btn" onclick="showAppraisalDetail(${a.id})" style="color:var(--blue)">📋</button>
+            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('appraisals',${a.id});go('appraisals')}">${ic.del}</button>
+          </div>`
+        );
+      })
+    )}</div>`
+  );
+};
+
+function addAppraisal(){
+  const emps = getAll('employees').filter(e=>e.status==='active');
+  showModal(modal('➕ تقييم أداء جديد',`
+    ${fg('الموظف *',sel('ap-emp',[{v:0,l:'اختر موظف...'},...emps.map(e=>({v:e.id,l:e.name+' ('+e.department+')'}))],'0'))}
+    <div class="form-row">
+      ${fg('فترة التقييم',sel('ap-period',[{v:'سنوي 2024',l:'سنوي 2024'},{v:'نصف سنوي H1 2024',l:'نصف سنوي H1'},{v:'نصف سنوي H2 2024',l:'نصف سنوي H2'},{v:'ربع سنوي Q1',l:'ربع سنوي Q1'}],'سنوي 2024'))}
+      ${fg('تاريخ التقييم',inp('ap-date','date',today()))}
+    </div>
+    <div style="margin:12px 0;font-weight:600;font-size:13px">معايير التقييم (من 100):</div>
+    <div class="form-row">
+      ${fg('جودة العمل',inp('ap-quality','number','','0-100'))}
+      ${fg('الالتزام بالمواعيد',inp('ap-punctuality','number','','0-100'))}
+    </div>
+    <div class="form-row">
+      ${fg('العمل الجماعي',inp('ap-teamwork','number','','0-100'))}
+      ${fg('الإنتاجية',inp('ap-productivity','number','','0-100'))}
+    </div>
+    ${fg('التوصية',sel('ap-rec',[{v:'ترقية',l:'ترقية'},{v:'زيادة راتب',l:'زيادة راتب'},{v:'مكافأة',l:'مكافأة'},{v:'تدريب',l:'يحتاج تدريب'},{v:'تحذير',l:'تحذير'}],'مكافأة'))}
+    ${fg('ملاحظات المقيّم',`<textarea id="ap-notes" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif"></textarea>`)}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveAppraisal()">💾 حفظ التقييم</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+function saveAppraisal(){
+  const empId=numVal('ap-emp');
+  if(!empId){alert('اختر الموظف');return;}
+  const q=Number(val('ap-quality')||0),p2=Number(val('ap-punctuality')||0),t=Number(val('ap-teamwork')||0),pr=Number(val('ap-productivity')||0);
+  const overall=((q+p2+t+pr)/4).toFixed(1);
+  insert('appraisals',{employeeId:empId,period:val('ap-period'),appraisalDate:val('ap-date'),
+    qualityScore:q,punctualityScore:p2,teamworkScore:t,productivityScore:pr,
+    overallScore:overall,recommendation:val('ap-rec'),
+    notes:document.getElementById('ap-notes')?.value||null,
+    appraiser:_authUser?.name||'المدير'});
+  closeModal();go('appraisals');
+}
+
+
+// 26. هيكل رواتب متعدد العناصر
+PAGES.salarystructure = function(){
+  const emps = getAll('employees').filter(e=>e.status==='active');
+  setPage('هيكل الرواتب','تفاصيل مكونات راتب كل موظف',
+    `<button class="btn btn-white" onclick="go('payroll')">📋 مسير الرواتب</button>`,
+    `<div class="card">${tbl(
+      ['الموظف','القسم','الراتب الأساسي','بدل انتقال','بدل سكن','بدل هاتف','حوافز','خصم تأمين','صافي الراتب',''],
+      emps.map(e=>{
+        const basic=Number(e.salary||0), transp=Number(e.transportAllowance||0),
+          housing=Number(e.housingAllowance||0), phone=Number(e.phoneAllowance||0),
+          bonus=Number(e.bonus||0), insur=Number(e.socialInsurance||Math.floor(basic*0.11));
+        const net=basic+transp+housing+phone+bonus-insur;
+        return tr(
+          `<strong>${e.name}</strong>`,e.department||'—',
+          fmt(basic)+' ج.م', fmt(transp)+' ج.م', fmt(housing)+' ج.م',
+          fmt(phone)+' ج.م', fmt(bonus)+' ج.م',
+          `<span class="text-red">${fmt(insur)} ج.م</span>`,
+          `<span class="text-green fw7">${fmt(net)} ج.م</span>`,
+          `<button class="icon-btn edit" onclick="editSalaryStructure(${e.id})">${ic.edit}</button>`
+        );
+      })
+    )}</div>`
+  );
+};
+
+function editSalaryStructure(id){
+  const e=getById('employees',id);if(!e)return;
+  showModal(modal('تعديل هيكل راتب — '+e.name,`
+    <div class="form-row">
+      ${fg('الراتب الأساسي (ج.م)',inp('ss-basic','number',e.salary||0))}
+      ${fg('بدل انتقال',inp('ss-transp','number',e.transportAllowance||0))}
+    </div>
+    <div class="form-row">
+      ${fg('بدل سكن',inp('ss-house','number',e.housingAllowance||0))}
+      ${fg('بدل هاتف',inp('ss-phone','number',e.phoneAllowance||0))}
+    </div>
+    <div class="form-row">
+      ${fg('حوافز / مكافآت',inp('ss-bonus','number',e.bonus||0))}
+      ${fg('خصم تأمين اجتماعي',inp('ss-insur','number',e.socialInsurance||Math.floor(Number(e.salary||0)*0.11)))}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveSalaryStructure(${id})">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+function saveSalaryStructure(id){
+  update('employees',id,{
+    salary:val('ss-basic'), transportAllowance:val('ss-transp'),
+    housingAllowance:val('ss-house'), phoneAllowance:val('ss-phone'),
+    bonus:val('ss-bonus'), socialInsurance:val('ss-insur')
+  });
+  closeModal();go('salarystructure');
+}
+
+
+// ══════════════════════════════════════════
+// دراسات الثبات — STABILITY STUDIES
+// ══════════════════════════════════════════
+
+// 11. دراسات الثبات
+PAGES.stability = function(){
+  const studies = getAll('stabilityStudies');
+  const prods = getAll('products');
+  setPage('دراسات الثبات — Stability Studies','متابعة ظروف التخزين وفترات الصلاحية',
+    `<button class="btn btn-green" onclick="addStabilityStudy()">${ic.plus} دراسة جديدة</button>`,
+    `<div class="card">${tbl(
+      ['المنتج','رقم الدفعة','درجة الحرارة (°C)','الرطوبة (%)','تاريخ البداية','تاريخ الاختبار القادم','الحالة',''],
+      studies.map(s=>{
+        const prod=getById('products',s.productId);
+        const nextTest=s.nextTestDate;
+        const isOverdue=nextTest&&new Date(nextTest)<new Date();
+        return tr(
+          prod?.name||'—',s.batchNumber||'—',
+          s.temperature||'25',s.humidity||'60',
+          s.startDate||'—',
+          nextTest?`<span class="${isOverdue?'text-red fw7':''}">${nextTest}${isOverdue?' ⚠️ متأخر':''}</span>`:'—',
+          s.status==='ongoing'?'<span class="badge b-blue">جارية</span>':s.status==='completed'?'<span class="badge b-green">مكتملة</span>':'<span class="badge b-amber">معلقة</span>',
+          `<div class="action-bar">
+            <button class="icon-btn edit" onclick="editStabilityStudy(${s.id})">${ic.edit}</button>
+            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('stabilityStudies',${s.id});go('stability')}">${ic.del}</button>
+          </div>`
+        );
+      })
+    )}</div>`
+  );
+};
+
+function addStabilityStudy(){
+  const prods=getAll('products');
+  showModal(modal('➕ دراسة ثبات جديدة',`
+    ${fg('المنتج *',sel('st2-prod',[{v:0,l:'اختر منتج...'},...prods.map(p=>({v:p.id,l:p.name}))],0))}
+    <div class="form-row">
+      ${fg('رقم الدفعة *',inp('st2-batch','text',''))}
+      ${fg('تاريخ البداية',inp('st2-start','date',today()))}
+    </div>
+    <div class="form-row">
+      ${fg('درجة الحرارة (°C)',inp('st2-temp','number',25))}
+      ${fg('الرطوبة النسبية (%)',inp('st2-hum','number',60))}
+    </div>
+    <div class="form-row">
+      ${fg('تاريخ الاختبار القادم',inp('st2-next','date',''))}
+      ${fg('الحالة',sel('st2-status',[{v:'ongoing',l:'جارية'},{v:'completed',l:'مكتملة'},{v:'pending',l:'معلقة'}],'ongoing'))}
+    </div>
+    ${fg('ملاحظات',inp('st2-notes','text',''))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveStabilityStudy()">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+function saveStabilityStudy(){
+  const prodId=numVal('st2-prod'),batch=val('st2-batch');
+  if(!prodId||!batch){alert('يرجى اختيار المنتج ورقم الدفعة');return;}
+  insert('stabilityStudies',{productId:prodId,batchNumber:batch,startDate:val('st2-start')||today(),
+    temperature:val('st2-temp')||'25',humidity:val('st2-hum')||'60',
+    nextTestDate:val('st2-next')||null,status:val('st2-status'),notes:val('st2-notes')||null});
+  closeModal();go('stability');
+}
+function editStabilityStudy(id){
+  const s=getById('stabilityStudies',id);if(!s)return;
+  const prods=getAll('products');
+  showModal(modal('تعديل دراسة الثبات',`
+    ${fg('المنتج',sel('st2-prod',[{v:0,l:'اختر...'},...prods.map(p=>({v:p.id,l:p.name}))],s.productId))}
+    <div class="form-row">
+      ${fg('رقم الدفعة',inp('st2-batch','text',s.batchNumber||''))}
+      ${fg('تاريخ الاختبار القادم',inp('st2-next','date',s.nextTestDate||''))}
+    </div>
+    <div class="form-row">
+      ${fg('درجة الحرارة',inp('st2-temp','number',s.temperature||25))}
+      ${fg('الرطوبة',inp('st2-hum','number',s.humidity||60))}
+    </div>
+    ${fg('الحالة',sel('st2-status',[{v:'ongoing',l:'جارية'},{v:'completed',l:'مكتملة'},{v:'pending',l:'معلقة'}],s.status))}
+    ${fg('ملاحظات',inp('st2-notes','text',s.notes||''))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="update('stabilityStudies',${id},{productId:numVal('st2-prod'),batchNumber:val('st2-batch'),nextTestDate:val('st2-next')||null,temperature:val('st2-temp'),humidity:val('st2-hum'),status:val('st2-status'),notes:val('st2-notes')||null});closeModal();go('stability')">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+
+// ══════════════════════════════════════════
+// معايرة المعدات — EQUIPMENT CALIBRATION
+// ══════════════════════════════════════════
+
+// 14. معايرة المعدات
+PAGES.equipment = function(){
+  const equip = getAll('equipment');
+  const overdue = equip.filter(e=>e.calibrationDueDate&&new Date(e.calibrationDueDate)<new Date());
+  setPage('معايرة المعدات — Equipment Calibration','متابعة معايرة أجهزة المختبر والمصنع',
+    `<button class="btn btn-green" onclick="addEquipment()">${ic.plus} إضافة معدة</button>`,
+    `<div class="stats-grid g3" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي المعدات</div><div class="val">${equip.length}</div></div>
+      <div class="stat-card"><div class="lbl">تحتاج معايرة</div><div class="val text-red">${overdue.length}</div></div>
+      <div class="stat-card"><div class="lbl">معايرة خلال 30 يوم</div><div class="val text-amber">${equip.filter(e=>e.calibrationDueDate&&new Date(e.calibrationDueDate)>new Date()&&Math.floor((new Date(e.calibrationDueDate)-new Date())/86400000)<=30).length}</div></div>
+    </div>
+    <div class="card">${tbl(
+      ['اسم المعدة','رقم الجهاز','الموقع','آخر معايرة','المعايرة القادمة','الحالة',''],
+      equip.map(e=>{
+        const due=e.calibrationDueDate;
+        const days=due?Math.floor((new Date(due)-new Date())/86400000):999;
+        return tr(
+          `<strong>${e.name}</strong>`,e.serialNumber||'—',e.location||'—',
+          e.lastCalibration||'—',
+          due?`<span class="${days<0?'text-red fw7':days<=30?'text-amber':''}">${due}${days<0?' ⚠️':days<=30?' 🔶':''}</span>`:'—',
+          days<0?'<span class="badge b-red">متأخرة</span>':days<=30?'<span class="badge b-amber">قريبة</span>':'<span class="badge b-green">جيد</span>',
+          `<div class="action-bar">
+            <button class="icon-btn edit" onclick="editEquipment(${e.id})">${ic.edit}</button>
+            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('equipment',${e.id});go('equipment')}">${ic.del}</button>
+          </div>`
+        );
+      })
+    )}</div>`
+  );
+};
+function addEquipment(){
+  showModal(modal('➕ إضافة معدة',`
+    <div class="form-row">
+      ${fg('اسم المعدة *',inp('eq-name','text','','مثال: ميزان تحليلي'))}
+      ${fg('رقم الجهاز (Serial)',inp('eq-serial','text',''))}
+    </div>
+    <div class="form-row">
+      ${fg('الموقع',sel('eq-loc',[{v:'المختبر',l:'المختبر'},{v:'خط الإنتاج',l:'خط الإنتاج'},{v:'المستودع',l:'المستودع'},{v:'المكتب',l:'المكتب'}],'المختبر'))}
+      ${fg('الشركة المصنعة',inp('eq-mfg','text',''))}
+    </div>
+    <div class="form-row">
+      ${fg('آخر معايرة',inp('eq-last','date',''))}
+      ${fg('المعايرة القادمة *',inp('eq-due','date',''))}
+    </div>
+    ${fg('شهادة المعايرة رقم',inp('eq-cert','text',''))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveEquipment()">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+function saveEquipment(){
+  if(!val('eq-name')){alert('يرجى كتابة اسم المعدة');return;}
+  insert('equipment',{name:val('eq-name'),serialNumber:val('eq-serial')||null,location:val('eq-loc'),manufacturer:val('eq-mfg')||null,lastCalibration:val('eq-last')||null,calibrationDueDate:val('eq-due')||null,calibrationCert:val('eq-cert')||null,status:'active'});
+  closeModal();go('equipment');
+}
+function editEquipment(id){
+  const e=getById('equipment',id);if(!e)return;
+  showModal(modal('تعديل معدة',`
+    ${fg('اسم المعدة',inp('eq-name','text',e.name||''))}
+    <div class="form-row">
+      ${fg('رقم الجهاز',inp('eq-serial','text',e.serialNumber||''))}
+      ${fg('الموقع',sel('eq-loc',[{v:'المختبر',l:'المختبر'},{v:'خط الإنتاج',l:'خط الإنتاج'},{v:'المستودع',l:'المستودع'}],e.location))}
+    </div>
+    <div class="form-row">
+      ${fg('آخر معايرة',inp('eq-last','date',e.lastCalibration||''))}
+      ${fg('المعايرة القادمة',inp('eq-due','date',e.calibrationDueDate||''))}
+    </div>
+    ${fg('شهادة المعايرة',inp('eq-cert','text',e.calibrationCert||''))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="update('equipment',${id},{name:val('eq-name'),serialNumber:val('eq-serial')||null,location:val('eq-loc'),lastCalibration:val('eq-last')||null,calibrationDueDate:val('eq-due')||null,calibrationCert:val('eq-cert')||null});closeModal();go('equipment')">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+
+// ══════════════════════════════════════════
+// إدارة الانحرافات — DEVIATION MANAGEMENT
+// ══════════════════════════════════════════
+
+// 13. إدارة الانحرافات
+PAGES.deviations = function(){
+  const devs = getAll('deviations');
+  const open = devs.filter(d=>d.status!=='closed');
+  setPage('إدارة الانحرافات — Deviations','تسجيل ومتابعة انحرافات الجودة والإنتاج',
+    `<button class="btn btn-green" onclick="addDeviation()">${ic.plus} تسجيل انحراف</button>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي الانحرافات</div><div class="val">${devs.length}</div></div>
+      <div class="stat-card"><div class="lbl">مفتوحة</div><div class="val text-red">${open.length}</div></div>
+      <div class="stat-card"><div class="lbl">حرجة</div><div class="val text-red">${devs.filter(d=>d.severity==='critical').length}</div></div>
+      <div class="stat-card"><div class="lbl">مغلقة</div><div class="val text-green">${devs.filter(d=>d.status==='closed').length}</div></div>
+    </div>
+    <div class="card">${tbl(
+      ['رقم الانحراف','النوع','الخطورة','الوصف','تاريخ الاكتشاف','الإجراء التصحيحي','الحالة',''],
+      devs.sort((a,b)=>(b.createdAt||'')>(a.createdAt||'')?1:-1).map(d=>tr(
+        `<code>DEV-${String(d.id).padStart(4,'0')}</code>`,
+        d.deviationType||'—',
+        d.severity==='critical'?'<span class="badge b-red">حرج</span>':d.severity==='major'?'<span class="badge b-amber">كبير</span>':'<span class="badge b-gray">بسيط</span>',
+        `<span style="font-size:12px">${(d.description||'').slice(0,50)}${(d.description||'').length>50?'...':''}</span>`,
+        d.discoveryDate||'—',
+        d.correctiveAction?'<span class="badge b-blue">موجود</span>':'<span class="badge b-gray">لم يحدد</span>',
+        d.status==='closed'?'<span class="badge b-green">مغلق</span>':d.status==='inprogress'?'<span class="badge b-blue">جاري</span>':'<span class="badge b-red">مفتوح</span>',
+        `<div class="action-bar">
+          <button class="icon-btn edit" onclick="editDeviation(${d.id})">${ic.edit}</button>
+          <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('deviations',${d.id});go('deviations')}">${ic.del}</button>
+        </div>`
+      ))
+    )}</div>`
+  );
+};
+
+function addDeviation(){
+  showModal(modal('تسجيل انحراف جديد',`
+    <div class="form-row">
+      ${fg('نوع الانحراف *',sel('dv-type',[{v:'درجة حرارة',l:'انحراف درجة حرارة'},{v:'رطوبة',l:'انحراف رطوبة'},{v:'إنتاج',l:'انحراف إنتاجي'},{v:'جودة',l:'انحراف جودة'},{v:'توثيق',l:'انحراف توثيق'},{v:'أخرى',l:'أخرى'}],'جودة'))}
+      ${fg('درجة الخطورة',sel('dv-sev',[{v:'minor',l:'بسيط'},{v:'major',l:'كبير'},{v:'critical',l:'حرج'}],'major'))}
+    </div>
+    ${fg('وصف الانحراف *',`<textarea id="dv-desc" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif" placeholder="اشرح الانحراف بالتفصيل..."></textarea>`)}
+    ${fg('تاريخ الاكتشاف',inp('dv-date','date',today()))}
+    ${fg('السبب الجذري (Root Cause)',`<textarea id="dv-root" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif"></textarea>`)}
+    ${fg('الإجراء التصحيحي (CAPA)',`<textarea id="dv-capa" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif"></textarea>`)}
+    ${fg('الحالة',sel('dv-status',[{v:'open',l:'مفتوح'},{v:'inprogress',l:'جاري المعالجة'},{v:'closed',l:'مغلق'}],'open'))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveDeviation()">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+function saveDeviation(){
+  const desc=document.getElementById('dv-desc')?.value?.trim();
+  if(!desc){alert('يرجى كتابة وصف الانحراف');return;}
+  insert('deviations',{deviationType:val('dv-type'),severity:val('dv-sev'),description:desc,discoveryDate:val('dv-date'),rootCause:document.getElementById('dv-root')?.value||null,correctiveAction:document.getElementById('dv-capa')?.value||null,status:val('dv-status')});
+  closeModal();go('deviations');
+}
+function editDeviation(id){
+  const d=getById('deviations',id);if(!d)return;
+  showModal(modal('تعديل الانحراف',`
+    <div class="form-row">
+      ${fg('النوع',sel('dv-type',[{v:'درجة حرارة',l:'درجة حرارة'},{v:'رطوبة',l:'رطوبة'},{v:'إنتاج',l:'إنتاج'},{v:'جودة',l:'جودة'},{v:'توثيق',l:'توثيق'},{v:'أخرى',l:'أخرى'}],d.deviationType))}
+      ${fg('الخطورة',sel('dv-sev',[{v:'minor',l:'بسيط'},{v:'major',l:'كبير'},{v:'critical',l:'حرج'}],d.severity))}
+    </div>
+    ${fg('الوصف',`<textarea id="dv-desc" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif">${d.description||''}</textarea>`)}
+    ${fg('السبب الجذري',`<textarea id="dv-root" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif">${d.rootCause||''}</textarea>`)}
+    ${fg('الإجراء التصحيحي',`<textarea id="dv-capa" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif">${d.correctiveAction||''}</textarea>`)}
+    ${fg('الحالة',sel('dv-status',[{v:'open',l:'مفتوح'},{v:'inprogress',l:'جاري'},{v:'closed',l:'مغلق'}],d.status))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="update('deviations',${id},{deviationType:val('dv-type'),severity:val('dv-sev'),description:document.getElementById('dv-desc')?.value,rootCause:document.getElementById('dv-root')?.value||null,correctiveAction:document.getElementById('dv-capa')?.value||null,status:val('dv-status')});closeModal();go('deviations')">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+
+// ══════════════════════════════════════════
+// تصدير التأمينات الاجتماعية
+// ══════════════════════════════════════════
+
+// 23. تصدير نموذج التأمينات الاجتماعية
+function exportSocialInsurance(){
+  const emps = getAll('employees').filter(e=>e.status==='active');
+  const now = new Date();
+  const month = String(now.getMonth()+1).padStart(2,'0');
+  const year = now.getFullYear();
+
+  const rows = [['م','اسم الموظف','الرقم القومي','الراتب الأساسي','نسبة صاحب العمل (18.75%)','نسبة العامل (11%)','الإجمالي']];
+  emps.forEach((e,i)=>{
+    const basic = Number(e.salary||0);
+    const employer = (basic * 0.1875).toFixed(2);
+    const worker   = (basic * 0.11).toFixed(2);
+    const total    = (basic * 0.2975).toFixed(2);
+    rows.push([i+1, e.name, e.nationalId||'—', basic, employer, worker, total]);
+  });
+
+  // Add totals row
+  const totBasic = emps.reduce((s,e)=>s+Number(e.salary||0),0);
+  rows.push(['الإجمالي','','',totBasic,(totBasic*0.1875).toFixed(2),(totBasic*0.11).toFixed(2),(totBasic*0.2975).toFixed(2)]);
+
+  if(typeof XLSX === 'undefined'){ alert('مكتبة Excel غير محملة'); return; }
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, `تأمينات ${month}-${year}`);
+  XLSX.writeFile(wb, `social_insurance_${year}_${month}.xlsx`);
+  showNotif&&showNotif('✅ تم تصدير نموذج التأمينات الاجتماعية','success');
+}
+
+
+// ══════════════════════════════════════════
+// تقييم الموردين — SUPPLIER SCORECARD
+// ══════════════════════════════════════════
+
+// 29. تقييم الموردين
+PAGES.supplierrating = function(){
+  const ratings = getAll('supplierRatings');
+  const purs = getAll('purchaseOrders');
+  const suppliers = [...new Set(purs.map(p=>p.supplier).filter(Boolean))];
+
+  // Calculate average rating per supplier
+  const avgRatings = {};
+  suppliers.forEach(sup=>{
+    const supRatings = ratings.filter(r=>r.supplier===sup);
+    if(supRatings.length){
+      avgRatings[sup] = supRatings.reduce((s,r)=>s+Number(r.overallScore||0),0)/supRatings.length;
+    }
+  });
+
+  setPage('تقييم الموردين — Supplier Scorecard','تقييم أداء الموردين في الجودة والتسليم والسعر',
+    `<button class="btn btn-green" onclick="addSupplierRating()">${ic.plus} تقييم مورد</button>`,
+    `<div class="card" style="margin-bottom:16px">
+      <div class="card-head"><h2>📊 ملخص تقييم الموردين</h2></div>
+      ${tbl(
+        ['المورد','عدد التقييمات','متوسط الجودة','متوسط التسليم','متوسط السعر','التقييم الإجمالي','التصنيف'],
+        suppliers.map(sup=>{
+          const supR = ratings.filter(r=>r.supplier===sup);
+          if(!supR.length) return tr(sup,'0','—','—','—','—','—');
+          const avgQ = (supR.reduce((s,r)=>s+Number(r.qualityScore||0),0)/supR.length).toFixed(0);
+          const avgD = (supR.reduce((s,r)=>s+Number(r.deliveryScore||0),0)/supR.length).toFixed(0);
+          const avgP = (supR.reduce((s,r)=>s+Number(r.priceScore||0),0)/supR.length).toFixed(0);
+          const avg  = ((Number(avgQ)+Number(avgD)+Number(avgP))/3).toFixed(0);
+          const grade = avg>=90?'A ⭐⭐⭐':avg>=75?'B ⭐⭐':avg>=60?'C ⭐':'D ⚠️';
+          return tr(
+            `<strong>${sup}</strong>`, supR.length,
+            `<span class="${avgQ>=75?'text-green':'text-amber'}">${avgQ}%</span>`,
+            `<span class="${avgD>=75?'text-green':'text-amber'}">${avgD}%</span>`,
+            `<span class="${avgP>=75?'text-green':'text-amber'}">${avgP}%</span>`,
+            `<span class="fw7 ${avg>=75?'text-green':'text-red'}">${avg}%</span>`,
+            `<span class="badge ${avg>=75?'b-green':avg>=60?'b-amber':'b-red'}">${grade}</span>`
+          );
+        })
+      )}
+    </div>
+    <div class="card">${tbl(
+      ['المورد','تاريخ التقييم','جودة المواد','الالتزام بالتسليم','السعر','الإجمالي','ملاحظات',''],
+      ratings.sort((a,b)=>(b.createdAt||'')>(a.createdAt||'')?1:-1).map(r=>tr(
+        r.supplier,r.ratingDate||'—',
+        r.qualityScore+'%',r.deliveryScore+'%',r.priceScore+'%',
+        `<span class="fw7 ${Number(r.overallScore)>=75?'text-green':'text-amber'}">${r.overallScore}%</span>`,
+        r.notes||'—',
+        `<button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('supplierRatings',${r.id});go('supplierrating')}">${ic.del}</button>`
+      ))
+    )}</div>`
+  );
+};
+
+function addSupplierRating(){
+  const purs=getAll('purchaseOrders');
+  const suppliers=[...new Set(purs.map(p=>p.supplier).filter(Boolean))];
+  showModal(modal('تقييم مورد',`
+    ${fg('المورد *',`<input list="sup-list" id="sr-sup" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif" placeholder="اسم المورد">
+      <datalist id="sup-list">${suppliers.map(s=>`<option value="${s}">`).join('')}</datalist>`)}
+    ${fg('تاريخ التقييم',inp('sr-date','date',today()))}
+    <div class="form-row">
+      ${fg('جودة المواد (0-100)',inp('sr-q','number',80))}
+      ${fg('الالتزام بالتسليم (0-100)',inp('sr-d','number',80))}
+      ${fg('السعر (0-100)',inp('sr-p','number',80))}
+    </div>
+    ${fg('ملاحظات',inp('sr-notes','text',''))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveSupplierRating()">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+function saveSupplierRating(){
+  const sup=(document.getElementById('sr-sup')?.value||'').trim();
+  if(!sup){alert('يرجى كتابة اسم المورد');return;}
+  const q=Number(val('sr-q')||0),d=Number(val('sr-d')||0),p=Number(val('sr-p')||0);
+  const overall=((q+d+p)/3).toFixed(0);
+  insert('supplierRatings',{supplier:sup,ratingDate:val('sr-date')||today(),qualityScore:q,deliveryScore:d,priceScore:p,overallScore:overall,notes:val('sr-notes')||null});
+  closeModal();go('supplierrating');
+}
+
+
+// ══════════════════════════════════════════
+// Autocomplete — إكمال تلقائي للقوائم
+// ══════════════════════════════════════════
+
+// 34. تحسين القوائم المنسدلة الكبيرة
+function smartSelect(id, options, currentVal, placeholder='ابحث أو اختر...'){
+  const datalistId = id + '_dl';
+  const inputHtml = `<div style="position:relative">
+    <input type="text" id="${id}_input" list="${datalistId}" value="${options.find(o=>String(o.v)===String(currentVal))?.l||''}"
+      placeholder="${placeholder}"
+      style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif"
+      oninput="syncSmartSelect('${id}')">
+    <input type="hidden" id="${id}" value="${currentVal||''}">
+    <datalist id="${datalistId}">${options.map(o=>`<option value="${o.l}" data-val="${o.v}">`).join('')}</datalist>
+  </div>`;
+  return inputHtml;
+}
+function syncSmartSelect(id){
+  const input = document.getElementById(id+'_input');
+  const hidden= document.getElementById(id);
+  const datalist=document.getElementById(id+'_dl');
+  if(!input||!hidden||!datalist) return;
+  const text=input.value.trim();
+  const options=Array.from(datalist.options);
+  const match=options.find(o=>o.value===text);
+  hidden.value = match ? (match.dataset.val||text) : '';
+}
+
+
+// ══════════════════════════════════════════
+// WhatsApp Integration
+// ══════════════════════════════════════════
+
+// 45. WhatsApp integration
+function sendWhatsApp(phone, message){
+  if(!phone){ alert('رقم الهاتف غير متوفر'); return; }
+  const cleanPhone = phone.replace(/\D/g,'');
+  const formattedPhone = cleanPhone.startsWith('0') ? '2'+cleanPhone : cleanPhone.startsWith('2') ? cleanPhone : '2'+cleanPhone;
+  const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
+  window.open(url, '_blank');
+}
+
+function sendDistributorWhatsApp(distId){
+  const dist = getById('distributors', distId);
+  if(!dist){ alert('الموزع غير موجود'); return; }
+  const phone = dist.phone||dist.mobile||'';
+  const message = `مرحباً ${dist.name}،\n\nنود التواصل معكم بشأن التعاون الدوائي.\n\nشكراً لكم\nفريق نظام ERP الدوائي`;
+  sendWhatsApp(phone, message);
+}
+
+function sendPaymentReminder(receivableId){
+  const rec = getById('receivables', receivableId);
+  if(!rec){ return; }
+  const dist = getById('distributors', rec.distributorId);
+  const phone = dist?.phone||'';
+  const message = `مرحباً ${dist?.name||''},\n\nنود تذكيركم بمبلغ ${Number(rec.amount||0).toLocaleString('ar-EG')} ج.م المستحق بتاريخ ${rec.dueDate||'—'}.\n\nيرجى التواصل معنا لتسوية الأمر.\n\nشكراً`;
+  sendWhatsApp(phone, message);
+}
+
+
+// ══════════════════════════════════════════
+// calcFinancials Cache
+// ══════════════════════════════════════════
+
+// 20. Cache لـ calcFinancials
+let _financialsCache = null;
+let _financialsCacheTime = 0;
+const CACHE_TTL = 30000; // 30 seconds
+
+const _origCalcFinancials = window.calcFinancials;
+if(_origCalcFinancials){
+  window.calcFinancials = function(){
+    const now = Date.now();
+    if(_financialsCache && (now - _financialsCacheTime) < CACHE_TTL){
+      return _financialsCache;
+    }
+    _financialsCache = _origCalcFinancials();
+    _financialsCacheTime = now;
+    return _financialsCache;
+  };
+  // Invalidate cache on any DB change
+  const _origSaveDB = window.saveDB;
+  if(_origSaveDB) window.saveDB = function(){
+    _financialsCache = null;
+    _origSaveDB();
+  };
+}
+
+
+// ══════════════════════════════════════════
+// Multi-tab Interface
+// ══════════════════════════════════════════
+
+// 33. نظام تبويبات متعددة
+(function initTabSystem(){
+  let openTabs = [];
+  let activeTab = null;
+
+  // Create tab bar
+  const tabBar = document.createElement('div');
+  tabBar.id = 'tab-bar';
+  tabBar.style.cssText = `display:flex;align-items:center;gap:4px;padding:6px 16px;
+    background:var(--sidebar);border-bottom:1px solid var(--border);
+    overflow-x:auto;min-height:38px;flex-wrap:nowrap`;
+
+  const main = document.querySelector('main');
+  const topbar = document.querySelector('.topbar');
+  if(main && topbar){
+    main.insertBefore(tabBar, topbar.nextSibling);
+  }
+
+  const tabPageLabels = {
+    dashboard:'🏠 الرئيسية', products:'💊 المنتجات', materials:'🧪 المواد',
+    production:'🏭 الإنتاج', inventory:'📦 المخزون', distributors:'🏢 الموزعون',
+    deliveries:'🚚 التوريد', expenses:'🧾 المصروفات', employees:'👥 الموظفون',
+    reports:'📊 التقارير', journal:'📒 اليومية', trialbalance:'⚖️ ميزان المراجعة',
+    vat:'🏦 VAT', contracts:'📄 العقود', assets:'🏗️ الأصول',
+    purchasing:'📦 المشتريات', payroll:'💰 الرواتب',
+    stability:'🔬 الثبات', equipment:'⚙️ المعدات', deviations:'⚠️ الانحرافات',
+    attendance:'📅 الحضور', appraisals:'📋 التقييم', auditlog:'📋 سجل التدقيق',
+    supplierrating:'⭐ تقييم الموردين',
+  };
+
+  window._openTab = function(pageId){
+    const label = tabPageLabels[pageId] || pageId;
+    if(!openTabs.find(t=>t.id===pageId)){
+      openTabs.push({id:pageId, label});
+      renderTabBar();
+    }
+    activeTab = pageId;
+    renderTabBar();
+  };
+
+  function renderTabBar(){
+    tabBar.innerHTML = openTabs.map(t=>`
+      <div onclick="_activateTab('${t.id}')" style="display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:6px;cursor:pointer;white-space:nowrap;font-size:12px;transition:.15s;
+        background:${activeTab===t.id?'var(--green-bg)':'transparent'};
+        color:${activeTab===t.id?'var(--green-light)':'var(--muted)'};
+        border:1px solid ${activeTab===t.id?'var(--green)':'transparent'}">
+        ${t.label}
+        <span onclick="event.stopPropagation();_closeTab('${t.id}')" style="margin-right:2px;opacity:.6;hover:opacity:1">×</span>
+      </div>`).join('');
+  }
+
+  window._activateTab = function(pageId){
+    activeTab = pageId;
+    renderTabBar();
+    if(typeof go === 'function') go(pageId);
+  };
+
+  window._closeTab = function(pageId){
+    openTabs = openTabs.filter(t=>t.id!==pageId);
+    if(activeTab===pageId){
+      activeTab = openTabs[openTabs.length-1]?.id || 'dashboard';
+      if(typeof go === 'function') go(activeTab);
+    }
+    renderTabBar();
+  };
+
+  // Hook into go() to track open tabs
+  const _origGoTab = window.go;
+  if(_origGoTab) window.go = function(page){
+    _origGoTab(page);
+    window._openTab(page);
+  };
+})();
+
 
 // renderNav/go called by coEnter() after company is selected
 
