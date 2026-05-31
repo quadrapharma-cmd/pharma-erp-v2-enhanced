@@ -410,7 +410,7 @@ const defaultDB = {
   expenses:[], employees:[], budgetLines:[], campaigns:[], salesTargets:[],
   receivables:[], payrollRuns:[], purchaseOrders:[], qualityChecks:[],
   returns:[], contracts:[], assets:[], eInvoices:[], taxLines:[], batchMaterials:[], productIngredients:[], partnerAccounts:[], partnerEntries:[], journalEntries:[], chartOfAccounts:[], historicalBalances:[], appUsers:[], auditLogs:[], leaveRequests:[], appraisals:[], equipment:[],
-  deviations:[], stabilityStudies:[], supplierRatings:[], warehouses:[], serialNumbers:[], savedReports:[], productionStages:[], dispensingRecords:[],
+  deviations:[], stabilityStudies:[], supplierRatings:[], warehouses:[], serialNumbers:[], savedReports:[], costCenters:[], capa:[], salesInvoices:[], salesOrders:[], drugRegistrations:[], cycleCountRecords:[], productionStages:[], dispensingRecords:[],
   _seq:{}
 };
 
@@ -608,6 +608,9 @@ const navItems=[
   {id:'returns',icon:'🔄',label:'المرتجعات',sec:'المبيعات'},
   {id:'receivables',icon:'💳',label:'الحسابات والذمم',sec:'المبيعات'},
   {id:'salesvstarget',icon:'📊',label:'المبيعات vs الأهداف',sec:'المبيعات'},
+  {id:'salesorders',icon:'📋',label:'أوامر البيع',sec:'المبيعات'},
+  {id:'salesinvoices',icon:'📄',label:'فواتير المبيعات',sec:'المبيعات'},
+  {id:'delivery',icon:'🚚',label:'الشحن والتوزيع',sec:'المبيعات'},
   {id:'purchasing',icon:'📦',label:'المشتريات',sec:'المالية'},
   {id:'partners',icon:'🤝',label:'جاري الشركاء',sec:'المالية'},
   {id:'shareholders',icon:'👥',label:'تحليل المساهمين',sec:'المالية'},
@@ -624,17 +627,27 @@ const navItems=[
   {id:'assets',icon:'🏗️',label:'الأصول الثابتة',sec:'المالية'},
   {id:'costanalysis',icon:'📉',label:'تحليل التكلفة',sec:'المالية'},
   {id:'reports',icon:'📈',label:'التقارير المالية',sec:'المالية'},
+  {id:'accounts',icon:'📚',label:'دليل الحسابات',sec:'المالية'},
+  {id:'journal',icon:'📒',label:'دفتر اليومية',sec:'المالية'},
+  {id:'balancesheet',icon:'📊',label:'الميزانية العمومية',sec:'المالية'},
+  {id:'manufacturingcost',icon:'⚙️',label:'تكاليف التصنيع',sec:'المالية'},
   {id:'vat',icon:'🧾',label:'ضريبة القيمة المضافة',sec:'الضرائب'},
   {id:'einvoice',icon:'📄',label:'الفواتير الإلكترونية',sec:'الضرائب'},
   {id:'taxes',icon:'🏦',label:'الضرائب العامة',sec:'الضرائب'},
+  {id:'stamptax',icon:'🏛️',label:'ضريبة الدمغة',sec:'الضرائب'},
   {id:'users',icon:'⚙️',label:'الإعدادات والمستخدمون',sec:'الإعدادات'},
   {id:'auditlog',icon:'📋',label:'سجل التدقيق',sec:'الإعدادات'},
   {id:'stability',icon:'🔬',label:'دراسات الثبات',sec:'الجودة والتسجيل'},
+  {id:'oos',icon:'⚠️',label:'OOS/OOT — نتائج خارج المواصفة',sec:'الجودة والتسجيل'},
+  {id:'coa',icon:'📄',label:'شهادات التحليل CoA',sec:'الجودة والتسجيل'},
+  {id:'drugregistration',icon:'📋',label:'التسجيل الدوائي',sec:'الجودة والتسجيل'},
+  {id:'capa',icon:'🔄',label:'CAPA — إجراءات تصحيحية',sec:'الجودة والتسجيل'},
   {id:'equipment',icon:'⚙️',label:'معايرة المعدات',sec:'الجودة والتسجيل'},
   {id:'deviations',icon:'⚠️',label:'إدارة الانحرافات',sec:'الجودة والتسجيل'},
   {id:'attendance',icon:'📅',label:'الحضور والإجازات',sec:'الموظفون'},
   {id:'appraisals',icon:'📊',label:'تقييم الأداء',sec:'الموظفون'},
   {id:'salarystructure',icon:'💲',label:'هيكل الرواتب',sec:'الموظفون'},
+  {id:'hr',icon:'👥',label:'لوحة الموارد البشرية',sec:'الموظفون'},
   {id:'supplierrating',icon:'⭐',label:'تقييم الموردين',sec:'المشتريات'},
   {id:'serialnumbers',icon:'🔢',label:'الأرقام التسلسلية',sec:'المخزون'},
   {id:'abcanalysis',icon:'📊',label:'تحليل ABC',sec:'التقارير'},
@@ -642,6 +655,7 @@ const navItems=[
   {id:'savedreports',icon:'📋',label:'التقارير المخصصة',sec:'التقارير'},
   {id:'productionstages',icon:'🔬',label:'مراحل الإنتاج (Stages)',sec:'الإنتاج'},
   {id:'cmoscorecard',icon:'📊',label:'تقييم المصانع Scorecard',sec:'الإنتاج'},
+  {id:'cyclecounting',icon:'📊',label:'الجرد الدوري Cycle Count',sec:'المخزون'},
   {id:'warehouses',icon:'🏭',label:'المستودعات',sec:'المخزون'},
 ];
 
@@ -1281,50 +1295,7 @@ function addMaterial(type){
   setTimeout(()=>initTabs(),100);
 }
 function editMaterial(id){ const m=getById('materials',id); if(!m)return; showModal(modal('تعديل مادة',materialForm(m))); }
-function materialForm(m={}){
-  return `
-    ${fg('اسم المادة *',inp('m-name','text',m.name))}
-    <div class="form-row">
-      ${fg('نوع المادة',sel('m-type',[{v:'raw_material',l:'مادة خام'},{v:'packaging',l:'مادة تغليف'}],m.materialType||'raw_material'))}
-      ${fg('وحدة القياس',sel('m-unit',UNITS,m.unit||'كجم'))}
-    </div>
-    <div class="form-row">
-      ${fg('تكلفة الوحدة (ج.م)',inp('m-cost','number',m.unitCost))}
-      ${fg('حد إعادة الطلب',inp('m-reorder','number',m.reorderLevel))}
-    </div>
-    ${fg('المورد',inp('m-supplier','text',m.supplier))}
-    ${fg('الحالة',sel('m-status',[{v:'active',l:'نشط'},{v:'inactive',l:'غير نشط'}],m.status||'active'))}
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="saveMaterial(${m.id||''})">💾 حفظ</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>`;
-}
-function saveMaterial(id){
-  const name = document.getElementById('m-name')?.value?.trim();
-  if(!name) return alert('يرجى كتابة اسم المادة');
-  const mtype = document.getElementById('m-type')?.value||'raw_material';
-  const d={
-    name, materialType:mtype,
-    unit:document.getElementById('m-unit')?.value||'كجم',
-    subType:mtype==='raw_material'?document.getElementById('m-subtype')?.value:document.getElementById('m-pkgtype')?.value,
-    currentStock:document.getElementById('m-stock')?.value||'0',
-    reorderLevel:document.getElementById('m-reorder')?.value||null,
-    unitCost:document.getElementById('m-cost')?.value||null,
-    status:document.getElementById('m-status')?.value||'active',
-    casNumber:document.getElementById('m-cas')?.value||null,
-    qualityGrade:document.getElementById('m-grade')?.value||null,
-    pharmacopoeialRef:document.getElementById('m-pharma')?.value||null,
-    specifications:document.getElementById('m-specs')?.value||null,
-    packagingSpec:document.getElementById('m-pkgspec')?.value||null,
-    storageCondition:document.getElementById('m-storage')?.value||null,
-    approvedSupplier:document.getElementById('m-supplier')?.value||null,
-    supplier:document.getElementById('m-supplier')?.value||null,
-    alternateSupplier:document.getElementById('m-supplier2')?.value||null,
-    qualityNotes:document.getElementById('m-qnotes')?.value||null
-  };
-  id?update('materials',id,d):insert('materials',d);
-  closeModal(); go('materials');
-}
+
 
 
 function addCmo(){ showModal(modal('إضافة مصنع جديد',cmoForm())); }
@@ -1871,31 +1842,6 @@ function editPurchaseOrder(id){
     <div class="form-actions"><button class="btn btn-green" onclick="savePurchaseOrder(${id})">💾 حفظ</button><button class="btn btn-ghost" onclick="closeModal()">إلغاء</button></div>`));
 }
 
-function addQualityCheck(){
-  const pOpts=[{v:0,l:'اختر منتج...'},...getAll('products').map(p=>({v:p.id,l:p.name}))];
-  showModal(modal('إضافة فحص جودة',`
-    ${fg('المنتج *',sel('qc-prod',pOpts))}
-    <div class="form-row">${fg('رقم الدفعة *',inp('qc-batch'))}${fg('تاريخ الفحص',inp('qc-date','date',today()))}</div>
-    ${fg('الكيميائي المسؤول',inp('qc-analyst'))}
-    ${fg('النتيجة *',sel('qc-result',[{v:'ناجح',l:'ناجح ✅'},{v:'مرفوض',l:'مرفوض ❌'},{v:'معلق',l:'معلق للمراجعة'}],'ناجح'))}
-    ${fg('ملاحظات',inp('qc-notes'))}
-    <div class="form-actions"><button class="btn btn-green" onclick="saveQualityCheck()">💾 حفظ</button><button class="btn btn-ghost" onclick="closeModal()">إلغاء</button></div>`));
-}
-function editQualityCheck(id){
-  const r=getById('qualityChecks',id);if(!r)return;
-  showModal(modal('تعديل فحص الجودة',`
-    <div class="form-row">${fg('رقم الدفعة',inp('qc-batch','text',r.batchNumber))}${fg('الكيميائي',inp('qc-analyst','text',r.analyst))}</div>
-    ${fg('النتيجة',sel('qc-result',[{v:'ناجح',l:'ناجح ✅'},{v:'مرفوض',l:'مرفوض ❌'},{v:'معلق',l:'معلق للمراجعة'}],r.result))}
-    ${fg('ملاحظات',inp('qc-notes','text',r.notes))}
-    <div class="form-actions"><button class="btn btn-green" onclick="saveQualityCheck(${id})">💾 حفظ</button><button class="btn btn-ghost" onclick="closeModal()">إلغاء</button></div>`));
-}
-function saveQualityCheck(id){
-  const batch=val('qc-batch');
-  if(!id&&(!numVal('qc-prod')||!batch))return alert('يرجى تعبئة الحقول الإلزامية');
-  const d={batchNumber:batch,analyst:val('qc-analyst')||null,checkDate:val('qc-date')||null,result:val('qc-result'),notes:val('qc-notes')||null};
-  if(id)update('qualityChecks',id,d);else{d.productId=numVal('qc-prod');insert('qualityChecks',d);}
-  closeModal();go('quality');
-}
 
 function addReturn(){
   const dOpts=[{v:0,l:'اختر موزع...'},...getAll('distributors').map(d=>({v:d.id,l:d.name}))];
@@ -11694,27 +11640,6 @@ PAGES.warehouses = function(){
   );
 };
 
-function addWarehouse(){
-  showModal(modal('إضافة مستودع',`
-    <div class="form-row">
-      ${fg('اسم المستودع *',inp('wh-name','text','','مثال: مستودع المواد الخام'))}
-      ${fg('الأيقونة',inp('wh-icon','text','🏭','🏭 أو 🧪 أو 📦'))}
-    </div>
-    <div class="form-row">
-      ${fg('النوع',sel('wh-type',[{v:'مواد خام',l:'مواد خام'},{v:'منتجات تامة',l:'منتجات تامة'},{v:'تغليف',l:'مواد تغليف'},{v:'محجوز',l:'محجوز للجودة'},{v:'عام',l:'عام'}],'مواد خام'))}
-      ${fg('الموقع',inp('wh-loc','text','','مثال: المبنى أ - الدور الأرضي'))}
-    </div>
-    ${fg('ملاحظات',inp('wh-notes','text',''))}
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="saveWarehouse()">💾 حفظ</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>`));
-}
-function saveWarehouse(){
-  const name=val('wh-name');if(!name){alert('يرجى كتابة اسم المستودع');return;}
-  insert('warehouses',{name,icon:val('wh-icon')||'🏭',type:val('wh-type'),location:val('wh-loc')||null,notes:val('wh-notes')||null});
-  closeModal();go('warehouses');
-}
 function editWarehouse(id){
   const w=getById('warehouses',id);if(!w)return;
   showModal(modal('تعديل المستودع',`
@@ -15122,6 +15047,2417 @@ PAGES.production = function(){
     ,'tbl_production')}</div>`
   );
 };
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// 📦 إدارة المواد والمخزون — النظام الكامل
+// مبني على: 21 CFR 211، EU GMP Ch.3/4/5، WHO GMP، ICH Q7، GS1 Standards
+// ═══════════════════════════════════════════════════════════════════════
+
+// ── ثوابت النظام ─────────────────────────────────────────────────────
+
+const PHARMA_GRADES = [
+  {v:'',      l:'اختر الدرجة...'},
+  {v:'BP',    l:'BP — British Pharmacopoeia'},
+  {v:'USP',   l:'USP — US Pharmacopeia'},
+  {v:'EP',    l:'EP/Ph.Eur — European Pharmacopoeia'},
+  {v:'IP',    l:'IP — Indian Pharmacopoeia'},
+  {v:'JP',    l:'JP — Japanese Pharmacopoeia'},
+  {v:'WHO',   l:'WHO — World Health Organization'},
+  {v:'Food',  l:'Food Grade — درجة غذائية'},
+  {v:'Tech',  l:'Technical Grade ⚠️ (غير مسموح للإنتاج)'},
+];
+
+const MATERIAL_SUBTYPES = {
+  raw_material: [
+    {v:'api',            l:'🧬 API — مادة فعالة (Active Pharmaceutical Ingredient)'},
+    {v:'excipient',      l:'⚗️ Excipient — سواغ'},
+    {v:'solvent',        l:'💧 Solvent — مذيب'},
+    {v:'process_aid',    l:'🔧 Process Aid — مادة مساعدة للتصنيع'},
+    {v:'lab_reagent',    l:'🔬 Lab Reagent — كاشف مختبر'},
+    {v:'water',          l:'💧 Water (PW/WFI) — ماء صيدلاني'},
+    {v:'gas',            l:'💨 Pharmaceutical Gas — غاز طبي'},
+  ],
+  packaging: [
+    {v:'blister_film',   l:'📦 Blister Film (PVC/PVDC/Alu)'},
+    {v:'alu_foil',       l:'🔲 Aluminium Foil — رقاقة ألومنيوم'},
+    {v:'glass_vial',     l:'🧪 Glass Vial — فيال زجاجي'},
+    {v:'glass_ampoule',  l:'💉 Glass Ampoule — أمبولة'},
+    {v:'hdpe_bottle',    l:'🍶 HDPE Bottle — زجاجة بلاستيك'},
+    {v:'rubber_stopper', l:'🔴 Rubber Stopper — سدادة مطاط'},
+    {v:'aluminum_cap',   l:'🔩 Aluminum Cap/Crimp — ختم ألومنيوم'},
+    {v:'carton',         l:'📫 Carton Box — علبة كرتون'},
+    {v:'leaflet',        l:'📄 Package Leaflet — نشرة داخلية'},
+    {v:'label',          l:'🏷️ Label — ملصق'},
+    {v:'sachet',         l:'🛍️ Sachet — كيس ساشيه'},
+    {v:'tube',           l:'🧴 Tube — أنبوب'},
+    {v:'iv_bag',         l:'🫙 IV Bag — كيس محلول وريدي'},
+    {v:'dropper',        l:'💧 Dropper Bottle — زجاجة قطرات'},
+  ],
+};
+
+const HAZARD_CLASSES = [
+  {v:'none',        l:'غير خطر (Non-hazardous)'},
+  {v:'flammable',   l:'⚠️ قابل للاشتعال (Flammable)'},
+  {v:'toxic',       l:'☠️ سام (Toxic)'},
+  {v:'corrosive',   l:'🧪 مسبب للتآكل (Corrosive)'},
+  {v:'oxidizing',   l:'🔥 مؤكسد (Oxidizing)'},
+  {v:'narcotic',    l:'💊 مخدر/مؤثر عقلي (Controlled)'},
+  {v:'sensitizer',  l:'⚗️ مثير للحساسية (Sensitizer)'},
+  {v:'radioactive', l:'☢️ مشع (Radioactive)'},
+];
+
+const STORAGE_CONDITIONS = [
+  {v:'ambient',     l:'🌡️ معتدل — Ambient (15-25°C)'},
+  {v:'controlled',  l:'🌡️ مضبوط — Controlled RT (20-25°C, ≤60%RH)'},
+  {v:'cool',        l:'❄️ بارد — Cool (8-15°C)'},
+  {v:'cold',        l:'🧊 مبرد — Cold Chain (2-8°C)'},
+  {v:'frozen',      l:'🧊❄️ مجمد — Frozen (-20°C)'},
+  {v:'deep_frozen', l:'🧊❄️ تجميد عميق — Deep Frozen (-80°C)'},
+  {v:'flammable',   l:'⚠️ قابل للاشتعال — مخزن خاص'},
+  {v:'narcotic',    l:'🔐 مخدرات — قفص مزدوج'},
+];
+
+const STOCK_STATUSES = {
+  quarantine:  {l:'🔒 معزول (Quarantine)',    c:'b-amber', allowed:[]},
+  approved:    {l:'✅ معتمد (Approved)',        c:'b-green', allowed:['quarantine']},
+  rejected:    {l:'❌ مرفوض (Rejected)',        c:'b-red',   allowed:['quarantine']},
+  sampling:    {l:'🔬 أخذ عينات (Sampling)',   c:'b-blue',  allowed:['quarantine']},
+  retest_due:  {l:'⏰ إعادة فحص (Retest Due)', c:'b-purple',allowed:['approved']},
+  hold:        {l:'⏸️ محجوز (On Hold)',         c:'b-gray',  allowed:['approved','quarantine']},
+  expired:     {l:'☠️ منتهي (Expired)',         c:'b-red',   allowed:['approved','quarantine']},
+  destruction: {l:'🗑️ قيد الإتلاف',           c:'b-red',   allowed:['rejected','expired']},
+};
+
+
+// ── ١. كارت الصنف الدوائي الكامل ─────────────────────────────────────
+
+function materialForm(m={}){
+  const isEdit = !!m.id;
+  const mtype  = m.materialType||'raw_material';
+  const subtypes = MATERIAL_SUBTYPES[mtype]||[];
+
+  return `
+  <div style="max-height:80vh;overflow-y:auto;padding-right:4px">
+
+  <!-- Tab headers -->
+  <div class="tabs" id="mat-tabs">
+    <button class="tab active" onclick="switchTab('mat-tabs','mat-basic')">📋 البيانات الأساسية</button>
+    <button class="tab" onclick="switchTab('mat-tabs','mat-quality')">🔬 الجودة والمواصفات</button>
+    <button class="tab" onclick="switchTab('mat-tabs','mat-storage')">🏭 التخزين والتداول</button>
+    <button class="tab" onclick="switchTab('mat-tabs','mat-supplier')">🤝 المورد والمشتريات</button>
+    ${mtype==='packaging'?'<button class="tab" onclick="switchTab(\'mat-tabs\',\'mat-pkg\')">📦 بيانات التغليف</button>':''}
+  </div>
+
+  <!-- Tab 1: البيانات الأساسية -->
+  <div id="mat-basic" class="tab-content active">
+    ${fg('اسم المادة (INN / Generic Name) *', inp('m-name','text',m.name||'','مثال: Paracetamol — لا أسماء تجارية'))}
+    <div class="form-row">
+      ${fg('نوع المادة', sel('m-type',[{v:'raw_material',l:'🧪 مادة خام وسواغات'},{v:'packaging',l:'📦 مواد تغليف'}],mtype))}
+      <div class="fg"><label>النوع الفرعي *</label>
+        <select id="m-subtype" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text)">
+          ${subtypes.map(s=>`<option value="${s.v}" ${(m.subType||m.materialSubType)===s.v?'selected':''}>${s.l}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      ${fg('رقم CAS *', inp('m-cas','text',m.casNumber||'','مثال: 103-90-2 — يمنع اللبس بين المواد'))}
+      ${fg('رقم EINECS/EC', inp('m-einecs','text',m.einecsNumber||'','مثال: 203-157-5 — للمواد الأوروبية'))}
+    </div>
+    <div class="form-row">
+      ${fg('رمز المادة الداخلي', inp('m-code','text',m.internalCode||'','MAT-001'))}
+      ${fg('رقم GTIN/EAN', inp('m-gtin','text',m.gtin||'','للتتبع التسلسلي GS1'))}
+    </div>
+    <div class="form-row">
+      ${fg('وحدة القياس الأساسية', sel('m-unit',UNITS,m.unit||'كجم'))}
+      ${fg('وحدة الشراء', sel('m-buy-unit',[{v:'كجم',l:'كجم'},{v:'لتر',l:'لتر'},{v:'جرام',l:'جرام'},{v:'مل',l:'مل'},{v:'علبة',l:'علبة'},{v:'برميل',l:'برميل'},{v:'لفة',l:'لفة'}],m.buyUnit||m.unit||'كجم'))}
+    </div>
+    <div class="form-row">
+      ${fg('الحالة', sel('m-status',[{v:'active',l:'✅ نشط'},{v:'inactive',l:'❌ غير نشط'},{v:'under_review',l:'🔄 قيد المراجعة'}],m.status||'active'))}
+      ${fg('الوزن الجزيئي (g/mol)', inp('m-mw','number',m.molecularWeight||'','للـ APIs فقط'))}
+    </div>
+    ${fg('الصيغة الكيميائية', inp('m-formula','text',m.chemicalFormula||'','مثال: C₈H₉NO₂ للباراسيتامول'))}
+    ${fg('وصف المادة / ملاحظات عامة', `<textarea id="m-desc" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif">${escapeHtml(m.description||'')}</textarea>`)}
+  </div>
+
+  <!-- Tab 2: الجودة والمواصفات -->
+  <div id="mat-quality" class="tab-content">
+    <div class="form-row">
+      ${fg('درجة الجودة الدوائية *', sel('m-grade', PHARMA_GRADES, m.pharmacopoeialGrade||m.qualityGrade||''))}
+      ${fg('مرجع الدستور الدوائي', inp('m-pharma','text',m.pharmacopoeialRef||'','USP monograph رقم الصفحة أو'))}
+    </div>
+
+    <div style="padding:12px;background:rgba(56,139,253,.06);border:1px solid rgba(56,139,253,.2);border-radius:10px;margin-bottom:12px">
+      <div style="font-weight:700;font-size:12px;color:var(--blue);margin-bottom:10px">📋 حدود المواصفة (Specifications)</div>
+      <div class="form-row">
+        ${fg('Assay % — حد الاعتبار الأدنى', inp('m-assay-min','number',m.assayMin||'','مثال: 99.0'))}
+        ${fg('الرطوبة % — LOD حد أقصى', inp('m-lod-max','number',m.lodMax||'','مثال: 0.5'))}
+      </div>
+      ${fg('المواصفات الكاملة / الشوائب المسموحة', `<textarea id="m-specs" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif" placeholder="مثال: Appearance: White crystalline powder&#10;Assay: NLT 99.0% (dried basis)&#10;Heavy metals: NMT 20 ppm">${escapeHtml(m.specifications||'')}</textarea>`)}
+    </div>
+
+    <div class="form-row">
+      ${fg('DMF Number (للـ API)', inp('m-dmf','text',m.dmfNumber||'','Drug Master File في FDA'))}
+      ${fg('CEP Number (للـ API)', inp('m-cep','text',m.cepNumber||'','شهادة ملاءمة Ph.Eur.'))}
+    </div>
+
+    <div style="padding:12px;background:rgba(46,160,67,.06);border:1px solid rgba(46,160,67,.2);border-radius:10px;margin-bottom:12px">
+      <div style="font-weight:700;font-size:12px;color:var(--green-light);margin-bottom:10px">⏰ إدارة الصلاحية وإعادة الفحص (ICH Q7)</div>
+      <div class="form-row">
+        ${fg('مدة إعادة الفحص (Retest Period — شهر)', inp('m-retest-months','number',m.retestPeriodMonths||'','مثال: 36 — للـ APIs'))}
+        ${fg('مدة الصلاحية (Expiry Period — شهر)', inp('m-expiry-months','number',m.expiryPeriodMonths||'','مثال: 24 — للمنتج النهائي'))}
+      </div>
+      <div class="form-row">
+        ${fg('الحد الأدنى % صلاحية عند الاستلام', inp('m-min-receipt','number',m.minShelfLifeAtReceipt||70,'مثال: 70 → يُرفض لو < 70% متبقي'))}
+        ${fg('الحد الأدنى أيام صلاحية عند الشحن', inp('m-min-ship','number',m.minShelfLifeAtShipment||180,'مثال: 180 → لا يُشحن لو < 6 شهر'))}
+      </div>
+      <div style="font-size:11px;color:var(--muted);padding:8px;background:var(--hover);border-radius:6px">
+        💡 Retest Date = للمواد الخام (APIs/Excipients) | Expiry Date = للمنتج النهائي
+      </div>
+    </div>
+
+    ${fg('خطة الفحص عند الاستلام (SOP Reference)', inp('m-sampling','text',m.samplingPlanRef||'','مثال: QC-SOP-015 / ANSI Z1.4 Level II'))}
+    ${fg('طريقة التحليل الرئيسية', inp('m-method','text',m.testMethod||'','مثال: HPLC-UV / Karl Fischer / Titrimetry'))}
+    ${fg('ملاحظات جودة', `<textarea id="m-qnotes" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif">${escapeHtml(m.qualityNotes||m.qualityNotes||'')}</textarea>`)}
+  </div>
+
+  <!-- Tab 3: التخزين والتداول -->
+  <div id="mat-storage" class="tab-content">
+    <div class="form-row">
+      ${fg('ظروف التخزين *', sel('m-storage-cond', STORAGE_CONDITIONS, m.storageCondition||'ambient'))}
+      ${fg('تصنيف الخطر (Hazard Class)', sel('m-hazard', HAZARD_CLASSES, m.hazardClass||'none'))}
+    </div>
+    <div class="form-row">
+      ${fg('درجة حرارة — حد أدنى (°C)', inp('m-temp-min','number',m.tempMin||15,''))}
+      ${fg('درجة حرارة — حد أقصى (°C)', inp('m-temp-max','number',m.tempMax||25,''))}
+    </div>
+    <div class="form-row">
+      ${fg('رطوبة نسبية — حد أقصى (%RH)', inp('m-humidity','number',m.humidityMax||60,''))}
+      ${fg('موقع التخزين الافتراضي', sel('m-wh-default',[{v:0,l:'المستودع الرئيسي'},...getAll('warehouses').map(w=>({v:w.id,l:w.name||w.warehouseName}))],m.defaultWarehouseId||0))}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+      ${[
+        {id:'m-light',  label:'حساس للضوء',     field:'lightSensitive'},
+        {id:'m-moisture',label:'حساس للرطوبة',   field:'moistureSensitive'},
+        {id:'m-oxygen', label:'حساس للأكسجين',   field:'oxygenSensitive'},
+        {id:'m-temp-s', label:'حساس للحرارة',    field:'temperatureSensitive'},
+        {id:'m-double-lock',label:'قفل مزدوج',   field:'requiresDoubleKey'},
+        {id:'m-dual-sig',label:'توقيع شخصين',    field:'requiresDualSignature'},
+      ].map(f=>`
+      <div style="padding:8px;background:var(--hover);border-radius:8px;display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="${f.id}" ${m[f.field]?'checked':''} style="width:14px;height:14px">
+        <label for="${f.id}" style="font-size:12px;cursor:pointer">${f.label}</label>
+      </div>`).join('')}
+    </div>
+    ${fg('تعليمات التخزين الخاصة', `<textarea id="m-storage-notes" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif" placeholder="مثال: يُحفظ بعيداً عن الأحماض — يُخزن تحت غاز N₂ — لا يُكدس أكثر من 4 صناديق">${escapeHtml(m.storageNotes||m.storageCondition||'')}</textarea>`)}
+
+    <div style="padding:12px;background:rgba(240,136,0,.06);border:1px solid rgba(240,136,0,.2);border-radius:10px;margin-top:10px">
+      <div style="font-weight:700;font-size:12px;color:var(--amber);margin-bottom:10px">📊 إدارة المخزون</div>
+      <div class="form-row">
+        ${fg('حد إعادة الطلب (Reorder Level)', inp('m-reorder','number',m.reorderLevel||'','عند الوصول إليه: طلب شراء تلقائي'))}
+        ${fg('مخزون الأمان (Safety Stock)', inp('m-safety','number',m.safetyStock||'','كمية احتياطية استراتيجية'))}
+      </div>
+      <div class="form-row">
+        ${fg('وقت الرصاص (Lead Time — أيام)', inp('m-lead','number',m.leadTimeDays||'','من الطلب حتى الاستلام'))}
+        ${fg('الحد الأدنى للطلب (MOQ)', inp('m-moq','number',m.moq||'','Minimum Order Quantity'))}
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab 4: المورد والمشتريات -->
+  <div id="mat-supplier" class="tab-content">
+    <div style="padding:12px;background:rgba(56,139,253,.06);border:1px solid rgba(56,139,253,.2);border-radius:10px;margin-bottom:12px">
+      <div style="font-weight:700;font-size:12px;color:var(--blue);margin-bottom:10px">🤝 قائمة الموردين المعتمدين (AVL)</div>
+      ${fg('المورد الرئيسي المعتمد *', inp('m-supplier','text',m.supplier||m.approvedSupplier||'','اسم المورد + بلد المنشأ'))}
+      ${fg('المورد البديل (Alternate Supplier)', inp('m-supplier2','text',m.alternateSupplier||'','مورد احتياطي عند الضرورة'))}
+      <div class="form-row">
+        ${fg('تاريخ آخر تدقيق للمورد', inp('m-audit-date','date',m.lastAuditDate||''))}
+        ${fg('درجة تقييم المورد', sel('m-vendor-grade',[{v:'A',l:'A — ممتاز (فحص مخفف)'},{v:'B',l:'B — جيد (فحص عادي)'},{v:'C',l:'C — مقبول (فحص مشدد)'},{v:'D',l:'D — تحت المراقبة'}],m.vendorGrade||'B'))}
+      </div>
+      ${fg('رقم شهادة GMP للمورد (API فقط)', inp('m-gmp-cert','text',m.supplierGmpCert||'','مع تاريخ الانتهاء'))}
+    </div>
+    <div class="form-row">
+      ${fg('سعر الوحدة التقديري (ج.م)', inp('m-cost','number',m.unitCost||'',''))}
+      ${fg('عملة الشراء', sel('m-currency',[{v:'EGP',l:'جنيه مصري'},{v:'USD',l:'دولار أمريكي'},{v:'EUR',l:'يورو'}],m.purchaseCurrency||'EGP'))}
+    </div>
+    ${fg('شروط الدفع مع المورد', inp('m-payment','text',m.paymentTerms||'','مثال: 60 يوم صافي / L/C'))}
+    ${fg('ملاحظات المورد والمشتريات', `<textarea id="m-supplier-notes" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif">${escapeHtml(m.supplierNotes||'')}</textarea>`)}
+  </div>
+
+  <!-- Tab 5: بيانات التغليف (للتغليف فقط) -->
+  ${mtype==='packaging'?`
+  <div id="mat-pkg" class="tab-content">
+    <div style="padding:12px;background:rgba(46,160,67,.06);border:1px solid rgba(46,160,67,.2);border-radius:10px;margin-bottom:12px">
+      <div style="font-weight:700;font-size:12px;color:var(--green-light);margin-bottom:10px">📋 Version Control — التغليف الثانوي</div>
+      <div class="form-row">
+        ${fg('رقم إصدار الطباعة (Artwork Version)', inp('m-art-ver','text',m.artworkVersion||'V1.0','مثال: V2.1'))}
+        ${fg('تاريخ اعتماد الإصدار', inp('m-art-date','date',m.artworkApprovalDate||today()))}
+      </div>
+      ${fg('سبب التغيير في الإصدار', inp('m-art-reason','text',m.artworkChangeReason||'','الإنشاء الأول أو سبب التعديل'))}
+    </div>
+    <div class="form-row">
+      ${fg('مستوى التغليف', sel('m-pkg-level',[{v:'primary',l:'أولي (يلامس الدواء)'},{v:'secondary',l:'ثانوي (علبة/نشرة)'},{v:'tertiary',l:'ثالثي (شحن/نقل)'}],m.packagingLevel||'primary'))}
+      ${fg('المادة الخام للتغليف', inp('m-pkg-material','text',m.packagingMaterial||'','PVC/PVDC/Alu/Glass Type I'))}
+    </div>
+    ${fg('مواصفات التغليف التفصيلية', `<textarea id="m-pkgspec" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif" placeholder="أبعاد — سُمك — WVTR — معايير الطباعة">${escapeHtml(m.packagingSpec||'')}</textarea>`)}
+    <div style="padding:10px;background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.2);border-radius:8px;font-size:11px;color:var(--red)">
+      ⚠️ 21 CFR 211.122: Labeling materials issued for a batch shall be carefully examined. All excess labeling bearing lot numbers shall be destroyed.
+    </div>
+  </div>` : ''}
+
+  <div class="form-actions">
+    <button class="btn btn-green" onclick="saveMaterial(${m.id||''})">💾 حفظ كارت الصنف</button>
+    <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+  </div>
+  </div>`;
+}
+
+function saveMaterial(id){
+  const name = document.getElementById('m-name')?.value?.trim();
+  if(!name) return alert('يرجى كتابة اسم المادة');
+  const mtype = document.getElementById('m-type')?.value||'raw_material';
+  const d = {
+    name, materialType: mtype,
+    subType: document.getElementById('m-subtype')?.value||null,
+    internalCode: document.getElementById('m-code')?.value||null,
+    gtin: document.getElementById('m-gtin')?.value||null,
+    casNumber: document.getElementById('m-cas')?.value||null,
+    einecsNumber: document.getElementById('m-einecs')?.value||null,
+    chemicalFormula: document.getElementById('m-formula')?.value||null,
+    molecularWeight: document.getElementById('m-mw')?.value||null,
+    description: document.getElementById('m-desc')?.value||null,
+    // Quality
+    pharmacopoeialGrade: document.getElementById('m-grade')?.value||null,
+    qualityGrade: document.getElementById('m-grade')?.value||null,
+    pharmacopoeialRef: document.getElementById('m-pharma')?.value||null,
+    assayMin: document.getElementById('m-assay-min')?.value||null,
+    lodMax: document.getElementById('m-lod-max')?.value||null,
+    specifications: document.getElementById('m-specs')?.value||null,
+    dmfNumber: document.getElementById('m-dmf')?.value||null,
+    cepNumber: document.getElementById('m-cep')?.value||null,
+    retestPeriodMonths: Number(document.getElementById('m-retest-months')?.value||0)||null,
+    expiryPeriodMonths: Number(document.getElementById('m-expiry-months')?.value||0)||null,
+    minShelfLifeAtReceipt: Number(document.getElementById('m-min-receipt')?.value||70),
+    minShelfLifeAtShipment: Number(document.getElementById('m-min-ship')?.value||180),
+    samplingPlanRef: document.getElementById('m-sampling')?.value||null,
+    testMethod: document.getElementById('m-method')?.value||null,
+    qualityNotes: document.getElementById('m-qnotes')?.value||null,
+    // Storage
+    storageCondition: document.getElementById('m-storage-cond')?.value||'ambient',
+    hazardClass: document.getElementById('m-hazard')?.value||'none',
+    tempMin: Number(document.getElementById('m-temp-min')?.value||15),
+    tempMax: Number(document.getElementById('m-temp-max')?.value||25),
+    humidityMax: Number(document.getElementById('m-humidity')?.value||60),
+    defaultWarehouseId: Number(document.getElementById('m-wh-default')?.value||0)||null,
+    lightSensitive: document.getElementById('m-light')?.checked||false,
+    moistureSensitive: document.getElementById('m-moisture')?.checked||false,
+    oxygenSensitive: document.getElementById('m-oxygen')?.checked||false,
+    temperatureSensitive: document.getElementById('m-temp-s')?.checked||false,
+    requiresDoubleKey: document.getElementById('m-double-lock')?.checked||false,
+    requiresDualSignature: document.getElementById('m-dual-sig')?.checked||false,
+    storageNotes: document.getElementById('m-storage-notes')?.value||null,
+    reorderLevel: Number(document.getElementById('m-reorder')?.value||0)||null,
+    safetyStock: Number(document.getElementById('m-safety')?.value||0)||null,
+    leadTimeDays: Number(document.getElementById('m-lead')?.value||0)||null,
+    moq: Number(document.getElementById('m-moq')?.value||0)||null,
+    // Supplier
+    supplier: document.getElementById('m-supplier')?.value||null,
+    approvedSupplier: document.getElementById('m-supplier')?.value||null,
+    alternateSupplier: document.getElementById('m-supplier2')?.value||null,
+    lastAuditDate: document.getElementById('m-audit-date')?.value||null,
+    vendorGrade: document.getElementById('m-vendor-grade')?.value||'B',
+    supplierGmpCert: document.getElementById('m-gmp-cert')?.value||null,
+    unitCost: document.getElementById('m-cost')?.value||null,
+    purchaseCurrency: document.getElementById('m-currency')?.value||'EGP',
+    paymentTerms: document.getElementById('m-payment')?.value||null,
+    supplierNotes: document.getElementById('m-supplier-notes')?.value||null,
+    // Packaging specific
+    artworkVersion: document.getElementById('m-art-ver')?.value||null,
+    artworkApprovalDate: document.getElementById('m-art-date')?.value||null,
+    artworkChangeReason: document.getElementById('m-art-reason')?.value||null,
+    packagingLevel: document.getElementById('m-pkg-level')?.value||null,
+    packagingMaterial: document.getElementById('m-pkg-material')?.value||null,
+    packagingSpec: document.getElementById('m-pkgspec')?.value||null,
+    unit: document.getElementById('m-unit')?.value||'كجم',
+    buyUnit: document.getElementById('m-buy-unit')?.value||null,
+    status: document.getElementById('m-status')?.value||'active',
+    currentStock: id ? (getById('materials',id)?.currentStock||'0') : '0',
+    updatedAt: new Date().toISOString(),
+  };
+  id ? update('materials',id,d) : insert('materials',d);
+  closeModal(); go('materials');
+}
+
+
+// ── ٢. استلام دفعات المواد الخام (GRN) — كامل ───────────────────────
+
+function addMaterialReceipt(matId){
+  const mats = getAll('materials');
+  const mat  = matId ? getById('materials',matId) : null;
+  const pOpts = [{v:0,l:'اختر مادة...'},...mats.filter(m=>m.status==='active').map(m=>({v:m.id,l:m.name+' ('+m.materialType+')'+(m.pharmacopoeialGrade?' ['+m.pharmacopoeialGrade+']':'')}))];
+  const pos  = getAll('purchaseOrders').filter(p=>p.status==='approved'||p.status==='pending');
+
+  showModal(modal('📥 استلام دفعة مواد خام — Goods Receipt Note (GRN)', `
+    <div style="padding:10px;background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.2);border-radius:8px;margin-bottom:14px;font-size:11px;color:var(--red)">
+      ⚖️ <strong>21 CFR 211.84:</strong> كل الواردات تدخل QUARANTINE أولاً — لا يُصرف أي شيء قبل إفراج QC
+    </div>
+
+    <div class="form-row">
+      ${fg('المادة *', sel('mr-mat', pOpts, matId||0))}
+      ${fg('أمر الشراء (اختياري)', sel('mr-po',[{v:0,l:'بدون أمر شراء'},...pos.map(p=>({v:p.id,l:`PO-${p.id} — ${p.materialName||'—'}`}))],0))}
+    </div>
+
+    <div style="padding:12px;background:rgba(56,139,253,.06);border:1px solid rgba(56,139,253,.2);border-radius:10px;margin-bottom:12px">
+      <div style="font-weight:700;font-size:12px;color:var(--blue);margin-bottom:10px">📦 بيانات الدفعة — Batch/Lot Information</div>
+      <div class="form-row">
+        ${fg('رقم الدفعة (LOT# / Batch#) *', inp('mr-lot','text','','رقم دفعة المورد — Supplier LOT#'))}
+        ${fg('رقم شهادة التحليل (CoA#)', inp('mr-coa','text','','Certificate of Analysis رقم'))}
+      </div>
+      <div class="form-row">
+        ${fg('تاريخ التصنيع', inp('mr-mfg','date',''))}
+        <div class="fg">
+          <label>تاريخ الصلاحية / إعادة الفحص <span id="mr-date-type-label" style="color:var(--muted);font-size:10px">(Expiry أو Retest)</span></label>
+          <input type="date" id="mr-expiry" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text)">
+        </div>
+      </div>
+      <div class="form-row">
+        ${fg('نوع التاريخ', sel('mr-date-type',[{v:'expiry',l:'Expiry Date — تاريخ صلاحية نهائي'},{v:'retest',l:'Retest Date — تاريخ إعادة فحص'}],'retest'))}
+        ${fg('الكمية المستلمة *', inp('mr-qty','number','',''))}
+      </div>
+    </div>
+
+    <div style="padding:12px;background:rgba(46,160,67,.06);border:1px solid rgba(46,160,67,.2);border-radius:10px;margin-bottom:12px">
+      <div style="font-weight:700;font-size:12px;color:var(--green-light);margin-bottom:10px">🏭 بيانات الشحنة والمورد</div>
+      <div class="form-row">
+        ${fg('المورد', inp('mr-supplier','text','','اسم الشركة + بلد المنشأ'))}
+        ${fg('رقم فاتورة المورد', inp('mr-inv','text','','Invoice Number'))}
+      </div>
+      <div class="form-row">
+        ${fg('تاريخ الاستلام', inp('mr-date','date',today()))}
+        ${fg('سعر الوحدة (ج.م)', inp('mr-price','number','',''))}
+      </div>
+      ${fg('درجة حرارة النقل (°C) — للمبردات', inp('mr-temp','text','','مثال: 5°C (يُدخل من Data Logger)'))}
+    </div>
+
+    <div id="mr-shelf-check" style="padding:10px;border-radius:8px;margin-bottom:12px;font-size:12px;display:none"></div>
+
+    ${fg('ملاحظات الاستلام', `<textarea id="mr-notes" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif" placeholder="حالة العبوة الخارجية — أي ملاحظات عند الاستلام..."></textarea>`)}
+
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveMaterialReceipt()">💾 حفظ وإدخال QUARANTINE</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`, null, '700px'));
+
+  setTimeout(()=>{
+    ['mr-mat','mr-expiry','mr-date-type'].forEach(id=>{
+      document.getElementById(id)?.addEventListener('change', checkShelfLifeAtReceipt);
+    });
+  },100);
+}
+
+function checkShelfLifeAtReceipt(){
+  const matId  = numVal('mr-mat');
+  const expiry = document.getElementById('mr-expiry')?.value;
+  const dtype  = document.getElementById('mr-date-type')?.value;
+  const el     = document.getElementById('mr-shelf-check');
+  const mat    = getById('materials', matId);
+  if(!el||!expiry||!mat) return;
+
+  const daysLeft  = Math.floor((new Date(expiry)-new Date())/86400000);
+  const totalDays = (dtype==='retest'
+    ? (mat.retestPeriodMonths||36)*30
+    : (mat.expiryPeriodMonths||24)*30);
+  const pctLeft   = totalDays > 0 ? Math.round(daysLeft/totalDays*100) : 100;
+  const minPct    = mat.minShelfLifeAtReceipt||70;
+  const ok        = pctLeft >= minPct;
+
+  el.style.display = 'block';
+  el.style.background = ok ? 'rgba(46,160,67,.08)' : 'rgba(248,81,73,.08)';
+  el.style.border = `1px solid rgba(${ok?'46,160,67':'248,81,73'},.25)`;
+  el.innerHTML = `
+    <strong>${ok?'✅ مقبول':'❌ مرفوض — صلاحية غير كافية'}</strong>
+    <div style="margin-top:4px">
+      متبقي: <strong>${daysLeft} يوم (${pctLeft}%)</strong> |
+      الحد الأدنى للاستلام: <strong>${minPct}%</strong>
+      ${!ok?`<br><span style="color:var(--red)">⚠️ يجب موافقة QA قبل قبول هذه الدفعة</span>`:''}
+    </div>`;
+
+  const lbl = document.getElementById('mr-date-type-label');
+  if(lbl) lbl.textContent = dtype==='retest' ? '(Retest Date — إعادة فحص)' : '(Expiry Date — صلاحية نهائية)';
+}
+
+function saveMaterialReceipt(){
+  const matId = numVal('mr-mat');
+  const lot   = val('mr-lot');
+  const qty   = numVal('mr-qty');
+  if(!matId||!lot||!qty) return alert('يرجى: اختيار المادة + رقم الدفعة + الكمية');
+  const mat   = getById('materials', matId);
+  const expiry  = document.getElementById('mr-expiry')?.value||null;
+  const dtype   = document.getElementById('mr-date-type')?.value||'retest';
+  const daysLeft = expiry ? Math.floor((new Date(expiry)-new Date())/86400000) : 9999;
+  const totalDays = dtype==='retest'
+    ? (mat?.retestPeriodMonths||36)*30
+    : (mat?.expiryPeriodMonths||24)*30;
+  const pctLeft = totalDays>0 ? Math.round(daysLeft/totalDays*100) : 100;
+  const minPct  = mat?.minShelfLifeAtReceipt||70;
+
+  const d = {
+    materialId:       matId,
+    materialName:     mat?.name||'',
+    batchNumber:      lot,
+    quantity:         qty,
+    remainingQuantity: qty,
+    usedQuantity:     0,
+    coaNumber:        val('mr-coa')||null,
+    manufacturingDate:document.getElementById('mr-mfg')?.value||null,
+    expiryDate:       dtype==='expiry' ? expiry : null,
+    retestDate:       dtype==='retest' ? expiry : null,
+    dateType:         dtype,
+    supplier:         val('mr-supplier')||mat?.supplier||null,
+    invoiceNumber:    val('mr-inv')||null,
+    receiptDate:      document.getElementById('mr-date')?.value||today(),
+    unitCost:         numVal('mr-price')||mat?.unitCost||null,
+    transportTemp:    val('mr-temp')||null,
+    notes:            document.getElementById('mr-notes')?.value||null,
+    purchaseOrderId:  numVal('mr-po')||null,
+    status:           'quarantine',
+    shelfLifePct:     pctLeft,
+    shelfLifeWarning: pctLeft < minPct,
+    receivedBy:       _authUser?.name||'—',
+    createdAt:        new Date().toISOString(),
+  };
+
+  insert('materialReceipts', d);
+  // Update material current stock
+  update('materials', matId, {
+    currentStock: String(Number(mat?.currentStock||0) + qty)
+  });
+  closeModal();
+  if(pctLeft < minPct) showNotif&&showNotif(`⚠️ تحذير: صلاحية الدفعة (${pctLeft}%) أقل من الحد الأدنى (${minPct}%) — يُنصح بمراجعة QA`, 'warn');
+  showNotif&&showNotif(`✅ تم إدخال الدفعة ${lot} في QUARANTINE — بانتظار إفراج QC`, 'success');
+  go('materials');
+}
+
+
+// ── ٣. تغيير حالة دفعة المخزون — GMP Status Control ─────────────────
+
+function changeReceiptStatus(receiptId){
+  const rec = getById('materialReceipts', receiptId);
+  if(!rec) return;
+  const mat = getById('materials', rec.materialId);
+  const current = rec.status||'quarantine';
+  const st = STOCK_STATUSES[current] || {l:current, c:'b-gray'};
+
+  const allowedTransitions = {
+    quarantine:  [{v:'approved',l:'✅ إفراج (Approved) — QC اجتاز'},{v:'rejected',l:'❌ رفض (Rejected)'},{v:'sampling',l:'🔬 أخذ عينات (Sampling)'}],
+    sampling:    [{v:'quarantine',l:'🔒 إعادة للعزل'},{v:'approved',l:'✅ إفراج بعد الفحص'}],
+    approved:    [{v:'hold',l:'⏸️ تعليق (On Hold)'},{v:'rejected',l:'❌ رفض لاحق'},{v:'retest_due',l:'⏰ إعادة فحص'}],
+    retest_due:  [{v:'approved',l:'✅ نجح إعادة الفحص'},{v:'rejected',l:'❌ رسب إعادة الفحص'}],
+    hold:        [{v:'approved',l:'✅ رفع التعليق'},{v:'rejected',l:'❌ رفض'}],
+    rejected:    [{v:'destruction',l:'🗑️ إتلاف رسمي'}],
+    expired:     [{v:'destruction',l:'🗑️ إتلاف رسمي'}],
+  };
+  const transitions = allowedTransitions[current] || [];
+
+  showModal(modal(`🔄 تغيير حالة الدفعة — ${rec.batchNumber}`, `
+    <div style="padding:12px;background:rgba(56,139,253,.06);border-radius:10px;margin-bottom:14px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px">
+        <div><span style="color:var(--muted)">المادة:</span><br><strong>${escapeHtml(rec.materialName||'—')}</strong></div>
+        <div><span style="color:var(--muted)">الدفعة:</span><br><strong>${escapeHtml(rec.batchNumber||'—')}</strong></div>
+        <div><span style="color:var(--muted)">الكمية المتبقية:</span><br><strong>${fmtN(rec.remainingQuantity||0)}</strong></div>
+      </div>
+      <div style="margin-top:8px">الحالة الحالية: <span class="badge ${st.c}">${st.l}</span></div>
+    </div>
+
+    ${transitions.length ? `
+    ${fg('الحالة الجديدة *', sel('st-new', [{v:'',l:'اختر...'},...transitions]))}
+    ${fg('سبب التغيير / ملاحظة QA *', `<textarea id="st-reason" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif" placeholder="اكتب سبب تغيير الحالة..."></textarea>`)}
+    ${fg('تاريخ إعادة الفحص التالي (إذا تم الإفراج)', inp('st-retest-next','date',''))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="applyStatusChange(${receiptId})">✅ تطبيق التغيير</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>` : `
+    <div style="padding:16px;text-align:center;color:var(--muted)">لا يوجد تحويلات مسموحة من هذه الحالة</div>
+    <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">إغلاق</button></div>
+    `}`));
+}
+
+function applyStatusChange(receiptId){
+  const newStatus = val('st-new');
+  const reason    = document.getElementById('st-reason')?.value||'';
+  if(!newStatus)  return alert('اختر الحالة الجديدة');
+  if(!reason.trim()) return alert('يجب كتابة سبب التغيير (GMP requirement)');
+
+  const rec  = getById('materialReceipts', receiptId);
+  const updates = {
+    status:      newStatus,
+    statusChangedBy:  _authUser?.name||'—',
+    statusChangedAt:  new Date().toISOString(),
+    statusReason:     reason,
+  };
+  if(newStatus==='approved' && document.getElementById('st-retest-next')?.value){
+    updates.retestDate = document.getElementById('st-retest-next')?.value;
+  }
+  update('materialReceipts', receiptId, updates);
+
+  // Add to audit log entry
+  insert('auditLogs', {
+    action:'STATUS_CHANGE',
+    table:'materialReceipts',
+    recordId: receiptId,
+    oldValue: rec?.status,
+    newValue: newStatus,
+    reason,
+    user: _authUser?.name||'—',
+    timestamp: new Date().toISOString(),
+  });
+
+  closeModal();
+  const labels = STOCK_STATUSES[newStatus]?.l || newStatus;
+  showNotif&&showNotif(`✅ تم تغيير حالة الدفعة إلى: ${labels}`, 'success');
+  go('materials');
+}
+
+
+// ── ٤. FEFO خوارزمية الصرف التلقائي ──────────────────────────────────
+
+function getFefoLots(materialId, requiredQty){
+  const receipts = getAll('materialReceipts');
+  const approved = receipts.filter(r=>
+    r.materialId===materialId &&
+    r.status==='approved' &&
+    Number(r.remainingQuantity||0) > 0
+  );
+
+  // Sort FEFO: by retest/expiry date ascending, then FIFO by receiptDate
+  approved.sort((a,b)=>{
+    const da = a.retestDate||a.expiryDate||'9999-12-31';
+    const db = b.retestDate||b.expiryDate||'9999-12-31';
+    if(da !== db) return da < db ? -1 : 1;
+    return (a.receiptDate||'') < (b.receiptDate||'') ? -1 : 1;
+  });
+
+  // Select lots to fulfill required qty
+  let remaining = requiredQty;
+  const selected = [];
+  for(const lot of approved){
+    if(remaining <= 0) break;
+    const take = Math.min(Number(lot.remainingQuantity||0), remaining);
+    selected.push({...lot, takeQty: take});
+    remaining -= take;
+  }
+
+  return { selected, shortage: Math.max(0, remaining), total: requiredQty };
+}
+
+function showFefoSelector(materialId, requiredQty, onSelect){
+  const result = getFefoLots(materialId, requiredQty);
+  const mat    = getById('materials', materialId);
+
+  showModal(modal(`📦 اختيار الدفعة — FEFO — ${mat?.name||'—'}`, `
+    <div style="padding:10px;background:rgba(56,139,253,.06);border-radius:8px;margin-bottom:12px;font-size:12px">
+      المطلوب: <strong>${fmtN(requiredQty)}</strong> |
+      ${result.shortage > 0
+        ? `<span style="color:var(--red)">نقص: ${fmtN(result.shortage)} ⚠️</span>`
+        : '<span style="color:var(--green-light)">كمية كافية ✅</span>'}
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">
+      الترتيب: الأقرب انتهاءً أولاً (FEFO) — ثم الأقدم استلاماً (FIFO)
+    </div>
+    ${result.selected.map((lot,i)=>`
+    <div style="padding:10px;border:1px solid ${i===0?'rgba(46,160,67,.4)':'var(--border)'};border-radius:8px;margin-bottom:8px;background:${i===0?'rgba(46,160,67,.04)':'var(--bg)'}">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <strong>LOT: ${escapeHtml(lot.batchNumber||'—')}</strong>
+          ${i===0?'<span class="badge b-green" style="font-size:10px;margin-right:4px">FEFO أول</span>':''}
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">
+            ${lot.retestDate?`Retest: ${lot.retestDate}`:''}
+            ${lot.expiryDate?`Expiry: ${lot.expiryDate}`:''}
+            | مورد: ${escapeHtml(lot.supplier||'—')}
+          </div>
+        </div>
+        <div style="text-align:left;font-size:12px">
+          <div>متاح: <strong>${fmtN(lot.remainingQuantity)}</strong></div>
+          <div style="color:var(--green-light)">يُصرف: <strong>${fmtN(lot.takeQty)}</strong></div>
+        </div>
+      </div>
+    </div>`).join('')}
+    ${result.shortage > 0 ? `
+    <div style="padding:10px;background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.2);border-radius:8px;font-size:12px;color:var(--red)">
+      ⚠️ نقص ${fmtN(result.shortage)} — المخزون المتاح غير كافٍ. يُنصح بتقليل الكمية أو طلب شراء.
+    </div>` : ''}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="confirmFefoSelection(${materialId},${requiredQty})">✅ تأكيد الاختيار</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+window._fefoCallbacks = {};
+function confirmFefoSelection(materialId, requiredQty){
+  const result = getFefoLots(materialId, requiredQty);
+  closeModal();
+  if(window._fefoCallbacks[materialId]) window._fefoCallbacks[materialId](result);
+}
+
+
+// ── ٥. المستودعات مع ظروف التخزين ───────────────────────────────────
+
+function addWarehouse(){
+  showModal(modal('🏭 إضافة مستودع / منطقة تخزين', `
+    <div class="form-row">
+      ${fg('اسم المستودع *', inp('wh-name','text','','مثال: مستودع المواد الخام المبردة'))}
+      ${fg('الكود / الرمز', inp('wh-code','text','','WH-COLD-01'))}
+    </div>
+    ${fg('نوع المستودع', sel('wh-type',[
+      {v:'raw_material',     l:'🧪 مواد خام وسواغات'},
+      {v:'packaging',        l:'📦 مواد تغليف'},
+      {v:'finished_goods',   l:'💊 منتج تام'},
+      {v:'quarantine_in',    l:'🔒 عزل وارد'},
+      {v:'quarantine_fg',    l:'🔒 عزل منتج تام'},
+      {v:'rejected',         l:'❌ مواد مرفوضة'},
+      {v:'returned',         l:'🔄 مرتجعات'},
+      {v:'expired',          l:'☠️ منتهية الصلاحية'},
+      {v:'destruction',      l:'🗑️ قيد الإتلاف'},
+      {v:'narcotics',        l:'🔐 مخدرات/مؤثرات عقلية'},
+      {v:'flammable',        l:'⚠️ مواد قابلة للاشتعال'},
+      {v:'sampling',         l:'🔬 كشك أخذ العينات'},
+    ],'raw_material'))}
+
+    <div style="padding:12px;background:rgba(56,139,253,.06);border:1px solid rgba(56,139,253,.2);border-radius:10px;margin-bottom:12px;margin-top:12px">
+      <div style="font-weight:700;font-size:12px;color:var(--blue);margin-bottom:10px">🌡️ ظروف التخزين المطلوبة</div>
+      <div class="form-row">
+        ${fg('فئة التخزين', sel('wh-cond', STORAGE_CONDITIONS, 'ambient'))}
+        ${fg('درجة حرارة — Min (°C)', inp('wh-temp-min','number',15,''))}
+      </div>
+      <div class="form-row">
+        ${fg('درجة حرارة — Max (°C)', inp('wh-temp-max','number',25,''))}
+        ${fg('رطوبة نسبية — Max (%RH)', inp('wh-humidity','number',60,''))}
+      </div>
+      <div class="form-row">
+        ${fg('تنبيه: درجة حرارة تجاوزت', inp('wh-temp-alert','number',27,'°C — يُرسل تنبيه عند التجاوز'))}
+        ${fg('مسجل حرارة (Data Logger)', sel('wh-logger',[{v:'yes',l:'✅ يوجد مسجل حرارة'},{v:'no',l:'❌ لا يوجد'}],'yes'))}
+      </div>
+    </div>
+
+    <div class="form-row">
+      ${fg('طاقة التخزين القصوى (وحدات)', inp('wh-capacity','number','','اختياري'))}
+      ${fg('الأيقونة', inp('wh-icon','text','🏭','إيموجي لتمييز المستودع'))}
+    </div>
+    ${fg('الوصف والتعليمات الخاصة', `<textarea id="wh-notes" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif"></textarea>`)}
+
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveWarehouse()">💾 حفظ المستودع</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+function saveWarehouse(id){
+  const name = val('wh-name');
+  if(!name) return alert('يرجى كتابة اسم المستودع');
+  const d = {
+    name: name, warehouseName: name,
+    code: val('wh-code')||null,
+    warehouseType: document.getElementById('wh-type')?.value||'raw_material',
+    storageCondition: document.getElementById('wh-cond')?.value||'ambient',
+    tempMin: Number(document.getElementById('wh-temp-min')?.value||15),
+    tempMax: Number(document.getElementById('wh-temp-max')?.value||25),
+    humidityMax: Number(document.getElementById('wh-humidity')?.value||60),
+    tempAlertThreshold: Number(document.getElementById('wh-temp-alert')?.value||27),
+    hasDataLogger: document.getElementById('wh-logger')?.value==='yes',
+    capacity: Number(document.getElementById('wh-capacity')?.value||0)||null,
+    icon: val('wh-icon')||'🏭',
+    notes: document.getElementById('wh-notes')?.value||null,
+    isActive: true,
+    createdAt: new Date().toISOString(),
+  };
+  id ? update('warehouses',id,d) : insert('warehouses',d);
+  closeModal(); go('warehouses');
+}
+
+
+// ── ٦. صلاحية المنتجات — تصنيف بصري كامل ───────────────────────────
+
+function getExpiryStatus(expiryDate, retestDate){
+  const checkDate = retestDate || expiryDate;
+  if(!checkDate) return {label:'—', color:'var(--muted)', class:'b-gray', pct:100, days:9999};
+  const days = Math.floor((new Date(checkDate) - new Date()) / 86400000);
+  if(days < 0)    return {label:`منتهي منذ ${Math.abs(days)} يوم`, color:'var(--red)',          class:'b-red',    pct:0,   days};
+  if(days < 30)   return {label:`${days} يوم — حرج`,              color:'var(--red)',          class:'b-red',    pct:5,   days};
+  if(days < 90)   return {label:`${days} يوم — تحذير`,            color:'var(--amber)',        class:'b-amber',  pct:25,  days};
+  if(days < 180)  return {label:`${days} يوم — قريب`,             color:'#f0aa00',            class:'b-amber',  pct:50,  days};
+  return                  {label:`${days} يوم — جيد`,             color:'var(--green-light)', class:'b-green',  pct:100, days};
+}
+
+function expiryBar(days, maxDays=365){
+  const pct = Math.max(0, Math.min(100, days/maxDays*100));
+  const color = days<0?'var(--red)':days<30?'var(--red)':days<90?'var(--amber)':'var(--green)';
+  return `<div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:3px">
+    <div style="height:100%;width:${pct}%;background:${color};border-radius:3px;transition:width .3s"></div>
+  </div>`;
+}
+
+
+// ── ٧. الأرقام التسلسلية — Serialization مع التجميع ─────────────────
+
+function addSerialNumbers(){
+  const prods = getAll('products').filter(p=>p.isSerialized||p.gtin);
+  showModal(modal('🔢 تسجيل أرقام تسلسلية — GS1 Serialization',`
+    <div style="padding:10px;background:rgba(56,139,253,.06);border-radius:8px;margin-bottom:12px;font-size:11px">
+      📋 <strong>GS1 DataMatrix إلزامي:</strong> GTIN (01) + Serial# (21) + LOT (10) + Expiry (17)
+    </div>
+    <div class="form-row">
+      ${fg('المنتج *', sel('sn-prod',[{v:0,l:'اختر منتج...'},...prods.map(p=>({v:p.id,l:p.name+(p.gtin?' [GTIN:'+p.gtin+']':'')}))],0))}
+      ${fg('رقم الدفعة (LOT#) *', inp('sn-lot','text','',''))}
+    </div>
+    <div class="form-row">
+      ${fg('تاريخ الصلاحية *', inp('sn-expiry','date',''))}
+      ${fg('رقم التسلسلي من (From)', inp('sn-from','number',1,''))}
+    </div>
+    <div class="form-row">
+      ${fg('رقم التسلسلي إلى (To)', inp('sn-to','number','',''))}
+      ${fg('بادئة الرقم (Prefix)', inp('sn-prefix','text','','مثال: EG2025'))}
+    </div>
+    ${fg('مستوى التعبئة', sel('sn-level',[{v:'unit',l:'عبوة فردية (Unit)'},{v:'case',l:'كرتونة (Case)'},{v:'pallet',l:'باليت (Pallet)'}],'unit'))}
+    ${fg('الـ SSCC للحاوية الأب (للتجميع)', inp('sn-parent','text','','اتركه فارغاً إن لم يكن هناك تجميع'))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="generateSerialNumbers()">⚡ توليد الأرقام التسلسلية</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+function generateSerialNumbers(){
+  const prodId  = numVal('sn-prod');
+  const lot     = val('sn-lot');
+  const expiry  = document.getElementById('sn-expiry')?.value;
+  const from    = numVal('sn-from')||1;
+  const to      = numVal('sn-to');
+  const prefix  = val('sn-prefix')||'SN';
+  const level   = document.getElementById('sn-level')?.value||'unit';
+  const parent  = val('sn-parent')||null;
+  if(!prodId||!lot||!expiry||!to) return alert('يرجى: المنتج + الدفعة + تاريخ الصلاحية + النطاق');
+  if(to-from > 10000) return alert('الحد الأقصى 10,000 رقم في المرة الواحدة');
+  const prod = getById('products', prodId);
+  let added = 0;
+  for(let i=from; i<=to; i++){
+    const sn = `${prefix}${String(i).padStart(8,'0')}`;
+    insert('serialNumbers',{
+      productId: prodId,
+      productName: prod?.name||'',
+      gtin: prod?.gtin||null,
+      serialNumber: sn,
+      batchNumber: lot,
+      expiryDate: expiry,
+      packagingLevel: level,
+      parentSSCC: parent,
+      status: 'commissioned',
+      commissionedAt: new Date().toISOString(),
+      commissionedBy: _authUser?.name||'—',
+      currentLocation: 'warehouse',
+    });
+    added++;
+  }
+  closeModal();
+  showNotif&&showNotif(`✅ تم توليد ${added} رقم تسلسلي — الحالة: Commissioned`, 'success');
+  go('serialnumbers');
+}
+
+function scanSerialOnShipment(serialNumber, deliveryOrderId){
+  const sn = (getAll('serialNumbers')||[]).find(s=>s.serialNumber===serialNumber);
+  if(!sn) return {ok:false, reason:'الرقم التسلسلي غير موجود في النظام'};
+  if(sn.status==='sold'||sn.status==='shipped') return {ok:false, reason:`سبق شحنه — الحالة: ${sn.status}`};
+  if(sn.status==='destroyed') return {ok:false, reason:'هذا الرقم مُتلف'};
+  const days = Math.floor((new Date(sn.expiryDate)-new Date())/86400000);
+  if(days < 0) return {ok:false, reason:'منتهي الصلاحية'};
+  // Mark as shipped
+  update('serialNumbers', sn.id, {
+    status:'shipped',
+    shippedAt: new Date().toISOString(),
+    deliveryOrderId,
+  });
+  return {ok:true, sn};
+}
+
+
+// ── ٨. الجرد الدوري — Cycle Counting ──────────────────────────────────
+
+PAGES.cyclecounting = function(){
+  const recs   = getAll('materialReceipts').filter(r=>r.status==='approved');
+  const mats   = getAll('materials');
+  const counts = getAll('cycleCountRecords')||[];
+  const today  = new Date().toISOString().split('T')[0];
+
+  setPage('📊 الجرد الدوري — Cycle Counting','مطابقة المخزون الفعلي مع السجلات',
+    `<div style="display:flex;gap:8px">
+      <button class="btn btn-green" onclick="startCycleCount()">+ بدء جرد جديد</button>
+      <button class="btn btn-white" onclick="go('materials')">← المواد</button>
+    </div>`,
+    `<div class="card">${tbl(
+      ['المادة','رقم الدفعة','الكمية السجلية','الكمية الفعلية','الفرق','الحالة','إجراء'],
+      recs.map(r=>{
+        const mat = getById('materials',r.materialId);
+        const lastCount = counts.filter(c=>c.receiptId===r.id).sort((a,b)=>b.countDate>a.countDate?1:-1)[0];
+        const diff = lastCount ? (lastCount.actualQty - Number(r.remainingQuantity||0)) : null;
+        const diffOk = diff === null ? true : Math.abs(diff) <= 0.01;
+        return tr(
+          escapeHtml(mat?.name||'—'),
+          escapeHtml(r.batchNumber||'—'),
+          fmtN(r.remainingQuantity||0),
+          lastCount ? fmtN(lastCount.actualQty) : '—',
+          diff !== null ? `<span class="${diffOk?'text-green':'text-red'} fw7">${diff>0?'+':''}${fmtN(diff)}</span>` : '—',
+          lastCount ? `<span class="badge ${diffOk?'b-green':'b-red'}">${diffOk?'✅ مطابق':'❌ فرق'}</span>` : '<span class="badge b-gray">لم يُجرد</span>',
+          `<button class="btn btn-white btn-sm" onclick="enterCycleCount(${r.id})">إدخال عدد</button>`
+        );
+      })
+    ,'tbl_cyclecounting')}</div>`
+  );
+};
+
+function enterCycleCount(receiptId){
+  const rec = getById('materialReceipts', receiptId);
+  const mat = getById('materials', rec?.materialId);
+  showModal(modal('📊 إدخال نتيجة الجرد',`
+    <div style="padding:10px;background:var(--hover);border-radius:8px;margin-bottom:12px;font-size:12px">
+      <strong>${escapeHtml(mat?.name||'—')}</strong> — دفعة: ${escapeHtml(rec?.batchNumber||'—')}
+      <div>الكمية المسجلة: <strong>${fmtN(rec?.remainingQuantity||0)} ${mat?.unit||''}</strong></div>
+    </div>
+    ${fg('الكمية الفعلية المعدودة *', inp('cc-qty','number','','أدخل الكمية الفعلية بعد العد'))}
+    ${fg('اسم القائم بالجرد', inp('cc-counter','text',_authUser?.name||'',''))}
+    ${fg('ملاحظات / سبب الفرق', `<textarea id="cc-notes" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif"></textarea>`)}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveCycleCount(${receiptId})">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+function saveCycleCount(receiptId){
+  const actual = numVal('cc-qty');
+  if(actual===null||actual===undefined) return alert('أدخل الكمية الفعلية');
+  const rec = getById('materialReceipts', receiptId);
+  const diff = actual - Number(rec?.remainingQuantity||0);
+  insert('cycleCountRecords',{
+    receiptId, materialId:rec?.materialId,
+    batchNumber: rec?.batchNumber,
+    bookQty: rec?.remainingQuantity,
+    actualQty: actual,
+    difference: diff,
+    countDate: today(),
+    countedBy: val('cc-counter')||_authUser?.name||'—',
+    notes: document.getElementById('cc-notes')?.value||null,
+    approved: Math.abs(diff) <= 0.01,
+  });
+  if(Math.abs(diff) > 0.01){
+    showNotif&&showNotif(`⚠️ فرق جرد: ${diff>0?'+':''}${fmtN(diff)} — يجب التحقيق قبل الترحيل`, 'warn');
+  }
+  closeModal(); go('cyclecounting');
+}
+
+// ── ٩. تحديث صفحة المواد الخام لتشمل كل الميزات ─────────────────────
+
+window._origMatsPage = PAGES.materials;
+PAGES.materials = function(){
+  const rows    = getAll('materials');
+  const recs    = getAll('materialReceipts');
+  const raw     = rows.filter(r=>r.materialType==='raw_material');
+  const pkg     = rows.filter(r=>r.materialType==='packaging');
+  const lowStock = rows.filter(r=>Number(r.currentStock||0)<=Number(r.reorderLevel||0)&&r.reorderLevel);
+  const retestSoon = recs.filter(r=>{
+    const d = r.retestDate||r.expiryDate;
+    if(!d) return false;
+    const days = Math.floor((new Date(d)-new Date())/86400000);
+    return days>=0 && days<=60 && r.status==='approved';
+  });
+
+  setPage('🧪 المواد الخام والتغليف','إدارة المواد وفق GMP — ICH Q7 — 21 CFR 211',
+    `<div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-green" onclick="addMaterial('raw_material')">+ مادة خام</button>
+      <button class="btn btn-green" style="background:rgba(46,160,67,.12);color:var(--green-light);border:1px solid rgba(46,160,67,.3)" onclick="addMaterial('packaging')">+ مادة تغليف</button>
+      <button class="btn btn-white" onclick="addMaterialReceipt()">📥 استلام دفعة (GRN)</button>
+      <button class="btn btn-white" onclick="go('cyclecounting')">📊 الجرد الدوري</button>
+    </div>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">مواد خام</div><div class="val">${raw.length}</div></div>
+      <div class="stat-card"><div class="lbl">مواد تغليف</div><div class="val">${pkg.length}</div></div>
+      <div class="stat-card"><div class="lbl text-red">مخزون منخفض ⚠️</div><div class="val text-red">${lowStock.length}</div></div>
+      <div class="stat-card"><div class="lbl text-amber">إعادة فحص قريباً ⏰</div><div class="val text-amber">${retestSoon.length}</div></div>
+    </div>
+
+    ${retestSoon.length ? `
+    <div style="padding:12px;background:rgba(240,136,0,.06);border:1px solid rgba(240,136,0,.2);border-radius:10px;margin-bottom:16px">
+      <div style="font-weight:700;font-size:12px;color:var(--amber);margin-bottom:8px">⏰ دفعات تحتاج إعادة فحص خلال 60 يوم</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        ${retestSoon.slice(0,6).map(r=>{
+          const mat = getById('materials',r.materialId);
+          const d = r.retestDate||r.expiryDate;
+          const days = Math.floor((new Date(d)-new Date())/86400000);
+          return `<div style="padding:8px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:11px">
+            <div style="font-weight:700">${escapeHtml(mat?.name||'—')}</div>
+            <div>LOT: ${escapeHtml(r.batchNumber||'—')}</div>
+            <div style="color:${days<30?'var(--red)':'var(--amber)'}">${days} يوم</div>
+            <button class="btn btn-sm" style="margin-top:4px;font-size:10px" onclick="changeReceiptStatus(${r.id})">تغيير الحالة</button>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : ''}
+
+    <div class="card">${tbl(
+      ['المادة','النوع','الدرجة','CAS','المخزون','إعادة الطلب','المورد','الحالة','إجراء'],
+      rows.map(m=>{
+        const receipts = recs.filter(r=>r.materialId===m.id&&r.status==='approved');
+        const nearExpiry = receipts.some(r=>{
+          const d = r.retestDate||r.expiryDate;
+          return d && Math.floor((new Date(d)-new Date())/86400000)<60;
+        });
+        const lowSt = Number(m.currentStock||0) <= Number(m.reorderLevel||0) && m.reorderLevel;
+        const hazIcon = m.hazardClass==='narcotic'?'🔐':m.hazardClass==='flammable'?'⚠️':m.hazardClass==='toxic'?'☠️':'';
+        return tr(
+          `<div>
+            <strong>${hazIcon} ${escapeHtml(m.name||'—')}</strong>
+            ${m.casNumber?`<div style="font-size:10px;color:var(--muted)">CAS: ${m.casNumber}</div>`:''}
+            ${m.chemicalFormula?`<div style="font-size:10px;color:var(--muted)">${m.chemicalFormula}</div>`:''}
+          </div>`,
+          `<span style="font-size:11px">${m.materialType==='raw_material'?'🧪 خام':'📦 تغليف'}</span>
+           ${m.subType?`<div style="font-size:10px;color:var(--muted)">${m.subType}</div>`:''}`,
+          m.pharmacopoeialGrade?`<span class="badge b-blue" style="font-size:10px">${m.pharmacopoeialGrade}</span>`:'—',
+          m.casNumber?`<code style="font-size:10px">${m.casNumber}</code>`:'—',
+          `<div style="${lowSt?'color:var(--red);font-weight:700':''}">
+            ${fmtN(m.currentStock||0)} ${m.unit||''}
+            ${lowSt?'<span class="badge b-red" style="font-size:10px">منخفض ⚠️</span>':''}
+            ${nearExpiry?'<span class="badge b-amber" style="font-size:10px">فحص قريب ⏰</span>':''}
+          </div>`,
+          m.reorderLevel?fmtN(m.reorderLevel)+' '+m.unit:'—',
+          escapeHtml(m.supplier||'—').substring(0,20),
+          `<span class="badge ${m.status==='active'?'b-green':'b-gray'}">${m.status==='active'?'نشط':'غير نشط'}</span>`,
+          `<div class="action-bar" style="gap:4px">
+            <button class="btn btn-white btn-sm" style="font-size:10px" onclick="addMaterialReceipt(${m.id})">📥 GRN</button>
+            <button class="btn btn-white btn-sm" style="font-size:10px" onclick="showMaterialBatches(${m.id})">📦 الدفعات</button>
+            <button class="icon-btn edit" onclick="editMaterial(${m.id})">${ic.edit}</button>
+            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('materials',${m.id});go('materials')}">${ic.del}</button>
+          </div>`
+        );
+      })
+    ,'tbl_materials')}</div>`
+  );
+};
+
+function showMaterialBatches(matId){
+  const mat  = getById('materials', matId);
+  const recs = getAll('materialReceipts').filter(r=>r.materialId===matId);
+
+  showModal(modal(`📦 دفعات: ${mat?.name||'—'}`, `
+    <div style="max-height:70vh;overflow-y:auto">
+    ${recs.length ? recs.sort((a,b)=>(b.receiptDate||'')>(a.receiptDate||'')?1:-1).map(r=>{
+      const st = STOCK_STATUSES[r.status||'quarantine']||STOCK_STATUSES.quarantine;
+      const checkDate = r.retestDate||r.expiryDate;
+      const exp = getExpiryStatus(r.expiryDate, r.retestDate);
+      return `
+      <div style="padding:12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <strong>LOT: ${escapeHtml(r.batchNumber||'—')}</strong>
+            <span class="badge ${st.c}" style="margin-right:6px;font-size:10px">${st.l}</span>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">
+              مورد: ${escapeHtml(r.supplier||'—')} | استلام: ${r.receiptDate||'—'}
+              ${r.coaNumber?` | CoA: ${r.coaNumber}`:''}
+            </div>
+          </div>
+          <div style="text-align:left;font-size:12px">
+            <div>متبقي: <strong>${fmtN(r.remainingQuantity||0)} ${mat?.unit||''}</strong></div>
+            <div>مُستخدم: ${fmtN(r.usedQuantity||0)}</div>
+          </div>
+        </div>
+        <div style="margin-top:6px">
+          ${checkDate?`
+          <div style="font-size:11px;color:${exp.color}">${r.dateType==='retest'?'إعادة فحص':'صلاحية'}: ${checkDate} — ${exp.label}</div>
+          ${expiryBar(exp.days)}` : ''}
+        </div>
+        <div style="margin-top:8px;display:flex;gap:6px">
+          <button class="btn btn-white btn-sm" style="font-size:10px" onclick="closeModal();changeReceiptStatus(${r.id})">🔄 تغيير الحالة</button>
+          ${r.status==='approved'?`<button class="btn btn-white btn-sm" style="font-size:10px" onclick="closeModal();showFefoSelector(${matId},0,null)">📦 FEFO عرض</button>`:''}
+        </div>
+      </div>`;
+    }).join('') : '<div style="padding:20px;text-align:center;color:var(--muted)">لا توجد دفعات مسجلة لهذه المادة</div>'}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="closeModal();addMaterialReceipt(${matId})">📥 استلام دفعة جديدة</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إغلاق</button>
+    </div>`));
+}
+
+// ── ١٠. Background Job: فحص تلقائي يومي للصلاحية وإعادة الفحص ───────
+
+function runDailyExpiryCheck(){
+  const recs    = getAll('materialReceipts');
+  const inv     = getAll('inventory');
+  const today   = new Date();
+  let warnings  = 0;
+
+  // فحص المواد الخام
+  recs.forEach(r=>{
+    if(!['approved','quarantine'].includes(r.status)) return;
+    const checkDate = r.retestDate||r.expiryDate;
+    if(!checkDate) return;
+    const d = new Date(checkDate);
+    const days = Math.floor((d - today)/86400000);
+
+    if(days < 0 && r.status==='approved'){
+      update('materialReceipts', r.id, {status:'expired', autoExpiredAt: today.toISOString()});
+      warnings++;
+    } else if(days===0 && r.retestDate && r.status==='approved'){
+      update('materialReceipts', r.id, {status:'retest_due', retestDueAt: today.toISOString()});
+      warnings++;
+    }
+  });
+
+  // فحص مخزون المنتج التام
+  inv.forEach(item=>{
+    if(!item.expiryDate) return;
+    const days = Math.floor((new Date(item.expiryDate) - today)/86400000);
+    if(days < 0 && item.status!=='expired'){
+      update('inventory', item.id, {status:'expired'});
+      warnings++;
+    }
+  });
+
+  if(warnings > 0) showNotif&&showNotif(`⏰ تم تحديث ${warnings} دفعة منتهية/مستحقة الفحص`, 'warn');
+}
+
+// تشغيل الفحص عند بدء النظام
+setTimeout(runDailyExpiryCheck, 2000);
+
+
+
+
+
+// ═══════════════════════════════════════════════════════
+// 🧪 إدارة الجودة والتسجيل — Quality & Registration
+// ICH Q7 / EU GMP Annex 11 / 21 CFR Part 211
+// ═══════════════════════════════════════════════════════
+
+// ── QC Tests — فحوصات الجودة الكاملة ─────────────────
+
+const QC_TEST_TYPES = [
+  {v:'identity',       l:'🔍 Identity Test — فحص الهوية'},
+  {v:'assay',          l:'📊 Assay — المحتوى الفعال'},
+  {v:'dissolution',    l:'💧 Dissolution — اختبار الذوبان'},
+  {v:'disintegration', l:'⏱️ Disintegration — تفتت الأقراص'},
+  {v:'hardness',       l:'⚖️ Hardness — صلابة الأقراص'},
+  {v:'friability',     l:'🧂 Friability — هشاشة الأقراص'},
+  {v:'uniformity',     l:'📏 Uniformity of Mass — تجانس الوزن'},
+  {v:'moisture',       l:'💦 LOD — رطوبة المادة'},
+  {v:'microbial',      l:'🦠 Microbial Limits — حدود ميكروبية'},
+  {v:'sterility',      l:'🚫 Sterility Test — فحص العقامة'},
+  {v:'ph',             l:'⚗️ pH — درجة الحموضة'},
+  {v:'viscosity',      l:'🌊 Viscosity — اللزوجة'},
+  {v:'particle_size',  l:'🔬 Particle Size — حجم الجسيمات'},
+  {v:'related_sub',    l:'⚠️ Related Substances — المواد ذات الصلة'},
+  {v:'heavy_metals',   l:'🏋️ Heavy Metals — المعادن الثقيلة'},
+  {v:'residual_solv',  l:'🧪 Residual Solvents — المذيبات المتبقية'},
+  {v:'packaging',      l:'📦 Packaging Tests — فحوصات التغليف'},
+  {v:'other',          l:'📋 أخرى'},
+];
+
+const QC_RESULTS = [
+  {v:'pass',    l:'✅ ناجح (Pass) — ضمن المواصفة'},
+  {v:'fail',    l:'❌ فاشل (Fail) — خارج المواصفة — OOS'},
+  {v:'oot',     l:'⚠️ OOT — خارج الاتجاه (Out of Trend)'},
+  {v:'pending', l:'⏳ قيد التحليل (Pending)'},
+  {v:'repeat',  l:'🔄 إعادة الفحص (Retest)'},
+];
+
+// ── صفحة الجودة الكاملة ───────────────────────────────
+
+PAGES.quality = function(){
+  const checks  = getAll('qualityChecks');
+  const deviations = getAll('deviations')||[];
+  const oosRecs = checks.filter(r=>r.result==='fail');
+  const ootRecs = checks.filter(r=>r.result==='oot');
+  const pendRecs= checks.filter(r=>r.result==='pending');
+
+  setPage('🔬 ضبط الجودة — QC Lab','فحوصات الجودة الكاملة — 21 CFR 211 / ICH Q7',
+    `<div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-green" onclick="addQCTest()">+ فحص جودة جديد</button>
+      <button class="btn btn-white" onclick="go('oos')">⚠️ OOS/OOT</button>
+      <button class="btn btn-white" onclick="go('coa')">📄 شهادات CoA</button>
+      <button class="btn btn-white" onclick="go('deviations')">📋 الانحرافات</button>
+    </div>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي الفحوصات</div><div class="val">${checks.length}</div></div>
+      <div class="stat-card"><div class="lbl text-green">ناجح ✅</div><div class="val text-green">${checks.filter(r=>r.result==='pass').length}</div></div>
+      <div class="stat-card"><div class="lbl text-red">OOS ❌</div><div class="val text-red">${oosRecs.length}</div></div>
+      <div class="stat-card"><div class="lbl text-amber">قيد التحليل ⏳</div><div class="val text-amber">${pendRecs.length}</div></div>
+    </div>
+    ${oosRecs.length ? `<div style="padding:12px;background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.2);border-radius:10px;margin-bottom:14px">
+      <strong style="color:var(--red)">⚠️ ${oosRecs.length} نتيجة OOS تستلزم تحقيقاً فورياً (21 CFR 211.192)</strong>
+      <div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap">
+        ${oosRecs.slice(0,4).map(r=>`<span class="badge b-red" style="cursor:pointer" onclick="editQCTest(${r.id})">${escapeHtml(r.batchNumber||'—')}</span>`).join('')}
+      </div></div>` : ''}
+    <div class="card">${tbl(
+      ['المادة/المنتج','رقم الدفعة','نوع الفحص','النتيجة الفعلية','حدود المواصفة','الكيميائي','التاريخ','القرار','إجراء'],
+      checks.sort((a,b)=>b.id-a.id).map(r=>{
+        const prod  = getById('products',r.productId) || getById('materials',r.materialId);
+        const resMap= {pass:'b-green',fail:'b-red',oot:'b-amber',pending:'b-gray',repeat:'b-blue'};
+        const resLbl= {pass:'✅ ناجح',fail:'❌ OOS',oot:'⚠️ OOT',pending:'⏳ قيد',repeat:'🔄 إعادة'};
+        return tr(
+          escapeHtml(prod?.name||r.sampleName||'—'),
+          `<code style="font-size:11px">${escapeHtml(r.batchNumber||'—')}</code>`,
+          QC_TEST_TYPES.find(t=>t.v===r.testType)?.l.split('—')[0]||r.testType||'—',
+          `<strong>${escapeHtml(r.actualResult||'—')}</strong>`,
+          escapeHtml(r.specLimit||'—'),
+          escapeHtml(r.analyst||'—'),
+          r.testDate||'—',
+          r.result ? `<span class="badge ${resMap[r.result]||'b-gray'}">${resLbl[r.result]||r.result}</span>` : '—',
+          `<div class="action-bar">
+            <button class="icon-btn edit" onclick="editQCTest(${r.id})">${ic.edit}</button>
+            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('qualityChecks',${r.id});go('quality')}">${ic.del}</button>
+          </div>`
+        );
+      })
+    ,'tbl_quality')}</div>`
+  );
+};
+
+function addQCTest(){ showQCForm(); }
+function editQCTest(id){ showQCForm(getById('qualityChecks',id)); }
+function showQCForm(q={}){
+  const pOpts=[{v:0,l:'اختر منتج/مادة...'},...getAll('products').map(p=>({v:'p'+p.id,l:'💊 '+p.name})),...getAll('materials').map(m=>({v:'m'+m.id,l:'🧪 '+m.name}))];
+  showModal(modal(q.id?'تعديل فحص جودة':'🔬 فحص جودة جديد — QC Test',`
+    <div class="form-row">
+      ${fg('المنتج أو المادة *', sel('qc-item', pOpts, q.productId?'p'+q.productId:q.materialId?'m'+q.materialId:0))}
+      ${fg('رقم الدفعة *', inp('qc-batch','text',q.batchNumber||'','LOT#'))}
+    </div>
+    <div class="form-row">
+      ${fg('نوع الفحص *', sel('qc-type', QC_TEST_TYPES, q.testType||'assay'))}
+      ${fg('المنهجية التحليلية', inp('qc-method','text',q.testMethod||'','HPLC-UV / Karl Fischer'))}
+    </div>
+    <div style="padding:12px;background:rgba(46,160,67,.06);border:1px solid rgba(46,160,67,.2);border-radius:10px;margin-bottom:12px">
+      <div style="font-weight:700;font-size:12px;color:var(--green-light);margin-bottom:8px">📊 حدود المواصفة والنتيجة</div>
+      <div class="form-row">
+        ${fg('حد المواصفة (Spec Limit)', inp('qc-spec','text',q.specLimit||'','مثال: NLT 99.0% / 6.0–7.0'))}
+        ${fg('النتيجة الفعلية *', inp('qc-result-val','text',q.actualResult||'','أدخل القيمة المقاسة'))}
+      </div>
+      ${fg('الحكم على النتيجة *', sel('qc-result', QC_RESULTS, q.result||'pending'))}
+    </div>
+    <div class="form-row">
+      ${fg('الكيميائي المسؤول *', inp('qc-analyst','text',q.analyst||_authUser?.name||'',''))}
+      ${fg('تاريخ الفحص', inp('qc-date','date',q.testDate||today()))}
+    </div>
+    ${fg('رقم السجل المخبري (Lab Book Ref)', inp('qc-labref','text',q.labBookRef||'',''))}
+    <div id="qc-oos-block" style="${q.result==='fail'?'':'display:none'}">
+      <div style="padding:10px;background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.2);border-radius:8px;margin-bottom:10px">
+        <strong style="color:var(--red)">⚠️ OOS — Out of Specification (21 CFR 211.192)</strong>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">يجب فتح تحقيق OOS فوراً وتوثيق السبب الجذري</div>
+      </div>
+      ${fg('سبب OOS الأولي', `<textarea id="qc-oos-reason" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif" placeholder="وصف أولي للسبب المحتمل...">${escapeHtml(q.oosReason||'')}</textarea>`)}
+    </div>
+    ${fg('ملاحظات إضافية', `<textarea id="qc-notes" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif">${escapeHtml(q.notes||'')}</textarea>`)}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveQCTest(${q.id||''})">💾 حفظ الفحص</button>
+      ${q.result==='pass'?`<button class="btn btn-white" onclick="closeModal();generateCOA(${q.id})">📄 إنشاء CoA</button>`:''}
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`,
+    null,'650px'));
+  setTimeout(()=>{
+    document.getElementById('qc-result')?.addEventListener('change',function(){
+      document.getElementById('qc-oos-block').style.display = this.value==='fail'?'block':'none';
+    });
+  },100);
+}
+
+function saveQCTest(id){
+  const itemVal = val('qc-item');
+  if(!itemVal||itemVal=='0') return alert('يرجى اختيار المنتج أو المادة');
+  const batchN  = val('qc-batch');
+  if(!batchN) return alert('يرجى كتابة رقم الدفعة');
+  const isProd  = String(itemVal).startsWith('p');
+  const itemId  = Number(String(itemVal).slice(1));
+  const resVal  = document.getElementById('qc-result')?.value;
+  const d = {
+    productId:   isProd ? itemId : null,
+    materialId:  isProd ? null   : itemId,
+    sampleName:  (isProd ? getById('products',itemId) : getById('materials',itemId))?.name||'',
+    batchNumber: batchN,
+    testType:    document.getElementById('qc-type')?.value||'assay',
+    testMethod:  val('qc-method')||null,
+    specLimit:   val('qc-spec')||null,
+    actualResult:val('qc-result-val')||null,
+    result:      resVal||'pending',
+    analyst:     val('qc-analyst')||null,
+    testDate:    document.getElementById('qc-date')?.value||today(),
+    labBookRef:  val('qc-labref')||null,
+    oosReason:   resVal==='fail' ? document.getElementById('qc-oos-reason')?.value||null : null,
+    notes:       document.getElementById('qc-notes')?.value||null,
+    recordedAt:  new Date().toISOString(),
+    recordedBy:  _authUser?.name||'—',
+  };
+  id ? update('qualityChecks',id,d) : insert('qualityChecks',d);
+  // Auto-create OOS deviation
+  if(resVal==='fail' && !id){
+    insert('deviations',{
+      type:'OOS', title:`OOS — ${d.sampleName} LOT: ${batchN}`,
+      description: d.oosReason||'نتيجة خارج المواصفة',
+      status:'open', severity:'critical',
+      detectedDate: today(),
+      detectedBy: d.analyst,
+      batchNumber: batchN,
+      relatedQCId: null,
+    });
+    showNotif&&showNotif('⚠️ تم فتح انحراف OOS تلقائياً — يجب التحقيق الفوري','warn');
+  }
+  closeModal(); go('quality');
+}
+
+
+// ── OOS/OOT صفحة ─────────────────────────────────────
+
+PAGES.oos = function(){
+  const checks = getAll('qualityChecks');
+  const oos = checks.filter(r=>r.result==='fail');
+  const oot = checks.filter(r=>r.result==='oot');
+  setPage('⚠️ OOS / OOT — نتائج خارج المواصفة','Out of Specification / Out of Trend — 21 CFR 211.192',
+    `<button class="btn btn-white" onclick="go('quality')">← الجودة</button>`,
+    `<div style="margin-bottom:16px;padding:14px;background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.2);border-radius:10px;font-size:12px">
+      <strong>🔴 OOS (${oos.length})</strong> — نتائج خارج مواصفة رسمية — تستوجب تحقيقاً فورياً وإيقاف الدفعة<br>
+      <strong>🟡 OOT (${oot.length})</strong> — نتائج ضمن المواصفة لكن خارج الاتجاه المتوقع — تستوجب مراقبة
+    </div>
+    <div class="card">
+      <div style="font-weight:700;margin-bottom:10px;color:var(--red)">🔴 Out of Specification — OOS</div>
+      ${tbl(['المادة/المنتج','الدفعة','الفحص','النتيجة الفعلية','الحد','الكيميائي','التاريخ','الانحراف'],
+        oos.map(r=>{
+          const dev = (getAll('deviations')||[]).find(d=>d.batchNumber===r.batchNumber&&d.type==='OOS');
+          return tr(
+            escapeHtml(r.sampleName||'—'), escapeHtml(r.batchNumber||'—'),
+            QC_TEST_TYPES.find(t=>t.v===r.testType)?.l.split('—')[0]||r.testType||'—',
+            `<strong style="color:var(--red)">${escapeHtml(r.actualResult||'—')}</strong>`,
+            escapeHtml(r.specLimit||'—'), escapeHtml(r.analyst||'—'), r.testDate||'—',
+            dev ? `<span class="badge b-red">DEV-${dev.id}</span>` : '<span class="badge b-gray">بدون انحراف</span>'
+          );
+        })
+      ,'tbl_oos')}
+    </div>`
+  );
+};
+
+
+// ── شهادة التحليل — Certificate of Analysis (CoA) ─────
+
+PAGES.coa = function(){
+  const checks = getAll('qualityChecks').filter(r=>r.result==='pass');
+  setPage('📄 شهادات التحليل — CoA','Certificate of Analysis — طبقاً لـ ICH Q7',
+    `<button class="btn btn-white" onclick="go('quality')">← الجودة</button>`,
+    `<div class="card">${tbl(
+      ['المادة/المنتج','الدفعة','نوع الفحص','النتيجة','الكيميائي','التاريخ','إجراء'],
+      checks.sort((a,b)=>b.id-a.id).map(r=>tr(
+        escapeHtml(r.sampleName||'—'),
+        `<code style="font-size:11px">${escapeHtml(r.batchNumber||'—')}</code>`,
+        QC_TEST_TYPES.find(t=>t.v===r.testType)?.l.split('—')[0]||r.testType||'—',
+        `<span class="badge b-green">✅ ${escapeHtml(r.actualResult||'ناجح')}</span>`,
+        escapeHtml(r.analyst||'—'), r.testDate||'—',
+        `<button class="btn btn-white btn-sm" onclick="printCOA(${r.id})">🖨️ طباعة CoA</button>`
+      ))
+    ,'tbl_coa')}</div>`
+  );
+};
+
+function generateCOA(qcId){
+  const q   = getById('qualityChecks', qcId);
+  if(!q) return alert('سجل الفحص غير موجود');
+  const prod = getById('products',q.productId)||getById('materials',q.materialId);
+  const comp = getAll('companies').find(c=>c.isActive);
+  const doc  = window.open('','_blank','width=900,height=700');
+  doc.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>CoA</title>
+  <style>body{font-family:Cairo,Arial,sans-serif;padding:30px;direction:rtl}
+  h2{color:#1a3a5c;border-bottom:3px solid #1a3a5c;padding-bottom:8px}
+  table{width:100%;border-collapse:collapse;margin-top:16px}
+  th,td{border:1px solid #ccc;padding:8px 12px;font-size:13px}
+  th{background:#f0f4f8;font-weight:700}.sig{margin-top:40px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}
+  .sig-box{border-top:2px solid #333;padding-top:8px;text-align:center;font-size:12px}
+  @media print{body{padding:0}}</style></head><body>
+  <h2>📄 شهادة التحليل — Certificate of Analysis</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+    <div>
+      <div><strong>الشركة:</strong> ${escapeHtml(comp?.name||'ميديسنيا')}</div>
+      <div><strong>المادة/المنتج:</strong> ${escapeHtml(prod?.name||q.sampleName||'—')}</div>
+      <div><strong>رقم الدفعة:</strong> ${escapeHtml(q.batchNumber||'—')}</div>
+    </div>
+    <div>
+      <div><strong>تاريخ الفحص:</strong> ${q.testDate||'—'}</div>
+      <div><strong>الكيميائي:</strong> ${escapeHtml(q.analyst||'—')}</div>
+      <div><strong>رقم السجل:</strong> ${escapeHtml(q.labBookRef||'—')}</div>
+    </div>
+  </div>
+  <table>
+    <tr><th>الاختبار</th><th>المرجع</th><th>حد المواصفة</th><th>النتيجة الفعلية</th><th>الحكم</th></tr>
+    <tr>
+      <td>${QC_TEST_TYPES.find(t=>t.v===q.testType)?.l.split('—')[0]||q.testType||'—'}</td>
+      <td>${escapeHtml(q.testMethod||'—')}</td>
+      <td>${escapeHtml(q.specLimit||'—')}</td>
+      <td><strong>${escapeHtml(q.actualResult||'—')}</strong></td>
+      <td style="color:${q.result==='pass'?'green':'red'}"><strong>${q.result==='pass'?'✅ ناجح':'❌ فاشل'}</strong></td>
+    </tr>
+  </table>
+  <p style="margin-top:16px;font-size:13px"><strong>النتيجة العامة:</strong>
+    <span style="color:${q.result==='pass'?'green':'red'};font-size:16px;font-weight:700">
+      ${q.result==='pass'?'✅ مطابق للمواصفة':'❌ غير مطابق للمواصفة'}
+    </span>
+  </p>
+  <div class="sig">
+    <div class="sig-box">الكيميائي المسؤول<br>${escapeHtml(q.analyst||'—')}</div>
+    <div class="sig-box">مدير الجودة<br>__________________</div>
+    <div class="sig-box">الصيدلاني المسؤول<br>__________________</div>
+  </div>
+  \x3Cscript>window.print()\x3C/script></body></html>`);
+  doc.document.close();
+}
+window.printCOA = generateCOA;
+
+
+// ── التسجيل الدوائي — Drug Registration ──────────────
+
+PAGES.drugregistration = function(){
+  const regs = getAll('drugRegistrations')||[];
+  const prods = getAll('products');
+  setPage('📋 التسجيل الدوائي','Drug Registration Dossier — هيئة الدواء المصرية EDA',
+    `<button class="btn btn-green" onclick="addDrugRegistration()">+ تسجيل دوائي جديد</button>`,
+    `<div class="stats-grid g3" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي المسجلات</div><div class="val">${regs.length}</div></div>
+      <div class="stat-card"><div class="lbl text-green">ساري ✅</div><div class="val text-green">${regs.filter(r=>r.status==='active').length}</div></div>
+      <div class="stat-card"><div class="lbl text-amber">قيد التجديد ⏰</div><div class="val text-amber">${regs.filter(r=>{const d=r.expiryDate;return d&&Math.floor((new Date(d)-new Date())/86400000)<180}).length}</div></div>
+    </div>
+    <div class="card">${tbl(
+      ['المنتج','رقم التسجيل','الجهة','تاريخ التسجيل','تاريخ الانتهاء','الحالة','إجراء'],
+      regs.map(r=>{
+        const days = r.expiryDate?Math.floor((new Date(r.expiryDate)-new Date())/86400000):9999;
+        const alertCls = days<90?'b-red':days<180?'b-amber':'b-green';
+        return tr(
+          escapeHtml(r.productName||'—'),
+          `<code>${escapeHtml(r.regNumber||'—')}</code>`,
+          escapeHtml(r.authority||'EDA'),
+          r.regDate||'—', r.expiryDate||'—',
+          `<span class="badge ${alertCls}">${days<0?'منتهي':days<90?'⚠️ '+days+' يوم':r.status==='active'?'✅ ساري':'—'}</span>`,
+          `<div class="action-bar">
+            <button class="icon-btn edit" onclick="editDrugReg(${r.id})">${ic.edit}</button>
+            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('drugRegistrations',${r.id});go('drugregistration')}">${ic.del}</button>
+          </div>`
+        );
+      })
+    ,'tbl_regs')}</div>`
+  );
+};
+
+function addDrugRegistration(){ showDrugRegForm(); }
+function editDrugReg(id){ showDrugRegForm(getById('drugRegistrations',id)||{}); }
+function showDrugRegForm(r={}){
+  const prods = getAll('products');
+  showModal(modal(r.id?'تعديل تسجيل':'📋 تسجيل دوائي جديد',`
+    <div class="form-row">
+      ${fg('المنتج *', sel('reg-prod',[{v:0,l:'اختر منتج...'},...prods.map(p=>({v:p.id,l:p.name}))],r.productId||0))}
+      ${fg('رقم التسجيل *', inp('reg-num','text',r.regNumber||'','مثال: 30/12345'))}
+    </div>
+    <div class="form-row">
+      ${fg('الجهة المانحة', inp('reg-auth','text',r.authority||'EDA — هيئة الدواء المصرية',''))}
+      ${fg('نوع الترخيص', sel('reg-type',[{v:'import',l:'استيراد'},{v:'local',l:'تصنيع محلي'},{v:'export',l:'تصدير'},{v:'clinical',l:'تجارب إكلينيكية'}],r.registrationType||'local'))}
+    </div>
+    <div class="form-row">
+      ${fg('تاريخ التسجيل', inp('reg-date','date',r.regDate||''))}
+      ${fg('تاريخ الانتهاء', inp('reg-expiry','date',r.expiryDate||''))}
+    </div>
+    <div class="form-row">
+      ${fg('رقم ملف التسجيل (Dossier Ref)', inp('reg-dossier','text',r.dossierRef||'',''))}
+      ${fg('رقم CTD أو NDA', inp('reg-ctd','text',r.ctdNumber||'',''))}
+    </div>
+    ${fg('ملاحظات', `<textarea id="reg-notes" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif">${escapeHtml(r.notes||'')}</textarea>`)}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveDrugReg(${r.id||''})">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+function saveDrugReg(id){
+  const prodId = numVal('reg-prod');
+  const num    = val('reg-num');
+  if(!prodId||!num) return alert('المنتج ورقم التسجيل إلزاميان');
+  const prod = getById('products',prodId);
+  const d = {
+    productId: prodId, productName: prod?.name||'',
+    regNumber: num,
+    authority: val('reg-auth')||'EDA',
+    registrationType: document.getElementById('reg-type')?.value||'local',
+    regDate: document.getElementById('reg-date')?.value||null,
+    expiryDate: document.getElementById('reg-expiry')?.value||null,
+    dossierRef: val('reg-dossier')||null,
+    ctdNumber: val('reg-ctd')||null,
+    notes: document.getElementById('reg-notes')?.value||null,
+    status:'active',
+  };
+  id ? update('drugRegistrations',id,d) : insert('drugRegistrations',d);
+  closeModal(); go('drugregistration');
+}
+
+
+// ═══════════════════════════════════════════════════════
+// 🚚 المبيعات والتوزيع — Sales & Distribution
+// ═══════════════════════════════════════════════════════
+
+const ORDER_STATUSES = {
+  draft:     {l:'مسودة',      c:'b-gray'},
+  confirmed: {l:'مؤكد',      c:'b-blue'},
+  processing:{l:'قيد التجهيز',c:'b-amber'},
+  shipped:   {l:'مشحون',     c:'b-purple'},
+  delivered: {l:'مُسلَّم',   c:'b-green'},
+  cancelled: {l:'ملغي',      c:'b-red'},
+  returned:  {l:'مرتجع',     c:'b-red'},
+};
+
+// ── صفحة أوامر البيع ─────────────────────────────────
+
+PAGES.salesorders = function(){
+  const orders = getAll('salesOrders')||[];
+  const total  = orders.reduce((s,o)=>s+Number(o.totalAmount||0),0);
+  const pending= orders.filter(o=>['confirmed','processing'].includes(o.status));
+
+  setPage('📋 أوامر البيع — Sales Orders','إدارة طلبات العملاء',
+    `<div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-green" onclick="addSalesOrder()">+ أمر بيع جديد</button>
+      <button class="btn btn-white" onclick="go('salesinvoices')">📄 الفواتير</button>
+      <button class="btn btn-white" onclick="go('delivery')">🚚 الشحن</button>
+    </div>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي الأوامر</div><div class="val">${orders.length}</div></div>
+      <div class="stat-card"><div class="lbl text-blue">قيد التنفيذ</div><div class="val text-blue">${pending.length}</div></div>
+      <div class="stat-card"><div class="lbl text-green">مُسلَّم ✅</div><div class="val text-green">${orders.filter(o=>o.status==='delivered').length}</div></div>
+      <div class="stat-card"><div class="lbl">إجمالي القيمة</div><div class="val">${fmtC(total)}</div></div>
+    </div>
+    <div class="card">${tbl(
+      ['رقم الأمر','العميل','التاريخ','الإجمالي','الحالة','إجراء'],
+      orders.sort((a,b)=>b.id-a.id).map(o=>{
+        const st = ORDER_STATUSES[o.status]||{l:o.status,c:'b-gray'};
+        return tr(
+          `<code style="font-size:11px">SO-${String(o.id).padStart(5,'0')}</code>`,
+          escapeHtml(o.customerName||'—'),
+          o.orderDate||'—',
+          fmtC(o.totalAmount||0),
+          `<span class="badge ${st.c}">${st.l}</span>`,
+          `<div class="action-bar">
+            <button class="btn btn-white btn-sm" onclick="viewSalesOrder(${o.id})">عرض</button>
+            <button class="icon-btn edit" onclick="editSalesOrder(${o.id})">${ic.edit}</button>
+            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('salesOrders',${o.id});go('salesorders')}">${ic.del}</button>
+          </div>`
+        );
+      })
+    ,'tbl_so')}</div>`
+  );
+};
+
+function addSalesOrder(){ showSOForm(); }
+function editSalesOrder(id){ showSOForm(getById('salesOrders',id)||{}); }
+function showSOForm(o={}){
+  const prods = getAll('products').filter(p=>p.status==='active'||!p.status);
+  const lines = o.lines||[{productId:'',qty:1,unitPrice:0}];
+  showModal(modal(o.id?'تعديل أمر بيع':'📋 أمر بيع جديد',`
+    <div class="form-row">
+      ${fg('اسم العميل *', inp('so-cust','text',o.customerName||'',''))}
+      ${fg('كود العميل', inp('so-custcode','text',o.customerCode||'',''))}
+    </div>
+    <div class="form-row">
+      ${fg('تاريخ الأمر', inp('so-date','date',o.orderDate||today()))}
+      ${fg('تاريخ التسليم المطلوب', inp('so-deldate','date',o.requestedDelivery||''))}
+    </div>
+    <div class="form-row">
+      ${fg('الحالة', sel('so-status',Object.entries(ORDER_STATUSES).map(([v,{l}])=>({v,l})),o.status||'draft'))}
+      ${fg('المرجع الخارجي (PO رقم العميل)', inp('so-ref','text',o.customerPORef||'',''))}
+    </div>
+    <div style="margin-bottom:10px">
+      <div style="font-weight:700;font-size:12px;margin-bottom:8px">📦 بنود الأمر</div>
+      <div id="so-lines">
+        ${lines.map((l,i)=>`
+        <div class="form-row" id="so-line-${i}" style="align-items:center">
+          <div class="fg" style="flex:2">
+            ${i===0?'<label>المنتج</label>':''}
+            <select id="so-prod-${i}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:12px;color:var(--text)">
+              <option value="">اختر منتج...</option>
+              ${prods.map(p=>`<option value="${p.id}" ${p.id==l.productId?'selected':''}>${escapeHtml(p.name)}</option>`).join('')}
+            </select>
+          </div>
+          ${i===0?fg('الكمية',''):''}<input type="number" id="so-qty-${i}" value="${l.qty||1}" min="1" style="width:80px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:12px;color:var(--text)">
+          ${i===0?fg('السعر',''):''}<input type="number" id="so-price-${i}" value="${l.unitPrice||0}" min="0" style="width:100px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:12px;color:var(--text)">
+          <button onclick="document.getElementById('so-line-${i}').remove()" style="background:none;border:none;color:var(--red);font-size:18px;cursor:pointer;padding:4px">✕</button>
+        </div>`).join('')}
+      </div>
+      <button class="btn btn-white btn-sm" style="margin-top:6px" onclick="addSOLine()">+ إضافة منتج</button>
+    </div>
+    <div class="form-row">
+      ${fg('ملاحظات', `<textarea id="so-notes" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif">${escapeHtml(o.notes||'')}</textarea>`)}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveSalesOrder(${o.id||''})">💾 حفظ الأمر</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`,null,'700px'));
+}
+
+let _soLineCount = 1;
+function addSOLine(){
+  const i = _soLineCount++;
+  const prods = getAll('products').filter(p=>p.status==='active'||!p.status);
+  const div = document.createElement('div');
+  div.className='form-row'; div.id=`so-line-${i}`; div.style.alignItems='center';
+  div.innerHTML=`
+    <div class="fg" style="flex:2">
+      <select id="so-prod-${i}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:12px;color:var(--text)">
+        <option value="">اختر منتج...</option>
+        ${prods.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}
+      </select>
+    </div>
+    <input type="number" id="so-qty-${i}" value="1" min="1" style="width:80px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:12px;color:var(--text)">
+    <input type="number" id="so-price-${i}" value="0" min="0" style="width:100px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:12px;color:var(--text)">
+    <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--red);font-size:18px;cursor:pointer;padding:4px">✕</button>`;
+  document.getElementById('so-lines')?.appendChild(div);
+}
+
+function saveSalesOrder(id){
+  const cust = val('so-cust');
+  if(!cust) return alert('اسم العميل إلزامي');
+  // Collect lines
+  const lines=[]; let total=0;
+  document.querySelectorAll('[id^="so-prod-"]').forEach(el=>{
+    const i = el.id.split('-')[2];
+    const prodId = Number(el.value)||null;
+    if(!prodId) return;
+    const qty   = Number(document.getElementById(`so-qty-${i}`)?.value||1);
+    const price = Number(document.getElementById(`so-price-${i}`)?.value||0);
+    const prod  = getById('products',prodId);
+    lines.push({productId:prodId, productName:prod?.name||'', qty, unitPrice:price, lineTotal:qty*price});
+    total += qty*price;
+  });
+  if(!lines.length) return alert('أضف منتجاً واحداً على الأقل');
+  const vatRate = 0.14;
+  const vatAmt  = total * vatRate;
+  const d = {
+    customerName: cust,
+    customerCode: val('so-custcode')||null,
+    orderDate: document.getElementById('so-date')?.value||today(),
+    requestedDelivery: document.getElementById('so-deldate')?.value||null,
+    status: document.getElementById('so-status')?.value||'draft',
+    customerPORef: val('so-ref')||null,
+    lines, subtotal:total, vatRate, vatAmount:vatAmt,
+    totalAmount: total+vatAmt,
+    notes: document.getElementById('so-notes')?.value||null,
+    createdBy: _authUser?.name||'—',
+  };
+  id ? update('salesOrders',id,d) : insert('salesOrders',d);
+  closeModal(); go('salesorders');
+}
+
+function viewSalesOrder(id){
+  const o = getById('salesOrders',id);
+  if(!o) return;
+  const st = ORDER_STATUSES[o.status]||{l:o.status,c:'b-gray'};
+  showModal(modal(`أمر البيع SO-${String(o.id).padStart(5,'0')}`,`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;font-size:13px">
+      <div><span style="color:var(--muted)">العميل:</span> <strong>${escapeHtml(o.customerName||'—')}</strong></div>
+      <div><span style="color:var(--muted)">الحالة:</span> <span class="badge ${st.c}">${st.l}</span></div>
+      <div><span style="color:var(--muted)">تاريخ الأمر:</span> ${o.orderDate||'—'}</div>
+      <div><span style="color:var(--muted)">التسليم المطلوب:</span> ${o.requestedDelivery||'—'}</div>
+    </div>
+    ${tbl(['المنتج','الكمية','السعر','الإجمالي'],
+      (o.lines||[]).map(l=>tr(escapeHtml(l.productName||'—'),fmtN(l.qty),fmtC(l.unitPrice),fmtC(l.lineTotal)))
+    ,'tbl_so_view')}
+    <div style="text-align:left;margin-top:12px;font-size:13px">
+      <div>الإجمالي قبل الضريبة: <strong>${fmtC(o.subtotal||0)}</strong></div>
+      <div>ضريبة القيمة المضافة (14%): <strong>${fmtC(o.vatAmount||0)}</strong></div>
+      <div style="font-size:16px;font-weight:700;color:var(--green-light)">الإجمالي النهائي: ${fmtC(o.totalAmount||0)}</div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="closeModal();createInvoiceFromSO(${id})">📄 إنشاء فاتورة</button>
+      <button class="btn btn-white" onclick="closeModal();createDeliveryFromSO(${id})">🚚 إنشاء شحنة</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إغلاق</button>
+    </div>`));
+}
+
+
+// ── فواتير المبيعات ───────────────────────────────────
+
+PAGES.salesinvoices = function(){
+  const invs = getAll('salesInvoices')||[];
+  setPage('📄 فواتير المبيعات','Sales Invoices — مرتبطة بالفاتورة الإلكترونية ETA',
+    `<div style="display:flex;gap:8px">
+      <button class="btn btn-green" onclick="addSalesInvoice()">+ فاتورة جديدة</button>
+      <button class="btn btn-white" onclick="go('salesorders')">← أوامر البيع</button>
+    </div>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي الفواتير</div><div class="val">${invs.length}</div></div>
+      <div class="stat-card"><div class="lbl text-red">غير مدفوعة</div><div class="val text-red">${invs.filter(i=>i.paymentStatus==='unpaid').length}</div></div>
+      <div class="stat-card"><div class="lbl text-green">مدفوعة</div><div class="val text-green">${invs.filter(i=>i.paymentStatus==='paid').length}</div></div>
+      <div class="stat-card"><div class="lbl">الإجمالي</div><div class="val">${fmtC(invs.reduce((s,i)=>s+Number(i.totalAmount||0),0))}</div></div>
+    </div>
+    <div class="card">${tbl(
+      ['رقم الفاتورة','العميل','تاريخ الفاتورة','الإجمالي','ضريبة 14%','الصافي','سداد','إجراء'],
+      invs.sort((a,b)=>b.id-a.id).map(inv=>tr(
+        `<code>INV-${String(inv.id).padStart(6,'0')}</code>`,
+        escapeHtml(inv.customerName||'—'),
+        inv.invoiceDate||'—',
+        fmtC(inv.subtotal||0),
+        fmtC(inv.vatAmount||0),
+        `<strong>${fmtC(inv.totalAmount||0)}</strong>`,
+        `<span class="badge ${inv.paymentStatus==='paid'?'b-green':'b-red'}">${inv.paymentStatus==='paid'?'✅ مدفوع':'⏳ معلق'}</span>`,
+        `<div class="action-bar">
+          <button class="btn btn-white btn-sm" onclick="printInvoice(${inv.id})">🖨️ طباعة</button>
+          <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('salesInvoices',${inv.id});go('salesinvoices')}">${ic.del}</button>
+        </div>`
+      ))
+    ,'tbl_inv')}</div>`
+  );
+};
+
+function createInvoiceFromSO(soId){
+  const so = getById('salesOrders',soId);
+  if(!so) return;
+  const inv = insert('salesInvoices',{
+    salesOrderId: soId,
+    customerName: so.customerName,
+    customerCode: so.customerCode,
+    invoiceDate:  today(),
+    lines:        so.lines,
+    subtotal:     so.subtotal,
+    vatRate:      so.vatRate||0.14,
+    vatAmount:    so.vatAmount,
+    totalAmount:  so.totalAmount,
+    paymentStatus:'unpaid',
+    createdBy:    _authUser?.name||'—',
+  });
+  update('salesOrders',soId,{status:'processing'});
+  showNotif&&showNotif(`✅ تم إنشاء الفاتورة INV-${String((getAll('salesInvoices')||[]).length).padStart(6,'0')}`, 'success');
+  go('salesinvoices');
+}
+
+function addSalesInvoice(){
+  const sos = (getAll('salesOrders')||[]).filter(o=>o.status==='confirmed'||o.status==='processing');
+  showModal(modal('📄 فاتورة مبيعات جديدة',`
+    <div class="form-row">
+      ${fg('من أمر بيع', sel('inv-so',[{v:0,l:'بدون أمر بيع'},...sos.map(s=>({v:s.id,l:`SO-${s.id} — ${s.customerName}`}))]))}
+      ${fg('اسم العميل *', inp('inv-cust','text','',''))}
+    </div>
+    <div class="form-row">
+      ${fg('تاريخ الفاتورة', inp('inv-date','date',today()))}
+      ${fg('الإجمالي قبل الضريبة (ج.م) *', inp('inv-sub','number','',''))}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveSalesInvoice()">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+  setTimeout(()=>{
+    document.getElementById('inv-so')?.addEventListener('change',function(){
+      const so = getById('salesOrders',Number(this.value));
+      if(so){
+        document.getElementById('inv-cust').value = so.customerName||'';
+        document.getElementById('inv-sub').value  = so.subtotal||0;
+      }
+    });
+  },100);
+}
+
+function saveSalesInvoice(){
+  const cust = val('inv-cust'); if(!cust) return alert('اسم العميل إلزامي');
+  const sub  = numVal('inv-sub')||0;
+  const vat  = sub * 0.14;
+  const soId = numVal('inv-so')||null;
+  insert('salesInvoices',{
+    salesOrderId:soId, customerName:cust,
+    invoiceDate: document.getElementById('inv-date')?.value||today(),
+    subtotal:sub, vatRate:0.14, vatAmount:vat, totalAmount:sub+vat,
+    paymentStatus:'unpaid', createdBy:_authUser?.name||'—',
+  });
+  if(soId) update('salesOrders',soId,{status:'processing'});
+  closeModal(); go('salesinvoices');
+}
+
+function printInvoice(id){
+  const inv = getById('salesInvoices',id); if(!inv) return;
+  const comp= getAll('companies').find(c=>c.isActive);
+  const w=window.open('','_blank','width=900,height=700');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>فاتورة</title>
+  <style>body{font-family:Cairo,Arial,sans-serif;padding:30px;direction:rtl}
+  h2{color:#1a3a5c}table{width:100%;border-collapse:collapse;margin:16px 0}
+  th,td{border:1px solid #ccc;padding:8px}th{background:#f0f4f8}
+  .total{font-size:18px;font-weight:700;color:#1a7a3c}@media print{body{padding:0}}</style></head><body>
+  <h2>📄 فاتورة ضريبية — Tax Invoice</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+    <div><strong>${escapeHtml(comp?.name||'ميديسنيا')}</strong><br>${escapeHtml(comp?.address||'')}</div>
+    <div style="text-align:left">
+      <div>رقم الفاتورة: <strong>INV-${String(inv.id).padStart(6,'0')}</strong></div>
+      <div>التاريخ: <strong>${inv.invoiceDate||today()}</strong></div>
+      <div>العميل: <strong>${escapeHtml(inv.customerName||'—')}</strong></div>
+    </div>
+  </div>
+  ${(inv.lines||[]).length?`<table><tr><th>المنتج</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr>
+  ${(inv.lines||[]).map(l=>`<tr><td>${escapeHtml(l.productName||'—')}</td><td>${fmtN(l.qty)}</td><td>${fmtC(l.unitPrice)}</td><td>${fmtC(l.lineTotal)}</td></tr>`).join('')}</table>`:''}
+  <div style="text-align:left;margin-top:16px">
+    <div>الإجمالي: ${fmtC(inv.subtotal||0)}</div>
+    <div>ضريبة القيمة المضافة (14%): ${fmtC(inv.vatAmount||0)}</div>
+    <div class="total">الإجمالي النهائي: ${fmtC(inv.totalAmount||0)}</div>
+  </div>
+  \x3Cscript\x3Ewindow.print()\x3C/script\x3E</body></html>`);
+  w.document.close();
+}
+
+
+// ── صفحة الشحن والتوزيع ──────────────────────────────
+
+PAGES.delivery = function(){
+  const orders = getAll('deliveryOrders')||[];
+  setPage('🚚 الشحن والتوزيع — Delivery','تتبع الشحنات والتسليم',
+    `<div style="display:flex;gap:8px">
+      <button class="btn btn-green" onclick="addDeliveryOrder()">+ شحنة جديدة</button>
+      <button class="btn btn-white" onclick="go('salesorders')">← أوامر البيع</button>
+    </div>`,
+    `<div class="card">${tbl(
+      ['رقم الشحنة','العميل','تاريخ الشحن','القيمة','الحالة','إجراء'],
+      orders.sort((a,b)=>b.id-a.id).map(o=>{
+        const st = ORDER_STATUSES[o.status]||{l:o.status,c:'b-gray'};
+        return tr(
+          `<code>DO-${String(o.id).padStart(5,'0')}</code>`,
+          escapeHtml(o.customerName||'—'),
+          o.shippingDate||'—',
+          fmtC(o.totalAmount||0),
+          `<span class="badge ${st.c}">${st.l}</span>`,
+          `<div class="action-bar">
+            ${o.status==='shipped'?`<button class="btn btn-white btn-sm" onclick="confirmDelivery(${o.id})">✅ تأكيد التسليم</button>`:''}
+            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('deliveryOrders',${o.id});go('delivery')}">${ic.del}</button>
+          </div>`
+        );
+      })
+    ,'tbl_do')}</div>`
+  );
+};
+
+function addDeliveryOrder(){
+  const sos = (getAll('salesOrders')||[]).filter(o=>['confirmed','processing'].includes(o.status));
+  showModal(modal('🚚 شحنة جديدة',`
+    <div class="form-row">
+      ${fg('أمر البيع', sel('do-so',[{v:0,l:'اختر أمر بيع...'},...sos.map(s=>({v:s.id,l:`SO-${s.id} — ${s.customerName}`}))],0))}
+      ${fg('تاريخ الشحن', inp('do-date','date',today()))}
+    </div>
+    ${fg('ملاحظات الشحن', `<textarea id="do-notes" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif"></textarea>`)}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveDeliveryOrder()">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+  setTimeout(()=>{
+    document.getElementById('do-so')?.addEventListener('change',function(){
+      const so = getById('salesOrders',Number(this.value));
+      if(so) document.getElementById('do-cust')&&(document.getElementById('do-cust').value=so.customerName||'');
+    });
+  },100);
+}
+
+function createDeliveryFromSO(soId){
+  const so = getById('salesOrders',soId); if(!so) return;
+  insert('deliveryOrders',{
+    salesOrderId:soId, customerName:so.customerName,
+    shippingDate:today(), status:'shipped',
+    totalAmount:so.totalAmount, lines:so.lines,
+    createdBy:_authUser?.name||'—',
+  });
+  update('salesOrders',soId,{status:'shipped'});
+  showNotif&&showNotif('✅ تم إنشاء أمر الشحن','success');
+  go('delivery');
+}
+
+function saveDeliveryOrder(){
+  const soId = numVal('do-so')||null;
+  const so   = soId ? getById('salesOrders',soId) : null;
+  insert('deliveryOrders',{
+    salesOrderId:soId, customerName:so?.customerName||'—',
+    shippingDate:document.getElementById('do-date')?.value||today(),
+    status:'shipped', totalAmount:so?.totalAmount||0,
+    notes:document.getElementById('do-notes')?.value||null,
+    createdBy:_authUser?.name||'—',
+  });
+  if(soId) update('salesOrders',soId,{status:'shipped'});
+  closeModal(); go('delivery');
+}
+
+function confirmDelivery(id){
+  update('deliveryOrders',id,{status:'delivered', deliveredAt:new Date().toISOString()});
+  const del = getById('deliveryOrders',id);
+  if(del?.salesOrderId) update('salesOrders',del.salesOrderId,{status:'delivered'});
+  showNotif&&showNotif('✅ تم تأكيد التسليم','success');
+  go('delivery');
+}
+
+
+// ═══════════════════════════════════════════════════════
+// 💰 المالية والمحاسبة — Finance & Accounting
+// ═══════════════════════════════════════════════════════
+
+// ── دليل الحسابات — Chart of Accounts ────────────────
+
+const DEFAULT_COA = [
+  {code:'1100',name:'النقدية وما يعادلها',type:'asset',      category:'current'},
+  {code:'1200',name:'ذمم مدينة - عملاء',  type:'asset',      category:'current'},
+  {code:'1300',name:'المخزون',             type:'asset',      category:'current'},
+  {code:'1400',name:'مدفوعات مقدمة',      type:'asset',      category:'current'},
+  {code:'1500',name:'أصول ثابتة — صافي',  type:'asset',      category:'fixed'},
+  {code:'2100',name:'ذمم دائنة — موردون', type:'liability',   category:'current'},
+  {code:'2200',name:'ضريبة القيمة المضافة مستحقة',type:'liability',category:'current'},
+  {code:'2300',name:'رواتب مستحقة',       type:'liability',   category:'current'},
+  {code:'2400',name:'قروض بنكية',         type:'liability',   category:'long_term'},
+  {code:'3100',name:'رأس المال',           type:'equity',      category:'capital'},
+  {code:'3200',name:'الأرباح المحتجزة',    type:'equity',      category:'capital'},
+  {code:'4100',name:'إيرادات المبيعات',   type:'revenue',     category:'operating'},
+  {code:'4200',name:'إيرادات أخرى',       type:'revenue',     category:'other'},
+  {code:'5100',name:'تكلفة البضاعة المباعة',type:'expense',   category:'cogs'},
+  {code:'5200',name:'تكاليف تصنيع',       type:'expense',     category:'manufacturing'},
+  {code:'5300',name:'رواتب وأجور',        type:'expense',     category:'operating'},
+  {code:'5400',name:'إيجار ومرافق',       type:'expense',     category:'operating'},
+  {code:'5500',name:'مصاريف بحث وتطوير',  type:'expense',     category:'operating'},
+  {code:'5600',name:'مصاريف تسويق',       type:'expense',     category:'operating'},
+  {code:'5700',name:'استهلاك أصول',       type:'expense',     category:'operating'},
+  {code:'5800',name:'مصاريف مالية',       type:'expense',     category:'financial'},
+];
+
+// Initialize COA if empty
+function initCOA(){
+  const accs = getAll('accounts')||[];
+  if(accs.length > 0) return;
+  DEFAULT_COA.forEach(a=>insert('accounts',a));
+}
+
+// ── صفحة دليل الحسابات ───────────────────────────────
+
+PAGES.accounts = function(){
+  initCOA();
+  const accs = getAll('accounts')||[];
+  const typeMap = {asset:'أصول',liability:'التزامات',equity:'حقوق ملكية',revenue:'إيرادات',expense:'مصاريف'};
+  const typeCls = {asset:'b-blue',liability:'b-red',equity:'b-purple',revenue:'b-green',expense:'b-amber'};
+
+  setPage('📚 دليل الحسابات — Chart of Accounts','الإطار المحاسبي الكامل',
+    `<button class="btn btn-green" onclick="addAccount()">+ حساب جديد</button>`,
+    `<div class="stats-grid g5" style="margin-bottom:16px">
+      ${Object.entries(typeMap).map(([t,l])=>`<div class="stat-card"><div class="lbl">${l}</div><div class="val">${accs.filter(a=>a.type===t).length}</div></div>`).join('')}
+    </div>
+    <div class="card">${tbl(
+      ['كود الحساب','اسم الحساب','النوع','التصنيف','الرصيد','إجراء'],
+      accs.sort((a,b)=>a.code>b.code?1:-1).map(a=>{
+        const bal = calcAccountBalance(a.code);
+        return tr(
+          `<code>${a.code}</code>`,
+          escapeHtml(a.name||'—'),
+          `<span class="badge ${typeCls[a.type]||'b-gray'}">${typeMap[a.type]||a.type}</span>`,
+          a.category||'—',
+          `<span class="${bal>=0?'text-green':'text-red'} fw7">${fmtC(Math.abs(bal))}</span>`,
+          `<div class="action-bar">
+            <button class="icon-btn edit" onclick="editAccount(${a.id})">${ic.edit}</button>
+            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('accounts',${a.id});go('accounts')}">${ic.del}</button>
+          </div>`
+        );
+      })
+    ,'tbl_coa')}</div>`
+  );
+};
+
+function calcAccountBalance(code){
+  const entries = getAll('journalEntries')||[];
+  let balance = 0;
+  entries.forEach(e=>{
+    (e.lines||[]).forEach(l=>{
+      if(l.accountCode===code) balance += Number(l.debit||0) - Number(l.credit||0);
+    });
+  });
+  return balance;
+}
+
+function addAccount(){ showAccountForm(); }
+function editAccount(id){ showAccountForm(getById('accounts',id)||{}); }
+function showAccountForm(a={}){
+  showModal(modal(a.id?'تعديل حساب':'+ حساب محاسبي جديد',`
+    <div class="form-row">
+      ${fg('كود الحساب *', inp('acc-code','text',a.code||'','مثال: 1150'))}
+      ${fg('اسم الحساب *', inp('acc-name','text',a.name||'',''))}
+    </div>
+    <div class="form-row">
+      ${fg('النوع *', sel('acc-type',[{v:'asset',l:'أصول'},{v:'liability',l:'التزامات'},{v:'equity',l:'حقوق ملكية'},{v:'revenue',l:'إيرادات'},{v:'expense',l:'مصاريف'}],a.type||'asset'))}
+      ${fg('التصنيف', inp('acc-cat','text',a.category||'','current / fixed / operating'))}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveAccount(${a.id||''})">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+function saveAccount(id){
+  const code=val('acc-code'),name=val('acc-name');
+  if(!code||!name) return alert('الكود والاسم إلزاميان');
+  const d={code,name,type:document.getElementById('acc-type')?.value||'asset',category:val('acc-cat')||null};
+  id?update('accounts',id,d):insert('accounts',d);
+  closeModal(); go('accounts');
+}
+
+
+// ── دفتر اليومية — Journal Entries ───────────────────
+
+PAGES.journal = function(){
+  const entries = getAll('journalEntries')||[];
+  setPage('📒 دفتر اليومية — Journal',  'قيود اليومية المحاسبية',
+    `<button class="btn btn-green" onclick="addJournalEntry()">+ قيد يومية</button>`,
+    `<div class="card">${tbl(
+      ['رقم القيد','التاريخ','الوصف','مجموع المدين','مجموع الدائن','الرصيد','إجراء'],
+      entries.sort((a,b)=>b.id-a.id).map(e=>{
+        const totalDr = (e.lines||[]).reduce((s,l)=>s+Number(l.debit||0),0);
+        const totalCr = (e.lines||[]).reduce((s,l)=>s+Number(l.credit||0),0);
+        const balanced = Math.abs(totalDr-totalCr)<0.01;
+        return tr(
+          `<code>JE-${String(e.id).padStart(6,'0')}</code>`,
+          e.entryDate||'—',
+          escapeHtml((e.description||'').substring(0,50)),
+          fmtC(totalDr), fmtC(totalCr),
+          balanced?'<span class="badge b-green">✅ متوازن</span>':'<span class="badge b-red">❌ غير متوازن</span>',
+          `<div class="action-bar">
+            <button class="btn btn-white btn-sm" onclick="viewJE(${e.id})">عرض</button>
+            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('journalEntries',${e.id});go('journal')}">${ic.del}</button>
+          </div>`
+        );
+      })
+    ,'tbl_je')}</div>`
+  );
+};
+
+function addJournalEntry(){ showJEForm(); }
+function showJEForm(je={}){
+  initCOA();
+  const accs = getAll('accounts')||[];
+  const lines = je.lines||[{accountCode:'',accountName:'',debit:0,credit:0},{accountCode:'',accountName:'',debit:0,credit:0}];
+  const accOpts = accs.map(a=>`<option value="${a.code}">${a.code} — ${escapeHtml(a.name)}</option>`).join('');
+  const lineHtml = lines.map((l,i)=>`
+    <div class="form-row" id="je-line-${i}" style="align-items:center">
+      <div class="fg" style="flex:2">
+        ${i===0?'<label>الحساب</label>':''}
+        <select id="je-acc-${i}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;color:var(--text)">
+          <option value="">اختر حساب...</option>${accOpts}
+        </select>
+      </div>
+      ${i===0?'<label style="font-size:12px;white-space:nowrap">مدين</label>':''}<input type="number" id="je-dr-${i}" value="${l.debit||0}" min="0" style="width:100px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;color:var(--text)">
+      ${i===0?'<label style="font-size:12px;white-space:nowrap">دائن</label>':''}<input type="number" id="je-cr-${i}" value="${l.credit||0}" min="0" style="width:100px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;color:var(--text)">
+      <button onclick="document.getElementById('je-line-${i}').remove()" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer">✕</button>
+    </div>`).join('');
+
+  showModal(modal('📒 قيد يومية جديد',`
+    <div class="form-row">
+      ${fg('تاريخ القيد', inp('je-date','date',je.entryDate||today()))}
+      ${fg('المرجع', inp('je-ref','text',je.reference||'',''))}
+    </div>
+    ${fg('وصف القيد *', inp('je-desc','text',je.description||'',''))}
+    <div id="je-lines" style="margin:12px 0">${lineHtml}</div>
+    <button class="btn btn-white btn-sm" onclick="addJELine()">+ بند</button>
+    <div id="je-balance-check" style="margin-top:8px;padding:8px;border-radius:6px;font-size:12px"></div>
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveJournalEntry(${je.id||''})">💾 ترحيل القيد</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`,null,'700px'));
+
+  setTimeout(()=>{
+    // Set selected values
+    lines.forEach((l,i)=>{
+      const sel = document.getElementById(`je-acc-${i}`);
+      if(sel&&l.accountCode) sel.value=l.accountCode;
+    });
+    // Balance check
+    document.getElementById('je-lines')?.addEventListener('input', checkJEBalance);
+    checkJEBalance();
+    // Auto-add JE line counter
+    window._jeLineCount = lines.length;
+  },100);
+}
+
+let _jeLineCount=2;
+function addJELine(){
+  const i=_jeLineCount++;
+  const accs=getAll('accounts')||[];
+  const accOpts=accs.map(a=>`<option value="${a.code}">${a.code} — ${escapeHtml(a.name)}</option>`).join('');
+  const div=document.createElement('div');
+  div.className='form-row'; div.id=`je-line-${i}`; div.style.alignItems='center';
+  div.innerHTML=`
+    <div class="fg" style="flex:2">
+      <select id="je-acc-${i}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;color:var(--text)">
+        <option value="">اختر حساب...</option>${accOpts}
+      </select>
+    </div>
+    <input type="number" id="je-dr-${i}" value="0" min="0" style="width:100px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;color:var(--text)">
+    <input type="number" id="je-cr-${i}" value="0" min="0" style="width:100px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;color:var(--text)">
+    <button onclick="this.parentElement.remove();checkJEBalance()" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer">✕</button>`;
+  document.getElementById('je-lines')?.appendChild(div);
+  div.addEventListener('input',checkJEBalance);
+}
+
+function checkJEBalance(){
+  let dr=0, cr=0;
+  document.querySelectorAll('[id^="je-dr-"]').forEach(el=>dr+=Number(el.value||0));
+  document.querySelectorAll('[id^="je-cr-"]').forEach(el=>cr+=Number(el.value||0));
+  const el=document.getElementById('je-balance-check'); if(!el) return;
+  const ok=Math.abs(dr-cr)<0.01;
+  el.style.background=ok?'rgba(46,160,67,.08)':'rgba(248,81,73,.08)';
+  el.style.border=`1px solid rgba(${ok?'46,160,67':'248,81,73'},.25)`;
+  el.innerHTML=`${ok?'✅ القيد متوازن':'⚠️ القيد غير متوازن'} — مدين: ${fmtC(dr)} | دائن: ${fmtC(cr)} | الفرق: ${fmtC(Math.abs(dr-cr))}`;
+}
+
+function saveJournalEntry(id){
+  const desc=val('je-desc'); if(!desc) return alert('وصف القيد إلزامي');
+  const lines=[]; let dr=0,cr=0;
+  document.querySelectorAll('[id^="je-acc-"]').forEach(el=>{
+    const i=el.id.split('-')[2];
+    const code=el.value; if(!code) return;
+    const acc=getAll('accounts').find(a=>a.code===code);
+    const debit=Number(document.getElementById(`je-dr-${i}`)?.value||0);
+    const credit=Number(document.getElementById(`je-cr-${i}`)?.value||0);
+    if(debit===0&&credit===0) return;
+    lines.push({accountCode:code,accountName:acc?.name||'',debit,credit});
+    dr+=debit; cr+=credit;
+  });
+  if(!lines.length) return alert('أضف بنوداً للقيد');
+  if(Math.abs(dr-cr)>0.01) return alert(`القيد غير متوازن — الفرق: ${fmtC(Math.abs(dr-cr))}`);
+  const d={
+    entryDate:document.getElementById('je-date')?.value||today(),
+    reference:val('je-ref')||null, description:desc,
+    lines, totalDebit:dr, totalCredit:cr,
+    postedBy:_authUser?.name||'—', postedAt:new Date().toISOString(),
+  };
+  id?update('journalEntries',id,d):insert('journalEntries',d);
+  closeModal(); go('journal');
+}
+
+function viewJE(id){
+  const e=getById('journalEntries',id); if(!e) return;
+  showModal(modal(`قيد JE-${String(e.id).padStart(6,'0')}`,`
+    <div style="font-size:13px;margin-bottom:12px">
+      <div>التاريخ: <strong>${e.entryDate||'—'}</strong> | الوصف: <strong>${escapeHtml(e.description||'—')}</strong></div>
+      <div>رحّله: ${escapeHtml(e.postedBy||'—')}</div>
+    </div>
+    ${tbl(['الحساب','الكود','مدين','دائن'],
+      (e.lines||[]).map(l=>tr(escapeHtml(l.accountName||l.accountCode||'—'),`<code>${l.accountCode||'—'}</code>`,l.debit?fmtC(l.debit):'—',l.credit?fmtC(l.credit):'—'))
+    ,'tbl_je_view')}
+    <div style="text-align:left;font-weight:700;margin-top:8px">
+      إجمالي مدين: ${fmtC(e.totalDebit||0)} | إجمالي دائن: ${fmtC(e.totalCredit||0)}
+    </div>
+    <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">إغلاق</button></div>`));
+}
+
+
+// ── الميزانية العمومية — Balance Sheet ────────────────
+
+PAGES.balancesheet = function(){
+  initCOA();
+  const accs = getAll('accounts')||[];
+  const getTypeTotal = (type)=>accs.filter(a=>a.type===type).reduce((s,a)=>s+calcAccountBalance(a.code),0);
+  const assets = getTypeTotal('asset');
+  const liab   = getTypeTotal('liability');
+  const equity = getTypeTotal('equity');
+  const revenue= getTypeTotal('revenue');
+  const expense= getTypeTotal('expense');
+  const netIncome = revenue - expense;
+
+  setPage('📊 الميزانية العمومية','Balance Sheet — القوائم المالية',
+    `<button class="btn btn-white" onclick="go('journal')">← اليومية</button>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي الأصول</div><div class="val text-blue">${fmtC(assets)}</div></div>
+      <div class="stat-card"><div class="lbl">إجمالي الالتزامات</div><div class="val text-red">${fmtC(liab)}</div></div>
+      <div class="stat-card"><div class="lbl">حقوق الملكية</div><div class="val text-purple">${fmtC(equity)}</div></div>
+      <div class="stat-card"><div class="lbl ${netIncome>=0?'text-green':'text-red'}">صافي الدخل ${netIncome>=0?'✅':'❌'}</div><div class="val ${netIncome>=0?'text-green':'text-red'}">${fmtC(netIncome)}</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="card">
+        <h3 style="margin:0 0 12px;font-size:14px">💰 الأصول</h3>
+        ${accs.filter(a=>a.type==='asset').map(a=>{const b=calcAccountBalance(a.code);return `
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+            <span><code style="font-size:10px">${a.code}</code> ${escapeHtml(a.name)}</span>
+            <strong class="${b>=0?'text-green':'text-red'}">${fmtC(b)}</strong>
+          </div>`}).join('')}
+        <div style="display:flex;justify-content:space-between;font-weight:700;margin-top:8px;color:var(--blue)"><span>إجمالي الأصول</span><span>${fmtC(assets)}</span></div>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 12px;font-size:14px">🔴 الالتزامات وحقوق الملكية</h3>
+        ${accs.filter(a=>a.type==='liability').map(a=>{const b=calcAccountBalance(a.code);return `
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+            <span><code style="font-size:10px">${a.code}</code> ${escapeHtml(a.name)}</span>
+            <strong>${fmtC(Math.abs(b))}</strong>
+          </div>`}).join('')}
+        <div style="display:flex;justify-content:space-between;font-weight:700;margin-top:4px;color:var(--red)"><span>إجمالي الالتزامات</span><span>${fmtC(liab)}</span></div>
+        ${accs.filter(a=>a.type==='equity').map(a=>{const b=calcAccountBalance(a.code);return `
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+            <span><code style="font-size:10px">${a.code}</code> ${escapeHtml(a.name)}</span>
+            <strong>${fmtC(Math.abs(b))}</strong>
+          </div>`}).join('')}
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+          <span>صافي الدخل لهذه الفترة</span>
+          <strong class="${netIncome>=0?'text-green':'text-red'}">${fmtC(netIncome)}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-weight:700;margin-top:4px;color:var(--purple)"><span>إجمالي حقوق الملكية</span><span>${fmtC(equity+netIncome)}</span></div>
+      </div>
+    </div>`
+  );
+};
+
+
+// ── تكاليف التصنيع ────────────────────────────────────
+
+PAGES.manufacturingcost = function(){
+  const orders = (getAll('productionOrders')||[]).filter(o=>o.status==='released'||o.status==='completed');
+  const invs   = getAll('inventory')||[];
+  setPage('⚙️ تكاليف التصنيع','Manufacturing Cost Analysis',
+    `<button class="btn btn-white" onclick="go('journal')">📒 اليومية</button>`,
+    `<div class="card">${tbl(
+      ['رقم التشغيلة','المنتج','الكمية','تكلفة مواد','تكلفة CMO','الإجمالي','تكلفة الوحدة','إجراء'],
+      orders.map(o=>{
+        const prod = getById('products',o.productId);
+        const matCost = Number(o.materialCost||o.estimatedCost||0);
+        const cmoCost = Number(o.cmoAmount||0);
+        const total   = matCost + cmoCost;
+        const unitCost= o.batchSize>0 ? total/Number(o.batchSize) : 0;
+        return tr(
+          `<code>${escapeHtml(o.batchNumber||'—')}</code>`,
+          escapeHtml(prod?.name||'—'),
+          fmtN(o.batchSize||0),
+          fmtC(matCost), fmtC(cmoCost),
+          `<strong>${fmtC(total)}</strong>`,
+          fmtC(unitCost),
+          `<button class="btn btn-white btn-sm" onclick="postManufacturingCost(${o.id})">📒 ترحيل</button>`
+        );
+      })
+    ,'tbl_mfgcost')}</div>`
+  );
+};
+
+function postManufacturingCost(orderId){
+  initCOA();
+  const o=getById('productionOrders',orderId); if(!o) return;
+  const prod=getById('products',o.productId);
+  const total=(Number(o.materialCost||o.estimatedCost||0)+Number(o.cmoAmount||0));
+  if(!total){return alert('لا توجد تكاليف لترحيلها');}
+  insert('journalEntries',{
+    entryDate:today(), description:`تكلفة تصنيع — ${prod?.name||'—'} — ${o.batchNumber||''}`,
+    lines:[
+      {accountCode:'1300',accountName:'المخزون',debit:total,credit:0},
+      {accountCode:'5200',accountName:'تكاليف تصنيع',debit:0,credit:total},
+    ],
+    totalDebit:total, totalCredit:total,
+    reference:`PO-${orderId}`, postedBy:_authUser?.name||'—', postedAt:new Date().toISOString(),
+  });
+  showNotif&&showNotif(`✅ تم ترحيل تكلفة ${fmtC(total)} للمخزون`,'success');
+  go('manufacturingcost');
+}
+
+
+// ═══════════════════════════════════════════════════════
+// 🔧 إصلاحات وإضافات متنوعة
+// BOM Version Control + ضريبة دمغة + CAPA + HR page
+// ═══════════════════════════════════════════════════════
+
+// ── BOM Version Control (إصلاح الإنتاج) ──────────────
+
+function addBOMItem(productId){
+  const product = getById('products', productId);
+  const materials = getAll('materials');
+  const existing  = (getAll('billOfMaterials')||[]).filter(b=>b.productId===productId);
+  const curVer = existing.length ? Math.max(...existing.map(b=>b.bomVersion||1)) : 0;
+  showModal(modal(`📋 BOM — ${product?.name||'—'} — إضافة مكون`,`
+    <div style="padding:10px;background:rgba(56,139,253,.06);border-radius:8px;margin-bottom:12px;font-size:12px">
+      نسخة BOM الحالية: <strong>V${curVer}</strong> | مكونات موجودة: <strong>${existing.length}</strong>
+    </div>
+    <div class="form-row">
+      ${fg('المادة الخام *', sel('bom-mat',[{v:0,l:'اختر مادة...'},...materials.filter(m=>m.status==='active').map(m=>({v:m.id,l:m.name+(m.pharmacopoeialGrade?' ['+m.pharmacopoeialGrade+']':'')+(m.casNumber?' CAS:'+m.casNumber:'')}))],0))}
+      ${fg('الكمية لكل وحدة إنتاج *', inp('bom-qty','number','',''))}
+    </div>
+    <div class="form-row">
+      ${fg('وحدة القياس', sel('bom-unit',UNITS,'كجم'))}
+      ${fg('مرحلة الإضافة', sel('bom-stage',[{v:'dispensing',l:'Dispensing'},{v:'granulation',l:'Granulation'},{v:'blending',l:'Blending'},{v:'compression',l:'Compression'},{v:'coating',l:'Coating'},{v:'filling',l:'Filling'},{v:'packaging',l:'Packaging'}],'dispensing'))}
+    </div>
+    <div class="form-row">
+      ${fg('ترتيب الإضافة', inp('bom-order','number',existing.length+1,''))}
+      ${fg('نسخة BOM الجديدة', inp('bom-ver','number',curVer+1,''))}
+    </div>
+    ${fg('سبب التغيير', inp('bom-reason','text','','مثال: تغيير مصدر مورد — تحسين الجودة'))}
+    ${fg('شروط خاصة عند الإضافة', `<textarea id="bom-cond" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif" placeholder="مثال: يُضاف بعد تحقيق درجة حرارة 60°C"></textarea>`)}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveBOMItem(${productId})">💾 إضافة للـ BOM</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+function saveBOMItem(productId){
+  const matId = numVal('bom-mat'); if(!matId) return alert('اختر المادة');
+  const qty   = numVal('bom-qty'); if(!qty) return alert('أدخل الكمية');
+  const mat   = getById('materials',matId);
+  const ver   = numVal('bom-ver')||1;
+  insert('billOfMaterials',{
+    productId, materialId:matId, materialName:mat?.name||'',
+    casNumber:mat?.casNumber||null, pharmacopoeialGrade:mat?.pharmacopoeialGrade||null,
+    quantity:qty, unit:document.getElementById('bom-unit')?.value||'كجم',
+    additionStage:document.getElementById('bom-stage')?.value||'dispensing',
+    additionOrder:numVal('bom-order')||1,
+    specialConditions:document.getElementById('bom-cond')?.value||null,
+    bomVersion:ver, versionDate:today(),
+    changeReason:val('bom-reason')||'إنشاء أولي',
+    approvedBy:_authUser?.name||'—',
+  });
+  closeModal();
+  showNotif&&showNotif(`✅ تمت إضافة ${mat?.name} للـ BOM V${ver}`,'success');
+  go('bom');
+}
+
+
+// ── CAPA System ───────────────────────────────────────
+
+PAGES.capa = function(){
+  const capas = getAll('capa')||[];
+  setPage('🔄 CAPA — الإجراءات التصحيحية والوقائية','Corrective & Preventive Actions — ICH Q10',
+    `<button class="btn btn-green" onclick="addCAPA()">+ CAPA جديد</button>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي CAPA</div><div class="val">${capas.length}</div></div>
+      <div class="stat-card"><div class="lbl text-red">مفتوح</div><div class="val text-red">${capas.filter(c=>c.status==='open').length}</div></div>
+      <div class="stat-card"><div class="lbl text-amber">قيد التنفيذ</div><div class="val text-amber">${capas.filter(c=>c.status==='in_progress').length}</div></div>
+      <div class="stat-card"><div class="lbl text-green">مغلق</div><div class="val text-green">${capas.filter(c=>c.status==='closed').length}</div></div>
+    </div>
+    <div class="card">${tbl(
+      ['رقم CAPA','النوع','الوصف','المصدر','الأولوية','الحالة','تاريخ الإغلاق','إجراء'],
+      capas.sort((a,b)=>b.id-a.id).map(c=>{
+        const priCls={critical:'b-red',major:'b-amber',minor:'b-blue'};
+        const stCls ={open:'b-red',in_progress:'b-amber',closed:'b-green',verified:'b-green'};
+        return tr(
+          `<code>CAPA-${String(c.id).padStart(4,'0')}</code>`,
+          c.capaType==='corrective'?'🔧 تصحيحي':'🛡️ وقائي',
+          escapeHtml((c.description||'').substring(0,50)),
+          escapeHtml(c.source||'—'),
+          `<span class="badge ${priCls[c.priority]||'b-gray'}">${c.priority||'—'}</span>`,
+          `<span class="badge ${stCls[c.status]||'b-gray'}">${c.status||'—'}</span>`,
+          c.targetCloseDate||'—',
+          `<div class="action-bar">
+            <button class="icon-btn edit" onclick="editCAPA(${c.id})">${ic.edit}</button>
+            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('capa',${c.id});go('capa')}">${ic.del}</button>
+          </div>`
+        );
+      })
+    ,'tbl_capa')}</div>`
+  );
+};
+
+function addCAPA(){ showCAPAForm(); }
+function editCAPA(id){ showCAPAForm(getById('capa',id)||{}); }
+function showCAPAForm(c={}){
+  showModal(modal(c.id?'تعديل CAPA':'🔄 CAPA جديد',`
+    <div class="form-row">
+      ${fg('نوع CAPA', sel('capa-type',[{v:'corrective',l:'🔧 تصحيحي (Corrective)'},{v:'preventive',l:'🛡️ وقائي (Preventive)'}],c.capaType||'corrective'))}
+      ${fg('الأولوية', sel('capa-priority',[{v:'critical',l:'🔴 حرج'},{v:'major',l:'🟡 رئيسي'},{v:'minor',l:'🔵 ثانوي'}],c.priority||'major'))}
+    </div>
+    ${fg('وصف المشكلة أو الخطر *', `<textarea id="capa-desc" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif">${escapeHtml(c.description||'')}</textarea>`)}
+    <div class="form-row">
+      ${fg('مصدر CAPA', inp('capa-source','text',c.source||'','انحراف / OOS / تدقيق / شكوى عميل'))}
+      ${fg('السبب الجذري (Root Cause)', inp('capa-root','text',c.rootCause||'',''))}
+    </div>
+    ${fg('الإجراء التصحيحي/الوقائي المقترح', `<textarea id="capa-action" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif">${escapeHtml(c.proposedAction||'')}</textarea>`)}
+    <div class="form-row">
+      ${fg('المسؤول عن التنفيذ', inp('capa-owner','text',c.owner||_authUser?.name||'',''))}
+      ${fg('تاريخ الإغلاق المستهدف', inp('capa-target','date',c.targetCloseDate||''))}
+    </div>
+    ${fg('الحالة', sel('capa-status',[{v:'open',l:'مفتوح'},{v:'in_progress',l:'قيد التنفيذ'},{v:'closed',l:'مغلق'},{v:'verified',l:'تم التحقق'}],c.status||'open'))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveCAPA(${c.id||''})">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+function saveCAPA(id){
+  const desc=document.getElementById('capa-desc')?.value;
+  if(!desc?.trim()) return alert('وصف المشكلة إلزامي');
+  const d={
+    capaType:document.getElementById('capa-type')?.value||'corrective',
+    priority:document.getElementById('capa-priority')?.value||'major',
+    description:desc,
+    source:val('capa-source')||null,
+    rootCause:val('capa-root')||null,
+    proposedAction:document.getElementById('capa-action')?.value||null,
+    owner:val('capa-owner')||null,
+    targetCloseDate:document.getElementById('capa-target')?.value||null,
+    status:document.getElementById('capa-status')?.value||'open',
+    openedBy:id?undefined:_authUser?.name||'—',
+    openedDate:id?undefined:today(),
+  };
+  id?update('capa',id,d):insert('capa',d);
+  closeModal(); go('capa');
+}
+
+
+// ── ضريبة الدمغة المصرية ─────────────────────────────
+
+PAGES.stamptax = function(){
+  const invs = getAll('salesInvoices')||[];
+  // Stamp tax: 0.3% on contracts and invoices in Egypt
+  const STAMP_RATE = 0.003;
+  const totalInv = invs.reduce((s,i)=>s+Number(i.subtotal||0),0);
+  const totalStamp = totalInv * STAMP_RATE;
+  setPage('🏛️ ضريبة الدمغة المصرية','Stamp Tax — قانون رقم 111 لسنة 1980',
+    `<button class="btn btn-white" onclick="go('taxegypt')">← الضرائب المصرية</button>`,
+    `<div class="stats-grid g3" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي الفواتير</div><div class="val">${fmtC(totalInv)}</div></div>
+      <div class="stat-card"><div class="lbl">معدل ضريبة الدمغة</div><div class="val">0.3%</div></div>
+      <div class="stat-card"><div class="lbl text-amber">ضريبة الدمغة المستحقة</div><div class="val text-amber">${fmtC(totalStamp)}</div></div>
+    </div>
+    <div style="padding:14px;background:rgba(240,136,0,.06);border:1px solid rgba(240,136,0,.2);border-radius:10px;margin-bottom:14px;font-size:13px">
+      <strong>🏛️ أساس قانون ضريبة الدمغة (111/1980):</strong><br>
+      • 0.3‰ على العقود والاتفاقيات التجارية<br>
+      • 0.3% على الفواتير التجارية (ملاحظة: تتغير بقرارات وزارية)<br>
+      • تسدد للمصلحة خلال 30 يوم من نهاية الفترة الضريبية
+    </div>
+    <div class="card">${tbl(
+      ['رقم الفاتورة','العميل','التاريخ','قيمة الفاتورة','ضريبة الدمغة (0.3%)'],
+      invs.map(inv=>tr(
+        `<code>INV-${String(inv.id).padStart(6,'0')}</code>`,
+        escapeHtml(inv.customerName||'—'),
+        inv.invoiceDate||'—',
+        fmtC(inv.subtotal||0),
+        fmtC(Number(inv.subtotal||0)*STAMP_RATE)
+      ))
+    ,'tbl_stamp')}</div>`
+  );
+};
+
+
+// ── صفحة الموارد البشرية الرئيسية ────────────────────
+
+PAGES.hr = function(){
+  const emps    = getAll('employees')||[];
+  const active  = emps.filter(e=>e.status==='active');
+  const leaves  = (getAll('leaveRequests')||[]).filter(l=>l.status==='pending');
+  const payroll = getAll('payrollRuns')||[];
+  setPage('👥 الموارد البشرية','إدارة الكوادر الدوائية',
+    `<div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-green" onclick="go('employees')">👤 الموظفون</button>
+      <button class="btn btn-white" onclick="go('payroll')">💵 مسير الرواتب</button>
+      <button class="btn btn-white" onclick="go('attendance')">📅 الحضور والإجازات</button>
+    </div>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي الموظفين</div><div class="val">${emps.length}</div></div>
+      <div class="stat-card"><div class="lbl text-green">نشط ✅</div><div class="val text-green">${active.length}</div></div>
+      <div class="stat-card"><div class="lbl text-amber">طلبات إجازة معلقة</div><div class="val text-amber">${leaves.length}</div></div>
+      <div class="stat-card"><div class="lbl">إجمالي الرواتب الشهرية</div><div class="val">${fmtC(active.reduce((s,e)=>s+Number(e.salary||0),0))}</div></div>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 12px;font-size:14px">👥 ملخص الأقسام</h3>
+      ${['QC','QA','الإنتاج','المخازن','الشؤون المالية','الموارد البشرية','التسجيل والشؤون التنظيمية'].map(dep=>{
+        const n=active.filter(e=>e.department===dep||e.dept===dep).length;
+        return n>0?`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span>${dep}</span><strong>${n} موظف</strong></div>`:''}).join('')}
+    </div>`
+  );
+};
+
+
+// ── تحديث بيانات DB لإضافة الجداول الجديدة ───────────
+
+// Ensure tables exist
+(function ensureTables(){
+  const db = window._db;
+  if(!db) return;
+  if(!db.drugRegistrations) db.drugRegistrations = [];
+  if(!db.salesOrders)       db.salesOrders = [];
+  if(!db.salesInvoices)     db.salesInvoices = [];
+  if(!db.capa)              db.capa = [];
+})();
 
 
 // renderNav/go called by coEnter() after company is selected
