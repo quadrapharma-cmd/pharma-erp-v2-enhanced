@@ -404,7 +404,7 @@ const defaultDB = {
   expenses:[], employees:[], budgetLines:[], campaigns:[], salesTargets:[],
   receivables:[], payrollRuns:[], purchaseOrders:[], qualityChecks:[],
   returns:[], contracts:[], assets:[], eInvoices:[], taxLines:[], batchMaterials:[], productIngredients:[], partnerAccounts:[], partnerEntries:[], journalEntries:[], chartOfAccounts:[], historicalBalances:[], appUsers:[], auditLogs:[], leaveRequests:[], appraisals:[], equipment:[],
-  deviations:[], stabilityStudies:[], supplierRatings:[], warehouses:[], serialNumbers:[],
+  deviations:[], stabilityStudies:[], supplierRatings:[], warehouses:[], serialNumbers:[], savedReports:[],
   _seq:{}
 };
 
@@ -640,7 +640,8 @@ const navItems=[
 function renderNav(){
   let html=''; let lastSection='';
   navItems.forEach(n=>{
-    if(n.section!==lastSection){ html+=`<div class="nav-section">${n.section}</div>`; lastSection=n.section; }
+    const sec = n.sec || n.section || '';
+    if(sec!==lastSection){ html+=`<div class="nav-section">${sec}</div>`; lastSection=sec; }
     html+=`<div class="nav-item ${currentPage===n.id?'active':''}" data-page="${n.id}" onclick="go('${n.id}')"><span class="icon">${n.icon}</span><span>${n.label}</span></div>`;
   });
   setHTML('nav-menu',html);
