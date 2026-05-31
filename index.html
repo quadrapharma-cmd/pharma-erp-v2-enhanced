@@ -641,6 +641,7 @@ const navItems=[
   {id:'forecasting',icon:'🔮',label:'التنبؤ بالمبيعات',sec:'التقارير'},
   {id:'savedreports',icon:'📋',label:'التقارير المخصصة',sec:'التقارير'},
   {id:'productionstages',icon:'🔬',label:'مراحل الإنتاج (Stages)',sec:'الإنتاج'},
+  {id:'cmoscorecard',icon:'📊',label:'تقييم المصانع Scorecard',sec:'الإنتاج'},
   {id:'warehouses',icon:'🏭',label:'المستودعات',sec:'المخزون'},
 ];
 
@@ -14105,173 +14106,13 @@ window.addProduct = function(){
 };
 
 
-// ════════════════════════════════════════════════════════════════════
-// نظام التصنيع الدوائي الشامل — كل الأشكال الصيدلانية
-// Pharmaceutical Manufacturing System — All Dosage Forms
-// ════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// 🏭 إدارة الإنتاج والتصنيع — النظام الكامل المطور
+// مبني على: 21 CFR 211، EU GMP، WHO GMP، ICH Q7، ICH Q10، ALCOA++
+// ═══════════════════════════════════════════════════════════════════════════
 
-// ── ثوابت الأشكال الصيدلانية ─────────────────────────────────────
-const DOSAGE_FORMS = {
-  tablet: {
-    label: 'أقراص (Tablets)', icon: '💊',
-    stages: [
-      { id:'dispensing',   name:'الوزن والصرف (Dispensing)',       minYield:99.0, ipc:['weight_check','label_check'] },
-      { id:'sifting',      name:'الغربلة (Sifting)',                minYield:99.5, ipc:['particle_size'] },
-      { id:'dry_mixing',   name:'الخلط الجاف (Dry Mixing)',         minYield:99.0, ipc:['blend_uniformity'] },
-      { id:'granulation',  name:'التحبيب (Granulation)',             minYield:98.0, ipc:['lod','particle_size'] },
-      { id:'drying',       name:'التجفيف (Drying)',                  minYield:98.0, ipc:['lod','temperature','time'] },
-      { id:'dry_sifting',  name:'الغربلة الجافة (Dry Sifting)',     minYield:99.0, ipc:['particle_size'] },
-      { id:'lubrication',  name:'التشحيم (Lubrication)',             minYield:99.0, ipc:['blend_time'] },
-      { id:'compression',  name:'الضغط (Compression)',               minYield:97.0, ipc:['weight','hardness','thickness','friability','disintegration'] },
-      { id:'coating',      name:'التغليف (Coating)',                  minYield:96.0, ipc:['weight_gain','appearance'] },
-      { id:'packaging',    name:'التعبئة (Packaging)',               minYield:96.0, ipc:['label_check','seal_integrity'] },
-    ]
-  },
-  capsule: {
-    label: 'كبسولات (Capsules)', icon: '💉',
-    stages: [
-      { id:'dispensing',   name:'الوزن والصرف',     minYield:99.0, ipc:['weight_check'] },
-      { id:'sifting',      name:'الغربلة',           minYield:99.5, ipc:['particle_size'] },
-      { id:'dry_mixing',   name:'الخلط الجاف',       minYield:99.0, ipc:['blend_uniformity'] },
-      { id:'granulation',  name:'التحبيب',            minYield:98.0, ipc:['lod','particle_size'] },
-      { id:'drying',       name:'التجفيف',            minYield:98.0, ipc:['lod','temperature'] },
-      { id:'lubrication',  name:'التشحيم',            minYield:99.0, ipc:['blend_time'] },
-      { id:'filling',      name:'التعبئة (Filling)',   minYield:97.0, ipc:['fill_weight','weight_variation','capsule_integrity'] },
-      { id:'packaging',    name:'التغليف والتعبئة',   minYield:96.0, ipc:['label_check','seal_integrity'] },
-    ]
-  },
-  syrup: {
-    label: 'شراب (Syrup)', icon: '🍶',
-    stages: [
-      { id:'dispensing',   name:'الوزن والصرف',               minYield:99.5, ipc:['weight_check'] },
-      { id:'dissolving',   name:'الإذابة (Dissolving)',         minYield:99.0, ipc:['temperature','time','visual'] },
-      { id:'mixing',       name:'الخلط والتجانس (Mixing)',       minYield:99.0, ipc:['ph','density','viscosity','appearance'] },
-      { id:'cooling',      name:'التبريد (Cooling)',              minYield:99.5, ipc:['temperature','time'] },
-      { id:'qs_water',     name:'التكملة بالماء (Q.S.)',          minYield:99.0, ipc:['volume','ph','density'] },
-      { id:'filtration',   name:'الترشيح (Filtration)',           minYield:98.0, ipc:['clarity','particle_free'] },
-      { id:'filling',      name:'التعبئة (Filling)',              minYield:97.0, ipc:['fill_volume','seal_integrity'] },
-      { id:'packaging',    name:'التغليف النهائي',               minYield:96.0, ipc:['label_check','carton_integrity'] },
-    ]
-  },
-  suspension: {
-    label: 'معلق (Suspension)', icon: '🧴',
-    stages: [
-      { id:'dispensing',   name:'الوزن والصرف',                   minYield:99.5, ipc:['weight_check'] },
-      { id:'milling',      name:'الطحن (Milling)',                  minYield:98.0, ipc:['particle_size_d90'] },
-      { id:'dispersion',   name:'التشتيت (Dispersion)',             minYield:98.5, ipc:['homogeneity','viscosity'] },
-      { id:'mixing',       name:'الخلط النهائي',                   minYield:99.0, ipc:['ph','viscosity','appearance'] },
-      { id:'qs_water',     name:'التكملة بالماء',                  minYield:99.0, ipc:['volume','density'] },
-      { id:'filling',      name:'التعبئة',                         minYield:97.0, ipc:['fill_volume','resuspendability'] },
-      { id:'packaging',    name:'التغليف النهائي',                 minYield:96.0, ipc:['label_check'] },
-    ]
-  },
-  injection: {
-    label: 'حقن (Injection)', icon: '💉',
-    stages: [
-      { id:'dispensing',   name:'الوزن والصرف',                   minYield:99.5, ipc:['weight_check','wfi_quality'] },
-      { id:'preparation',  name:'تحضير المحلول (Preparation)',      minYield:99.0, ipc:['ph','clarity','particulate','conductivity'] },
-      { id:'sterile_filt', name:'الترشيح المعقم (Sterile Filt.)',   minYield:98.5, ipc:['filter_integrity','bioburden'] },
-      { id:'filling',      name:'التعبئة المعقمة (Aseptic Fill)',   minYield:97.0, ipc:['fill_volume','seal_integrity','particulate'] },
-      { id:'sterilization',name:'التعقيم (Sterilization)',           minYield:99.0, ipc:['temperature','time','sterility_indicator'] },
-      { id:'inspection',   name:'الفحص البصري (Visual Inspection)', minYield:98.0, ipc:['particulate_free','clarity','fill_volume'] },
-      { id:'labeling',     name:'التسمية والتعبئة',                minYield:97.0, ipc:['label_check','batch_coding'] },
-    ]
-  },
-  cream: {
-    label: 'كريم (Cream)', icon: '🧴',
-    stages: [
-      { id:'dispensing',   name:'الوزن والصرف',                   minYield:99.5, ipc:['weight_check'] },
-      { id:'oil_phase',    name:'الطور الزيتي (Oil Phase)',         minYield:99.0, ipc:['temperature','visual'] },
-      { id:'water_phase',  name:'الطور المائي (Water Phase)',        minYield:99.0, ipc:['temperature','ph'] },
-      { id:'emulsification',name:'الاستحلاب (Emulsification)',      minYield:98.0, ipc:['viscosity','homogeneity','appearance'] },
-      { id:'cooling',      name:'التبريد مع الخلط',                minYield:99.0, ipc:['temperature','viscosity'] },
-      { id:'filling',      name:'التعبئة (Filling)',               minYield:97.0, ipc:['fill_weight','visual'] },
-      { id:'packaging',    name:'التغليف النهائي',                 minYield:96.0, ipc:['seal_integrity','label_check'] },
-    ]
-  },
-  ointment: {
-    label: 'مرهم (Ointment)', icon: '🧴',
-    stages: [
-      { id:'dispensing',   name:'الوزن والصرف',         minYield:99.5, ipc:['weight_check'] },
-      { id:'melting',      name:'الإذابة (Melting)',      minYield:99.0, ipc:['temperature','visual'] },
-      { id:'incorporation',name:'الدمج (Incorporation)',  minYield:98.5, ipc:['homogeneity','appearance'] },
-      { id:'cooling',      name:'التبريد مع الخلط',      minYield:99.0, ipc:['temperature','consistency'] },
-      { id:'filling',      name:'التعبئة',               minYield:97.0, ipc:['fill_weight','visual'] },
-      { id:'packaging',    name:'التغليف النهائي',       minYield:96.0, ipc:['seal_integrity','label_check'] },
-    ]
-  },
-  powder: {
-    label: 'بودرة (Powder/Sachet)', icon: '🧪',
-    stages: [
-      { id:'dispensing',   name:'الوزن والصرف',         minYield:99.5, ipc:['weight_check'] },
-      { id:'sifting',      name:'الغربلة',               minYield:99.5, ipc:['particle_size'] },
-      { id:'mixing',       name:'الخلط',                 minYield:99.0, ipc:['blend_uniformity','lod'] },
-      { id:'filling',      name:'التعبئة (Sachet/Bottle)',minYield:97.0, ipc:['fill_weight','weight_variation'] },
-      { id:'packaging',    name:'التغليف النهائي',       minYield:96.0, ipc:['seal_integrity','label_check'] },
-    ]
-  },
-  drops: {
-    label: 'قطرات (Drops)', icon: '💧',
-    stages: [
-      { id:'dispensing',   name:'الوزن والصرف',      minYield:99.5, ipc:['weight_check','wfi_quality'] },
-      { id:'preparation',  name:'تحضير المحلول',      minYield:99.0, ipc:['ph','clarity','osmolality'] },
-      { id:'sterile_filt', name:'الترشيح المعقم',     minYield:98.5, ipc:['filter_integrity'] },
-      { id:'filling',      name:'التعبئة',            minYield:97.5, ipc:['fill_volume','drop_rate','seal'] },
-      { id:'packaging',    name:'التغليف',            minYield:97.0, ipc:['label_check','integrity'] },
-    ]
-  },
-};
+// ── ١. BOM مع Version Control + مرحلة الإضافة ─────────────────────────────
 
-// IPC parameter labels
-const IPC_PARAMS = {
-  weight_check:      { label:'فحص الوزن',              unit:'g',   type:'number' },
-  particle_size:     { label:'حجم الجسيمات',           unit:'μm',  type:'number' },
-  particle_size_d90: { label:'D90 حجم الجسيمات',       unit:'μm',  type:'number' },
-  lod:               { label:'فقد الرطوبة (LOD %)',     unit:'%',   type:'number', limit:2.0 },
-  temperature:       { label:'درجة الحرارة',            unit:'°C',  type:'number' },
-  time:              { label:'مدة المرحلة',             unit:'min', type:'number' },
-  blend_uniformity:  { label:'انتظام الخلط (RSD%)',     unit:'%',   type:'number', limit:5.0 },
-  blend_time:        { label:'مدة التشحيم',             unit:'min', type:'number' },
-  weight:            { label:'وزن القرص/الكبسولة',      unit:'mg',  type:'number' },
-  hardness:          { label:'الصلادة',                 unit:'kP',  type:'number', limit_min:4 },
-  thickness:         { label:'السماكة',                 unit:'mm',  type:'number' },
-  friability:        { label:'الهشاشة (Friability %)',  unit:'%',   type:'number', limit:1.0 },
-  disintegration:    { label:'وقت التفتت',              unit:'min', type:'number', limit:15 },
-  weight_gain:       { label:'زيادة وزن التغليف %',     unit:'%',   type:'number' },
-  appearance:        { label:'المظهر',                  unit:'',    type:'pass_fail' },
-  label_check:       { label:'فحص الملصق',              unit:'',    type:'pass_fail' },
-  seal_integrity:    { label:'سلامة الإغلاق',           unit:'',    type:'pass_fail' },
-  ph:                { label:'درجة الحموضة (pH)',        unit:'',    type:'number' },
-  density:           { label:'الكثافة',                 unit:'g/ml',type:'number' },
-  viscosity:         { label:'اللزوجة',                 unit:'cP',  type:'number' },
-  clarity:           { label:'الشفافية',                unit:'',    type:'pass_fail' },
-  volume:            { label:'الحجم الكلي',             unit:'L',   type:'number' },
-  fill_volume:       { label:'حجم التعبئة',             unit:'ml',  type:'number' },
-  fill_weight:       { label:'وزن التعبئة',             unit:'g',   type:'number' },
-  weight_variation:  { label:'تذبذب الوزن %',           unit:'%',   type:'number', limit:7.5 },
-  capsule_integrity: { label:'سلامة الكبسولة',          unit:'',    type:'pass_fail' },
-  homogeneity:       { label:'التجانس',                 unit:'',    type:'pass_fail' },
-  visual:            { label:'الفحص البصري',            unit:'',    type:'pass_fail' },
-  wfi_quality:       { label:'جودة الماء للحقن',        unit:'',    type:'pass_fail' },
-  particulate:       { label:'خلو من الجسيمات',         unit:'',    type:'pass_fail' },
-  particulate_free:  { label:'خلو من الجسيمات',         unit:'',    type:'pass_fail' },
-  bioburden:         { label:'العبء الميكروبي',          unit:'CFU', type:'number', limit:10 },
-  sterility_indicator:{ label:'مؤشر التعقيم',           unit:'',    type:'pass_fail' },
-  filter_integrity:  { label:'سلامة الفلتر',            unit:'',    type:'pass_fail' },
-  conductivity:      { label:'التوصيلية الكهربائية',    unit:'μS',  type:'number' },
-  osmolality:        { label:'الأسمولية',               unit:'mOsm',type:'number' },
-  drop_rate:         { label:'معدل القطرات',            unit:'drops/ml',type:'number' },
-  resuspendability:  { label:'سهولة إعادة التعليق',     unit:'',    type:'pass_fail' },
-  batch_coding:      { label:'ترميز الدفعة',            unit:'',    type:'pass_fail' },
-  carton_integrity:  { label:'سلامة الكرتونة',          unit:'',    type:'pass_fail' },
-  consistency:       { label:'القوام',                  unit:'',    type:'pass_fail' },
-};
-
-// ════════════════════════════════════════════════════════════════
-// BOM — تعديل لإضافة Assay%, LOD%, Overage%, حدود Yield
-// ════════════════════════════════════════════════════════════════
-
-window._origAddBOMEntry2 = window.addBOMEntry;
 window.addBOMEntry = function(editId){
   const products = getAll('products');
   const mats = getAll('materials');
@@ -14279,734 +14120,1007 @@ window.addBOMEntry = function(editId){
   const pkg = mats.filter(m=>m.materialType==='packaging');
   const b = editId ? getById('productBOM', editId) : {};
 
-  showModal(modal(editId?'تعديل وصفة الإنتاج':'إضافة وصفة إنتاج (BOM) — مع تعويض الماء', `
+  // BOM version history for this product/material combo
+  const allVersions = editId
+    ? (getAll('productBOM')||[]).filter(x=>x.productId===b.productId&&x.materialId===b.materialId&&x.id!==editId)
+    : [];
+
+  const prod = b.productId ? getById('products',b.productId) : null;
+  const form = prod?.dosageForm || 'tablet';
+  const dosageForm = (typeof DOSAGE_FORMS !== 'undefined' ? DOSAGE_FORMS[form] : null) || {stages:[]};
+  const stageOpts = [{v:'',l:'اختر مرحلة الإضافة...'},...dosageForm.stages.map(s=>({v:s.id,l:s.name}))];
+
+  showModal(modal(editId?'تعديل وصفة الإنتاج BOM':'إضافة وصفة إنتاج BOM', `
     <div class="form-row">
-      ${fg('المنتج *', sel('bom-prod', [{v:0,l:'اختر منتج...'},...products.map(p=>({v:p.id,l:p.name}))], b.productId||0))}
-      <div class="fg"><label>المادة *</label>
-        <select id="bom-mat" onchange="bomUpdateCalc()">
+      ${fg('المنتج *', sel('bom-prod',
+        [{v:0,l:'اختر منتج...'},...products.map(p=>({v:p.id,l:`${p.name} (${p.dosageForm||'—'})`}))],
+        b.productId||0))}
+      <div class="fg"><label>المادة الخام / التغليف *</label>
+        <select id="bom-mat" onchange="bomUpdateCalc();bomUpdateStages()">
           <option value="">اختر مادة...</option>
-          <optgroup label="🧪 مواد خام">${raw.map(m=>`<option value="${m.id}" data-type="api" ${b.materialId==m.id?'selected':''}>${m.name} (${m.unit})</option>`).join('')}</optgroup>
-          <optgroup label="📦 تغليف">${pkg.map(m=>`<option value="${m.id}" data-type="pkg" ${b.materialId==m.id?'selected':''}>${m.name} (${m.unit})</option>`).join('')}</optgroup>
+          <optgroup label="🧪 مواد خام (APIs & Excipients)">
+            ${raw.map(m=>`<option value="${m.id}" data-type="${m.materialType}" ${b.materialId==m.id?'selected':''}>${m.name}</option>`).join('')}
+          </optgroup>
+          <optgroup label="📦 مواد تغليف">
+            ${pkg.map(m=>`<option value="${m.id}" data-type="pkg" ${b.materialId==m.id?'selected':''}>${m.name}</option>`).join('')}
+          </optgroup>
         </select>
       </div>
     </div>
 
     <div class="form-row">
-      ${fg('الكمية النظرية/وحدة *', inp('bom-qty','number',b.quantityPerUnit||'','مثال: 500 mg'))}
-      ${fg('الوحدة', inp('bom-unit','text',b.unit||'mg','mg / g / ml'))}
+      ${fg('الكمية النظرية / وحدة إنتاج *', inp('bom-qty','number',b.quantityPerUnit||'','مثال: 500'))}
+      ${fg('الوحدة', inp('bom-unit','text',b.unit||'mg','mg / g / ml / units'))}
     </div>
 
-    <div style="padding:12px;background:rgba(56,139,253,.06);border:1px solid rgba(56,139,253,.2);border-radius:8px;margin-bottom:14px">
-      <div style="font-weight:700;font-size:12px;color:var(--blue);margin-bottom:10px">⚗️ تعويض الماء والنقاء (Water & Potency Compensation)</div>
-      <div class="form-row">
-        ${fg('Assay % (نقاء المادة الفعالة)', inp('bom-assay','number',b.assay_pct||100,'مثال: 98.5'))}
-        ${fg('LOD % (رطوبة المادة الخام)', inp('bom-lod','number',b.lod_pct||0,'مثال: 1.5'))}
+    <!-- تعويض الماء والنقاء -->
+    <div style="padding:14px;background:rgba(56,139,253,.06);border:1px solid rgba(56,139,253,.2);border-radius:10px;margin-bottom:14px">
+      <div style="font-weight:700;font-size:12px;color:var(--blue);margin-bottom:10px">
+        ⚗️ تعويض النقاء والرطوبة — Water & Potency Compensation
+        <span style="font-weight:400;color:var(--muted);font-size:11px"> (21 CFR 211.101 — ICH Q7)</span>
       </div>
       <div class="form-row">
-        ${fg('Overage % (زيادة للثبات)', inp('bom-overage','number',b.overage_pct||0,'مثال: 5 للفيتامينات'))}
+        ${fg('Assay % — نقاء المادة الفعالة', inp('bom-assay','number',b.assay_pct||100,'100 = نقاء كامل'))}
+        ${fg('LOD % — رطوبة المادة الخام', inp('bom-lod','number',b.lod_pct||0,'0 = جافة تماماً'))}
+      </div>
+      <div class="form-row">
+        ${fg('Overage % — زيادة للثبات والفاقد', inp('bom-overage','number',b.overage_pct||0,'للفيتامينات: 5-10%'))}
         ${fg('نوع التعويض', sel('bom-comp-type',[
-          {v:'none',     l:'بدون تعويض'},
-          {v:'lod_assay',l:'تعويض LOD + Assay'},
-          {v:'overage',  l:'Overage فقط'},
-          {v:'all',      l:'LOD + Assay + Overage'},
+          {v:'none',      l:'بدون تعويض'},
+          {v:'lod_assay', l:'تصحيح LOD + Assay (للـ APIs)'},
+          {v:'overage',   l:'Overage فقط (للسواغات)'},
+          {v:'all',       l:'LOD + Assay + Overage (كامل)'},
         ], b.compensationType||'lod_assay'))}
       </div>
-      <div id="bom-calc-result" style="padding:10px;background:var(--bg);border-radius:8px;font-size:12px;margin-top:8px"></div>
-    </div>
-
-    <div style="padding:12px;background:rgba(46,160,67,.06);border:1px solid rgba(46,160,67,.2);border-radius:8px;margin-bottom:14px">
-      <div style="font-weight:700;font-size:12px;color:var(--green-light);margin-bottom:10px">📊 حدود الحصيلة (Yield Limits)</div>
-      <div class="form-row">
-        ${fg('الحد الأدنى للحصيلة %', inp('bom-yield-min','number',b.minYield||97,'مثال: 97'))}
-        ${fg('الحد الأقصى للحصيلة %', inp('bom-yield-max','number',b.maxYield||101,'مثال: 101'))}
+      <div id="bom-calc-result" style="padding:10px;background:rgba(0,0,0,.04);border-radius:8px;margin-top:8px;font-size:12px;min-height:40px">
+        أدخل الكميات لحساب التعويض...
       </div>
     </div>
 
-    ${fg('ملاحظات', inp('bom-notes','text',b.notes||'','مثال: يُضاف في مرحلة التحبيب'))}
+    <!-- مرحلة الإضافة والترتيب -->
+    <div style="padding:14px;background:rgba(46,160,67,.06);border:1px solid rgba(46,160,67,.2);border-radius:10px;margin-bottom:14px">
+      <div style="font-weight:700;font-size:12px;color:var(--green-light);margin-bottom:10px">
+        📍 مرحلة الإضافة وترتيبها — Addition Stage & Order
+      </div>
+      <div class="form-row">
+        <div class="fg"><label>مرحلة الإضافة</label>
+          <select id="bom-stage" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text)">
+            ${stageOpts.map(s=>`<option value="${s.v}" ${b.additionStage===s.v?'selected':''}>${s.l}</option>`).join('')}
+          </select>
+        </div>
+        ${fg('ترتيب الإضافة (١، ٢، ٣...)', inp('bom-order','number',b.additionOrder||1,'الأول يُضاف أولاً'))}
+      </div>
+      ${fg('شروط خاصة عند الإضافة', inp('bom-conditions','text',b.specialConditions||'','مثال: تحت غاز N2 — محمي من الضوء — درجة حرارة < 25°C'))}
+    </div>
+
+    <!-- حدود الحصيلة -->
+    <div style="padding:14px;background:rgba(240,136,0,.06);border:1px solid rgba(240,136,0,.2);border-radius:10px;margin-bottom:14px">
+      <div style="font-weight:700;font-size:12px;color:var(--amber);margin-bottom:10px">
+        📊 حدود الحصيلة المقبولة — Yield Acceptance Limits
+        <span style="font-weight:400;color:var(--muted);font-size:11px"> (ICH Q7 — 21 CFR 211.192)</span>
+      </div>
+      <div class="form-row">
+        ${fg('الحد الأدنى للحصيلة %', inp('bom-yield-min','number',b.minYield||97,'الانحراف يُفتح أقل من هذا'))}
+        ${fg('الحد الأقصى للحصيلة %', inp('bom-yield-max','number',b.maxYield||102,'تحقق أعلى من هذا'))}
+      </div>
+    </div>
+
+    <!-- Version Control -->
+    <div style="padding:14px;background:rgba(188,128,240,.06);border:1px solid rgba(188,128,240,.2);border-radius:10px;margin-bottom:14px">
+      <div style="font-weight:700;font-size:12px;color:#bc80f0;margin-bottom:10px">
+        📌 إدارة النسخ — Version Control
+        <span style="font-weight:400;color:var(--muted);font-size:11px"> (ICH Q10 — EU GMP Annex 11)</span>
+      </div>
+      <div class="form-row">
+        ${fg('رقم النسخة', inp('bom-ver','text',b.versionNumber||'1.0','مثال: 1.0 — 1.1 — 2.0'))}
+        ${fg('تاريخ الاعتماد', inp('bom-ver-date','date',b.effectiveDate||today()))}
+      </div>
+      ${fg('سبب التغيير / Change Reason', inp('bom-change-reason','text',b.changeReason||'',
+        editId?'لماذا تُعدَّل هذه النسخة؟':'الإنشاء الأول'))}
+      ${allVersions.length ? `
+      <div style="margin-top:8px;font-size:11px;color:var(--muted)">
+        السجل التاريخي للنسخ السابقة: ${allVersions.map(v=>`<span style="padding:2px 6px;background:var(--hover);border-radius:4px;margin:2px">${v.versionNumber||'1.0'} (${v.effectiveDate||'—'})</span>`).join('')}
+      </div>` : ''}
+    </div>
+
+    ${fg('ملاحظات', inp('bom-notes','text',b.notes||'','أي معلومة إضافية...'))}
 
     <div class="form-actions">
-      <button class="btn btn-green" onclick="saveBOMEntry(${editId||''})">💾 حفظ</button>
+      <button class="btn btn-green" onclick="saveBOMEntry(${editId||''})">💾 حفظ الوصفة</button>
       <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
     </div>`));
 
-  setTimeout(bomUpdateCalc, 100);
+  setTimeout(()=>{
+    bomUpdateCalc();
+    ['bom-qty','bom-assay','bom-lod','bom-overage','bom-comp-type'].forEach(id=>{
+      document.getElementById(id)?.addEventListener('input', bomUpdateCalc);
+      document.getElementById(id)?.addEventListener('change', bomUpdateCalc);
+    });
+    document.getElementById('bom-prod')?.addEventListener('change', bomUpdateStages);
+  },100);
 };
 
+function bomUpdateStages(){
+  const prodId = numVal('bom-prod');
+  const prod   = getById('products', prodId);
+  const form   = prod?.dosageForm||'tablet';
+  const df     = (typeof DOSAGE_FORMS !== 'undefined' ? DOSAGE_FORMS[form] : null) || {stages:[]};
+  const stageEl = document.getElementById('bom-stage');
+  if(!stageEl) return;
+  stageEl.innerHTML = `<option value="">اختر مرحلة...</option>` +
+    df.stages.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+}
+
 function bomUpdateCalc(){
-  const qty    = Number(document.getElementById('bom-qty')?.value||0);
-  const assay  = Number(document.getElementById('bom-assay')?.value||100);
-  const lod    = Number(document.getElementById('bom-lod')?.value||0);
-  const over   = Number(document.getElementById('bom-overage')?.value||0);
-  const ctype  = document.getElementById('bom-comp-type')?.value||'lod_assay';
-  const unit   = document.getElementById('bom-unit')?.value||'mg';
-  const el     = document.getElementById('bom-calc-result');
-  if(!el||!qty) return;
+  const qty   = Number(document.getElementById('bom-qty')?.value||0);
+  const assay = Number(document.getElementById('bom-assay')?.value||100);
+  const lod   = Number(document.getElementById('bom-lod')?.value||0);
+  const over  = Number(document.getElementById('bom-overage')?.value||0);
+  const ctype = document.getElementById('bom-comp-type')?.value||'lod_assay';
+  const unit  = document.getElementById('bom-unit')?.value||'mg';
+  const el    = document.getElementById('bom-calc-result');
+  if(!el) return;
+  if(!qty){ el.innerHTML='<span style="color:var(--muted)">أدخل الكمية النظرية لحساب التعويض...</span>'; return; }
 
   let corrected = qty;
-  let steps = [];
+  const steps = [];
 
   if(ctype==='lod_assay'||ctype==='all'){
-    const lodCorr = qty * 100/(100-lod);
-    const assayCorr = lodCorr * 100/assay;
-    steps.push(`تصحيح LOD: ${qty.toFixed(2)} × 100/(100-${lod}) = ${lodCorr.toFixed(2)} ${unit}`);
-    steps.push(`تصحيح Assay: ${lodCorr.toFixed(2)} × 100/${assay} = ${assayCorr.toFixed(2)} ${unit}`);
+    const lodCorr   = qty * 100 / (100 - lod);
+    const assayCorr = lodCorr * 100 / assay;
+    steps.push(`تصحيح LOD: ${qty.toFixed(3)} × 100/(100−${lod}) = <strong>${lodCorr.toFixed(3)} ${unit}</strong>`);
+    steps.push(`تصحيح Assay: ${lodCorr.toFixed(3)} × 100/${assay} = <strong>${assayCorr.toFixed(3)} ${unit}</strong>`);
     corrected = assayCorr;
   }
   if(ctype==='overage'||ctype==='all'){
-    const overCorr = corrected * (100+over)/100;
-    steps.push(`إضافة Overage: ${corrected.toFixed(2)} × (100+${over})/100 = ${overCorr.toFixed(2)} ${unit}`);
+    const overCorr = corrected * (100 + over) / 100;
+    steps.push(`إضافة Overage: ${corrected.toFixed(3)} × (100+${over})/100 = <strong>${overCorr.toFixed(3)} ${unit}</strong>`);
     corrected = overCorr;
   }
 
-  const diff = corrected - qty;
-  const diffPct = qty>0?((diff/qty)*100).toFixed(2):0;
+  const diff    = corrected - qty;
+  const diffPct = qty>0 ? ((diff/qty)*100).toFixed(2) : 0;
 
   el.innerHTML = `
-    ${steps.map(s=>`<div style="padding:2px 0;color:var(--muted)">▸ ${s}</div>`).join('')}
-    <div style="margin-top:8px;font-weight:700;color:var(--green-light)">
-      الكمية الفعلية المطلوبة: <span style="font-size:15px">${corrected.toFixed(3)} ${unit}</span>
-      <span style="color:var(--amber);font-size:11px">(+${diff.toFixed(3)} ${unit} = +${diffPct}% تعويض)</span>
+    <div style="margin-bottom:6px">${steps.map(s=>`<div style="padding:2px 0;color:var(--muted);font-size:11px">▸ ${s}</div>`).join('')}</div>
+    <div style="display:flex;gap:16px;align-items:center;padding:8px;background:rgba(46,160,67,.1);border-radius:6px">
+      <div>الكمية الفعلية للوزن: <strong style="font-size:14px;color:var(--green-light)">${corrected.toFixed(4)} ${unit}</strong></div>
+      <div style="color:var(--amber);font-size:11px">+${diff.toFixed(4)} ${unit} (${diffPct}% تعويض)</div>
     </div>`;
 }
 
 window.saveBOMEntry = function(editId){
   const prodId = numVal('bom-prod'), matId = numVal('bom-mat'), qty = numVal('bom-qty');
-  if(!prodId||!matId||!qty) return alert('يرجى تعبئة المنتج والمادة والكمية');
-  const mat = getById('materials', matId);
+  if(!prodId||!matId||!qty) return alert('يرجى تعبئة: المنتج، المادة، الكمية');
+  const mat   = getById('materials', matId);
   const assay = Number(document.getElementById('bom-assay')?.value||100);
   const lod   = Number(document.getElementById('bom-lod')?.value||0);
   const over  = Number(document.getElementById('bom-overage')?.value||0);
   const ctype = document.getElementById('bom-comp-type')?.value||'lod_assay';
 
-  // Calculate corrected quantity
   let corrected = qty;
   if(ctype==='lod_assay'||ctype==='all') corrected = qty * 100/(100-lod) * 100/assay;
   if(ctype==='overage'||ctype==='all')   corrected = corrected * (100+over)/100;
 
   const d = {
-    productId: prodId, materialId: matId,
-    materialName: mat?.name||'', unit: val('bom-unit')||mat?.unit||'',
+    productId:      prodId,
+    materialId:     matId,
+    materialName:   mat?.name||'',
+    unit:           val('bom-unit')||mat?.unit||'',
     quantityPerUnit: qty,
     correctedQuantity: corrected,
-    assay_pct: assay, lod_pct: lod, overage_pct: over,
+    assay_pct:      assay,
+    lod_pct:        lod,
+    overage_pct:    over,
     compensationType: ctype,
-    minYield: Number(document.getElementById('bom-yield-min')?.value||97),
-    maxYield: Number(document.getElementById('bom-yield-max')?.value||101),
-    notes: val('bom-notes')||null
+    additionStage:  document.getElementById('bom-stage')?.value||null,
+    additionOrder:  Number(document.getElementById('bom-order')?.value||1),
+    specialConditions: val('bom-conditions')||null,
+    minYield:       Number(document.getElementById('bom-yield-min')?.value||97),
+    maxYield:       Number(document.getElementById('bom-yield-max')?.value||102),
+    versionNumber:  val('bom-ver')||'1.0',
+    effectiveDate:  document.getElementById('bom-ver-date')?.value||today(),
+    changeReason:   val('bom-change-reason')||null,
+    notes:          val('bom-notes')||null,
+    approvedBy:     _authUser?.name||'—',
+    approvedAt:     new Date().toISOString(),
   };
   editId ? update('productBOM',editId,d) : insert('productBOM',d);
   closeModal(); go('bom');
 };
 
 
-// ════════════════════════════════════════════════════════════════
-// مراحل الإنتاج — Production Stages System
-// ════════════════════════════════════════════════════════════════
+// ── ٢. MRP Check — فحص توافر المواد قبل إصدار أمر الإنتاج ──────────────────
 
-PAGES.productionstages = function(){
-  const orders = getAll('productionOrders');
-  const stages = getAll('productionStages');
+function runMRPCheck(productId, batchSize){
+  const bom   = (getAll('productBOM')||[]).filter(b=>b.productId===productId);
+  const mats  = getAll('materials');
+  const receipts = getAll('materialReceipts');
+  const results  = [];
 
-  setPage('مراحل الإنتاج والتحضير','متابعة كل مرحلة مع الحصيلة والـ IPC',
-    `<div style="display:flex;gap:8px">
-      <button class="btn btn-white" onclick="go('production')">← أوامر الإنتاج</button>
-    </div>`,
-    `<div class="stats-grid g4" style="margin-bottom:16px">
-      <div class="stat-card"><div class="lbl">إجمالي المراحل</div><div class="val">${stages.length}</div></div>
-      <div class="stat-card"><div class="lbl">مكتملة</div><div class="val text-green">${stages.filter(s=>s.status==='completed').length}</div></div>
-      <div class="stat-card"><div class="lbl">جارية</div><div class="val text-blue">${stages.filter(s=>s.status==='in_progress').length}</div></div>
-      <div class="stat-card"><div class="lbl">انحرافات</div><div class="val text-red">${stages.filter(s=>s.status==='deviated').length}</div></div>
-    </div>
-    <div class="card">${tbl(
-      ['التشغيلة','المرحلة','الوزن قبل (kg)','الوزن بعد (kg)','الحصيلة %','الحالة','IPC',''],
-      stages.sort((a,b)=>(b.createdAt||'')>(a.createdAt||'')?1:-1).map(s=>{
-        const order = getById('productionOrders',s.productionOrderId);
-        const prod  = getById('products', order?.productId);
-        const yieldPct = s.weightBefore>0 ? ((s.weightAfter/s.weightBefore)*100).toFixed(1) : '—';
-        const yieldOk  = s.weightBefore>0 && (s.weightAfter/s.weightBefore)*100 >= (s.minYield||95);
-        return tr(
-          `<code class="fw7">${order?.batchNumber||order?.orderNumber||('ORD-'+s.productionOrderId)}</code>`,
-          `<strong>${s.stageName||s.stageId}</strong><br><span style="font-size:10px;color:var(--muted)">${prod?.name||'—'}</span>`,
-          s.weightBefore ? fmtN(s.weightBefore)+' kg' : '—',
-          s.weightAfter  ? fmtN(s.weightAfter) +' kg' : '—',
-          s.weightBefore&&s.weightAfter ?
-            `<span class="fw7 ${yieldOk?'text-green':'text-red'}">${yieldPct}%${yieldOk?'':' ⚠️'}</span>` : '—',
-          s.status==='completed'?'<span class="badge b-green">مكتملة</span>':
-          s.status==='in_progress'?'<span class="badge b-blue">جارية</span>':
-          s.status==='deviated'?'<span class="badge b-red">انحراف</span>':'<span class="badge b-gray">معلقة</span>',
-          `<button class="btn btn-white btn-sm" onclick="showIPCResults(${s.id})">📋 IPC</button>`,
-          `<div class="action-bar">
-            <button class="icon-btn edit" onclick="editProductionStage(${s.id})">${ic.edit}</button>
-            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('productionStages',${s.id});go('productionstages')}">${ic.del}</button>
-          </div>`
-        );
-      })
-    ,'tbl_productionstages')}</div>`
-  );
-};
+  bom.forEach(b=>{
+    const mat      = getById('materials', b.materialId);
+    const required = (b.correctedQuantity||b.quantityPerUnit) * batchSize;
+    const stock    = Number(mat?.currentStock||0);
+    // Only count approved, unexpired receipts
+    const availBatches = receipts.filter(r=>
+      r.materialId===b.materialId &&
+      r.status==='approved' &&
+      Number(r.remainingQuantity||0) > 0 &&
+      (!r.expiryDate || new Date(r.expiryDate) > new Date())
+    );
+    const availableApproved = availBatches.reduce((s,r)=>s+Number(r.remainingQuantity||0),0);
+    const shortage  = Math.max(0, required - availableApproved);
+    const ok        = shortage === 0;
 
-function openProductionStages(orderId){
-  const order = getById('productionOrders', orderId);
-  if(!order) return;
-  const prod = getById('products', order.productId);
-  const form = prod?.dosageForm||'tablet';
-  const dosageForm = DOSAGE_FORMS[form] || DOSAGE_FORMS.tablet;
-  const existingStages = getAll('productionStages').filter(s=>s.productionOrderId===orderId);
-
-  setPage(
-    `مراحل إنتاج: ${prod?.name||'—'}`,
-    `دفعة رقم: ${order.batchNumber||order.orderNumber||orderId} | ${order.quantity||0} وحدة | ${dosageForm.label}`,
-    `<div style="display:flex;gap:8px">
-      <button class="btn btn-white" onclick="go('production')">← أوامر الإنتاج</button>
-      <button class="btn btn-green" onclick="addAllStages(${orderId})">${ic.plus} إنشاء كل المراحل</button>
-      <button class="btn btn-white" onclick="showReconciliation(${orderId})">⚖️ المطابقة</button>
-    </div>`,
-    `
-    <!-- Progress bar -->
-    <div class="card" style="padding:16px;margin-bottom:16px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <h2 style="font-size:14px;font-weight:700">تقدم التشغيلة</h2>
-        <span style="font-size:12px;color:var(--muted)">${existingStages.filter(s=>s.status==='completed').length}/${dosageForm.stages.length} مرحلة</span>
-      </div>
-      <div style="display:flex;gap:4px;flex-wrap:wrap">
-        ${dosageForm.stages.map((stage,i)=>{
-          const existing = existingStages.find(s=>s.stageId===stage.id);
-          const color = !existing?'var(--border)':existing.status==='completed'?'var(--green)':existing.status==='deviated'?'var(--red)':'var(--blue)';
-          return `<div title="${stage.name}" style="flex:1;min-width:40px;height:8px;background:${color};border-radius:4px"></div>`;
-        }).join('')}
-      </div>
-      <div style="display:flex;gap:16px;margin-top:8px;font-size:11px">
-        <span style="color:var(--green)">● مكتملة</span>
-        <span style="color:var(--blue)">● جارية</span>
-        <span style="color:var(--red)">● انحراف</span>
-        <span style="color:var(--border)">● معلقة</span>
-      </div>
-    </div>
-
-    <!-- Stages cards -->
-    <div style="display:flex;flex-direction:column;gap:12px">
-      ${dosageForm.stages.map((stage,i)=>{
-        const existing = existingStages.find(s=>s.stageId===stage.id);
-        const yieldPct = existing && existing.weightBefore>0 ? ((existing.weightAfter/existing.weightBefore)*100).toFixed(1) : null;
-        const yieldOk  = yieldPct && Number(yieldPct) >= stage.minYield;
-        return `
-        <div class="card" style="padding:16px;border-right:4px solid ${!existing?'var(--border)':existing.status==='completed'?'var(--green)':existing.status==='deviated'?'var(--red)':'var(--blue)'}">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${existing?'12px':'0'}">
-            <div style="display:flex;align-items:center;gap:10px">
-              <div style="width:28px;height:28px;border-radius:50%;background:var(--hover);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:var(--muted)">${i+1}</div>
-              <div>
-                <div style="font-weight:700;font-size:13px">${stage.name}</div>
-                <div style="font-size:11px;color:var(--muted)">الحد الأدنى للحصيلة: ${stage.minYield}%</div>
-              </div>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center">
-              ${yieldPct ? `<span class="badge ${yieldOk?'b-green':'b-red'} fw7">${yieldPct}% ${yieldOk?'✅':'⚠️'}</span>` : ''}
-              ${existing ?
-                `<button class="btn btn-white btn-sm" onclick="editProductionStage(${existing.id})">تعديل</button>
-                 <button class="btn btn-white btn-sm" onclick="showIPCResults(${existing.id})">📋 IPC</button>` :
-                `<button class="btn btn-green btn-sm" onclick="addProductionStage(${orderId},'${stage.id}','${stage.name}',${stage.minYield},'${dosageForm.stages.map(s=>s.id).join(',')}')">+ بدء المرحلة</button>`
-              }
-            </div>
-          </div>
-          ${existing ? `
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:12px">
-            <div><span style="color:var(--muted)">قبل:</span> <strong>${existing.weightBefore||'—'} kg</strong></div>
-            <div><span style="color:var(--muted)">بعد:</span> <strong>${existing.weightAfter||'—'} kg</strong></div>
-            <div><span style="color:var(--muted)">فاقد:</span> <strong class="text-amber">${existing.weightBefore&&existing.weightAfter?(existing.weightBefore-existing.weightAfter).toFixed(3)+' kg':'—'}</strong></div>
-            <div><span style="color:var(--muted)">المسؤول:</span> <strong>${existing.operator||'—'}</strong></div>
-          </div>` : ''}
-        </div>`;
-      }).join('')}
-    </div>
-
-    <!-- Dispensing summary -->
-    <div class="card" style="margin-top:16px;padding:16px">
-      <h2 style="font-size:14px;font-weight:700;margin-bottom:12px">⚖️ الوزن والصرف — Dispensing Record</h2>
-      <button class="btn btn-green btn-sm" onclick="showDispensingRecord(${orderId})" style="margin-bottom:12px">${ic.plus} سجل الوزن والصرف</button>
-      ${showDispensingTable(orderId)}
-    </div>`
-  );
-}
-
-function addAllStages(orderId){
-  const order = getById('productionOrders', orderId);
-  const prod = getById('products', order?.productId);
-  const form = prod?.dosageForm||'tablet';
-  const dosageForm = DOSAGE_FORMS[form] || DOSAGE_FORMS.tablet;
-  const existing = getAll('productionStages').filter(s=>s.productionOrderId===orderId);
-
-  let added = 0;
-  dosageForm.stages.forEach(stage=>{
-    if(!existing.find(s=>s.stageId===stage.id)){
-      insert('productionStages',{
-        productionOrderId:orderId, stageId:stage.id,
-        stageName:stage.name, stageNumber:dosageForm.stages.indexOf(stage)+1,
-        minYield:stage.minYield, ipcRequired:stage.ipc,
-        status:'pending', weightBefore:null, weightAfter:null
-      });
-      added++;
-    }
+    results.push({
+      materialName:  b.materialName||mat?.name||'—',
+      required:      required,
+      available:     availableApproved,
+      shortage:      shortage,
+      unit:          b.unit||mat?.unit||'',
+      stage:         b.additionStage||'dispensing',
+      ok,
+    });
   });
-  showNotif&&showNotif(`✅ تم إنشاء ${added} مرحلة جديدة`,'success');
-  openProductionStages(orderId);
+
+  return results;
 }
 
-function addProductionStage(orderId, stageId, stageName, minYield){
-  const order = getById('productionOrders', orderId);
-  const prod = getById('products', order?.productId);
-  const form = prod?.dosageForm||'tablet';
-  const dosageForm = DOSAGE_FORMS[form]||DOSAGE_FORMS.tablet;
-  const stage = dosageForm.stages.find(s=>s.id===stageId)||{};
-  const ipcKeys = stage.ipc||[];
+function showMRPCheck(productId, batchSize){
+  const checks = runMRPCheck(productId, batchSize);
+  if(!checks.length){
+    showNotif&&showNotif('⚠️ لا توجد وصفة BOM لهذا المنتج — أضف BOM أولاً','warn');
+    return false;
+  }
 
-  showModal(modal(`مرحلة: ${stageName}`, `
-    <div style="padding:10px;background:rgba(56,139,253,.06);border:1px solid rgba(56,139,253,.2);border-radius:8px;margin-bottom:14px;font-size:12px">
-      الحد الأدنى للحصيلة: <strong style="color:var(--blue)">${minYield}%</strong>
+  const allOk = checks.every(c=>c.ok);
+  const prod  = getById('products', productId);
+
+  showModal(modal(`🔍 فحص توافر المواد (MRP) — ${prod?.name||'—'}`,`
+    <div style="padding:12px;background:rgba(${allOk?'46,160,67':'248,81,73'},.08);border:1px solid rgba(${allOk?'46,160,67':'248,81,73'},.25);border-radius:10px;margin-bottom:14px;text-align:center;font-weight:700">
+      ${allOk
+        ? '✅ كل المواد متاحة — يمكن إصدار أمر الإنتاج'
+        : '❌ يوجد نقص في بعض المواد — يجب الشراء أو إعادة الجدولة'}
     </div>
 
-    <div class="form-row">
-      ${fg('الوزن قبل المرحلة (kg) *', inp('ps-before','number','','مثال: 50.000'))}
-      ${fg('الوزن بعد المرحلة (kg) *',  inp('ps-after', 'number','','مثال: 49.200'))}
-    </div>
-    <div id="ps-yield-calc" style="padding:10px;background:var(--bg);border-radius:8px;font-size:13px;margin-bottom:12px;display:none"></div>
-
-    <div class="form-row">
-      ${fg('تاريخ/وقت البداية', inp('ps-start','datetime-local',''))}
-      ${fg('تاريخ/وقت الانتهاء', inp('ps-end',  'datetime-local',''))}
-    </div>
-    <div class="form-row">
-      ${fg('المشغّل / المسؤول', inp('ps-operator','text','','اسم الكيميائي'))}
-      ${fg('المشرف / المدير', inp('ps-supervisor','text','','اسم المشرف'))}
-    </div>
-
-    ${ipcKeys.length ? `
-    <div style="padding:12px;background:rgba(46,160,67,.06);border:1px solid rgba(46,160,67,.2);border-radius:8px;margin-bottom:14px">
-      <div style="font-weight:700;font-size:12px;color:var(--green-light);margin-bottom:10px">📊 نتائج ضبط الجودة أثناء الإنتاج (IPC)</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        ${ipcKeys.map(k=>{
-          const p = IPC_PARAMS[k]||{label:k,unit:'',type:'number'};
-          if(p.type==='pass_fail'){
-            return `<div class="fg"><label>${p.label}</label>
-              <select id="ipc-${k}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--text)">
-                <option value="">اختر...</option>
-                <option value="pass">✅ مطابق (Pass)</option>
-                <option value="fail">❌ غير مطابق (Fail)</option>
-              </select></div>`;
-          }
-          return `${fg(`${p.label}${p.unit?' ('+p.unit+')':''}${p.limit?' — الحد: '+p.limit:''}`,
-            inp(`ipc-${k}`,'number','',`قيمة...`))}`;
-        }).join('')}
-      </div>
-    </div>` : ''}
-
-    ${fg('حالة المرحلة', sel('ps-status',[
-      {v:'completed',   l:'✅ مكتملة — ضمن المواصفة'},
-      {v:'deviated',    l:'⚠️ انحراف — خارج حد الحصيلة'},
-      {v:'in_progress', l:'🔄 جارية'},
-    ],'completed'))}
-    ${fg('ملاحظات وتحفظات', `<textarea id="ps-notes" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif"></textarea>`)}
+    <table style="width:100%;font-size:12px;border-collapse:collapse">
+      <thead>
+        <tr style="background:rgba(255,255,255,.04);font-size:11px">
+          <th style="padding:8px;text-align:right;border-bottom:1px solid var(--border)">المادة</th>
+          <th style="padding:8px;border-bottom:1px solid var(--border)">مطلوب</th>
+          <th style="padding:8px;border-bottom:1px solid var(--border)">متاح معتمد</th>
+          <th style="padding:8px;border-bottom:1px solid var(--border)">النقص</th>
+          <th style="padding:8px;border-bottom:1px solid var(--border)">الحالة</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${checks.map(c=>`
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:8px;font-weight:600">${escapeHtml(c.materialName)}</td>
+          <td style="padding:8px;text-align:center">${fmtN(c.required)} ${c.unit}</td>
+          <td style="padding:8px;text-align:center;color:${c.ok?'var(--green-light)':'var(--amber)'}">${fmtN(c.available)} ${c.unit}</td>
+          <td style="padding:8px;text-align:center;color:${c.shortage>0?'var(--red)':'var(--muted)'}">${c.shortage>0?fmtN(c.shortage)+' '+c.unit:'—'}</td>
+          <td style="padding:8px;text-align:center">
+            ${c.ok
+              ? '<span class="badge b-green">✅ كافٍ</span>'
+              : '<span class="badge b-red">❌ ناقص</span>'}
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
 
     <div class="form-actions">
-      <button class="btn btn-green" onclick="saveProductionStage('${orderId}','${stageId}','${stageName}',${minYield})">💾 حفظ المرحلة</button>
+      ${allOk
+        ? `<button class="btn btn-green" onclick="closeModal();saveProduction()">✅ تأكيد وإصدار الأمر</button>`
+        : `<button class="btn btn-amber" onclick="closeModal();saveProduction()" style="background:rgba(240,136,0,.15);color:var(--amber);border:1px solid rgba(240,136,0,.3)">⚠️ إصدار رغم النقص</button>
+           <button class="btn btn-green" onclick="closeModal();go('purchasing')">🛒 طلب شراء المواد الناقصة</button>`}
       <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
     </div>`));
 
-  // Auto-calculate yield on input
-  setTimeout(()=>{
-    ['ps-before','ps-after'].forEach(id=>{
-      document.getElementById(id)?.addEventListener('input', calcStageYield);
-    });
-  },100);
+  return allOk;
+}
 
-  function calcStageYield(){
-    const before = Number(document.getElementById('ps-before')?.value||0);
-    const after  = Number(document.getElementById('ps-after')?.value||0);
-    const el = document.getElementById('ps-yield-calc');
-    if(!el||!before) return;
-    el.style.display='block';
-    const yieldPct = (after/before*100).toFixed(2);
-    const loss = (before-after).toFixed(3);
-    const ok = Number(yieldPct) >= minYield;
-    el.innerHTML = `
-      <div style="display:flex;gap:20px;align-items:center">
-        <div>الحصيلة: <strong class="${ok?'text-green':'text-red'}" style="font-size:16px">${yieldPct}%</strong></div>
-        <div>الفاقد: <strong class="text-amber">${loss} kg</strong></div>
-        <div style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:700;background:${ok?'rgba(46,160,67,.15)':'rgba(248,81,73,.15)'};color:${ok?'var(--green)':'var(--red)'}">
-          ${ok?'✅ مقبول':'⚠️ انحراف مطلوب'}
-        </div>
-      </div>`;
-    if(!ok) document.getElementById('ps-status').value='deviated';
+
+// ── ٣. أمر الإنتاج — ٦ حالات رسمية + MRP Check ────────────────────────────
+
+function addProduction(){
+  const pOpts=[{v:0,l:'اختر منتج...'},...getAll('products').map(p=>({v:p.id,l:p.name}))];
+  const cOpts=[{v:0,l:'اختر مصنع CMO...'},...getAll('cmos').map(c=>({v:c.id,l:c.name}))];
+
+  showModal(modal('📋 أمر إنتاج جديد',`
+    <div class="form-row">
+      ${fg('المنتج *', sel('po-prod',pOpts,0))}
+      ${fg('المصنع CMO *', sel('po-cmo',cOpts,0))}
+    </div>
+    <div class="form-row">
+      ${fg('رقم أمر الإنتاج', inp('po-num','text','','تلقائي إذا تُرك فارغاً'))}
+      ${fg('رقم التشغيلة (Batch No.)', inp('po-batch','text','',`BATCH-${new Date().getFullYear()}-`))}
+    </div>
+    <div class="form-row">
+      ${fg('تاريخ الأمر', inp('po-date','date',today()))}
+      ${fg('الموعد المتوقع للتسليم', inp('po-exp','date',''))}
+    </div>
+    <div class="form-row">
+      ${fg('حجم الدفعة (عدد الوحدات) *', inp('po-qty','number','','مثال: 100000 قرص'))}
+      ${fg('حجم الدفعة بالكيلو (kg)', inp('po-batch-kg','number','','للحساب الداخلي'))}
+    </div>
+    <div class="form-row">
+      ${fg('تكلفة CMO التقديرية (ج.م)', inp('po-tcost','number','','بدون تكلفة المواد'))}
+      ${fg('تكلفة الوحدة التقديرية (ج.م)', inp('po-ucost','number','','سيُحسب فعلياً بعد الإنتاج'))}
+    </div>
+
+    <!-- الحالة — ٦ حالات رسمية -->
+    ${fg('الحالة', sel('po-status',[
+      {v:'draft',      l:'📝 مسودة — Draft'},
+      {v:'approved',   l:'✅ معتمد — Approved (بعد موافقة QA)'},
+      {v:'in_progress',l:'🔄 جاري — In Progress'},
+      {v:'completed',  l:'📦 منجز — Completed (في انتظار QA)'},
+      {v:'qa_review',  l:'🔬 قيد مراجعة QA — Under QA Review'},
+      {v:'released',   l:'🚀 مُفرج — Released (للتوزيع)'},
+    ],'draft'))}
+
+    ${fg('ملاحظات', `<textarea id="po-notes" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif" placeholder="أي ملاحظة خاصة بهذا الأمر..."></textarea>`)}
+
+    <div class="form-actions">
+      <button class="btn btn-blue" onclick="checkMRPThenSave()" style="background:rgba(56,139,253,.15);color:var(--blue);border:1px solid rgba(56,139,253,.3)">🔍 فحص توافر المواد</button>
+      <button class="btn btn-green" onclick="saveProduction()">💾 حفظ مباشر</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+function checkMRPThenSave(){
+  const prodId = numVal('po-prod'), qty = numVal('po-qty');
+  if(!prodId||!qty) return alert('اختر المنتج وحدد الكمية أولاً');
+  showMRPCheck(prodId, qty);
+}
+
+function saveProduction(id){
+  const qty = numVal('po-qty');
+  if(!qty) return alert('يرجى تحديد حجم الدفعة');
+  if(!id && (!numVal('po-prod')||!numVal('po-cmo'))) return alert('يرجى اختيار المنتج والمصنع');
+
+  const batchNo = val('po-batch') || `BATCH-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
+  const orderNo = val('po-num')   || `PO-${Date.now().toString().slice(-6)}`;
+
+  if(id){
+    update('productionOrders',id,{
+      quantity:    qty,
+      batchNumber: val('po-batch')||null,
+      unitCost:    val('po-ucost')||null,
+      cmoBaseCost: val('po-tcost')||'0',
+      totalCost:   val('po-tcost')||null,
+      expectedDate:val('po-exp')||null,
+      status:      val('po-status'),
+      notes:       document.getElementById('po-notes')?.value||null,
+    });
+  } else {
+    insert('productionOrders',{
+      productId:   numVal('po-prod'),
+      cmoId:       numVal('po-cmo'),
+      orderNumber: orderNo,
+      batchNumber: batchNo,
+      quantity:    qty,
+      batchSizeKg: numVal('po-batch-kg')||null,
+      unitCost:    val('po-ucost')||null,
+      cmoBaseCost: val('po-tcost')||'0',
+      totalCost:   val('po-tcost')||null,
+      orderDate:   val('po-date')||today(),
+      expectedDate:val('po-exp')||null,
+      status:      val('po-status')||'draft',
+      notes:       document.getElementById('po-notes')?.value||null,
+      createdBy:   _authUser?.name||'—',
+      standardCost: null, // يُحسب بعد الإنتاج
+      actualCost:   null, // يُحسب بعد اكتمال التكاليف
+    });
   }
+  closeModal(); go('production');
 }
 
-function saveProductionStage(orderId, stageId, stageName, minYield){
-  const before = Number(document.getElementById('ps-before')?.value||0);
-  const after  = Number(document.getElementById('ps-after')?.value||0);
-  if(!before) return alert('يرجى إدخال الوزن قبل المرحلة');
-
-  // Collect IPC results
-  const order = getById('productionOrders', parseInt(orderId));
-  const prod  = getById('products', order?.productId);
-  const form  = prod?.dosageForm||'tablet';
-  const dosageForm = DOSAGE_FORMS[form]||DOSAGE_FORMS.tablet;
-  const stage = dosageForm.stages.find(s=>s.id===stageId)||{};
-  const ipcKeys = stage.ipc||[];
-
-  const ipcResults = {};
-  ipcKeys.forEach(k=>{
-    const el = document.getElementById('ipc-'+k);
-    if(el) ipcResults[k] = el.value;
-  });
-
-  const yieldPct = before>0?(after/before*100):0;
-  const status = val('ps-status')||'completed';
-
-  // Find existing stage record
-  const existing = getAll('productionStages').find(s=>s.productionOrderId===parseInt(orderId)&&s.stageId===stageId);
-
-  const stageData = {
-    productionOrderId: parseInt(orderId),
-    stageId, stageName,
-    stageNumber: dosageForm.stages.findIndex(s=>s.id===stageId)+1,
-    weightBefore: before, weightAfter: after,
-    yieldPct: yieldPct.toFixed(2),
-    lineLoss: (before-after).toFixed(3),
-    minYield, ipcResults,
-    operator: val('ps-operator')||null,
-    supervisor: val('ps-supervisor')||null,
-    startTime: document.getElementById('ps-start')?.value||null,
-    endTime:   document.getElementById('ps-end')?.value||null,
-    notes: document.getElementById('ps-notes')?.value||null,
-    status
-  };
-
-  if(existing) update('productionStages', existing.id, stageData);
-  else insert('productionStages', stageData);
-
-  // If deviated — open deviation automatically
-  if(status==='deviated'){
-    insert('deviations',{
-      deviationType:'إنتاج', severity:'major',
-      description:`انحراف في حصيلة مرحلة ${stageName}: ${yieldPct.toFixed(1)}% (الحد الأدنى ${minYield}%)`,
-      discoveryDate:today(), status:'open',
-      productionOrderId:parseInt(orderId)
-    });
-    showNotif&&showNotif('⚠️ تم فتح انحراف تلقائياً لهذه المرحلة','warn');
-  }
-
-  closeModal();
-  openProductionStages(parseInt(orderId));
-}
-
-function editProductionStage(stageId){
-  const s = getById('productionStages', stageId);
-  if(!s) return;
-  addProductionStage(s.productionOrderId, s.stageId, s.stageName, s.minYield);
-  // Pre-fill after modal opens
-  setTimeout(()=>{
-    if(document.getElementById('ps-before')) document.getElementById('ps-before').value = s.weightBefore||'';
-    if(document.getElementById('ps-after'))  document.getElementById('ps-after').value  = s.weightAfter||'';
-    if(document.getElementById('ps-operator'))  document.getElementById('ps-operator').value  = s.operator||'';
-    if(document.getElementById('ps-supervisor')) document.getElementById('ps-supervisor').value = s.supervisor||'';
-    if(document.getElementById('ps-status'))  document.getElementById('ps-status').value  = s.status||'completed';
-    if(document.getElementById('ps-notes'))   document.getElementById('ps-notes').value   = s.notes||'';
-    Object.entries(s.ipcResults||{}).forEach(([k,v])=>{
-      const el = document.getElementById('ipc-'+k);
-      if(el) el.value = v;
-    });
-  },150);
-}
-
-function showIPCResults(stageId){
-  const s = getById('productionStages', stageId);
-  if(!s||!s.ipcResults) return showNotif&&showNotif('لا توجد نتائج IPC','info');
-  const entries = Object.entries(s.ipcResults);
-  if(!entries.length) return showNotif&&showNotif('لا توجد نتائج IPC مسجلة','info');
-
-  showModal(modal(`📋 نتائج IPC — ${s.stageName}`,`
-    <table style="width:100%;font-size:13px">
-      <thead><tr style="background:rgba(255,255,255,.04)"><th style="padding:8px;text-align:right">المعامل</th><th style="padding:8px">النتيجة</th><th style="padding:8px">الحالة</th></tr></thead>
-      <tbody>
-        ${entries.map(([k,v])=>{
-          const p = IPC_PARAMS[k]||{label:k,unit:''};
-          const limitOk = !p.limit || Number(v)<=p.limit;
-          const limitMinOk = !p.limit_min || Number(v)>=p.limit_min;
-          const ok = (v==='pass')||(v!=='fail'&&limitOk&&limitMinOk);
-          return `<tr style="border-bottom:1px solid var(--border)">
-            <td style="padding:8px;font-weight:600">${p.label}</td>
-            <td style="padding:8px">${v} ${p.unit}</td>
-            <td style="padding:8px"><span class="badge ${ok?'b-green':'b-red'}">${ok?'✅ مطابق':'❌ غير مطابق'}</span></td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table>
-    <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">إغلاق</button></div>`));
+function editProduction(id){
+  const o = getById('productionOrders',id); if(!o) return;
+  showModal(modal('تعديل أمر الإنتاج',`
+    <div class="form-row">
+      ${fg('حجم الدفعة', inp('po-qty','number',o.quantity))}
+      ${fg('رقم التشغيلة', inp('po-batch','text',o.batchNumber||''))}
+    </div>
+    <div class="form-row">
+      ${fg('تكلفة CMO', inp('po-tcost','number',o.cmoBaseCost||o.totalCost))}
+      ${fg('تكلفة الوحدة التقديرية', inp('po-ucost','number',o.unitCost))}
+    </div>
+    <div class="form-row">
+      ${fg('الموعد المتوقع', inp('po-exp','date',o.expectedDate||''))}
+      ${fg('الحالة', sel('po-status',[
+        {v:'draft',       l:'📝 مسودة'},
+        {v:'approved',    l:'✅ معتمد'},
+        {v:'in_progress', l:'🔄 جاري'},
+        {v:'completed',   l:'📦 منجز'},
+        {v:'qa_review',   l:'🔬 قيد مراجعة QA'},
+        {v:'released',    l:'🚀 مُفرج'},
+      ], o.status||'draft'))}
+    </div>
+    ${fg('ملاحظات', `<textarea id="po-notes" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif">${escapeHtml(o.notes||'')}</textarea>`)}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveProduction(${id})">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
 }
 
 
-// ════════════════════════════════════════════════════════════════
-// سجل الوزن والصرف — Dispensing Record
-// ════════════════════════════════════════════════════════════════
+// ── ٤. Dispensing Record — بتوقيع شخصين (21 CFR 211.101c) ──────────────────
 
 function showDispensingRecord(orderId){
-  const order = getById('productionOrders', orderId);
-  const prod  = getById('products', order?.productId);
-  const bom   = getAll('productBOM').filter(b=>b.productId===order?.productId);
+  const order  = getById('productionOrders', orderId);
+  const prod   = getById('products', order?.productId);
+  const bom    = (getAll('productBOM')||[])
+                   .filter(b=>b.productId===order?.productId)
+                   .sort((a,b)=>(a.additionOrder||99)-(b.additionOrder||99));
   const existing = getAll('dispensingRecords').filter(d=>d.productionOrderId===orderId);
   const batchSize = Number(order?.quantity||0);
 
-  showModal(modal('⚖️ سجل الوزن والصرف — Dispensing Record',`
-    <div style="padding:10px;background:rgba(46,160,67,.06);border:1px solid rgba(46,160,67,.2);border-radius:8px;margin-bottom:14px;font-size:12px">
-      <strong>${prod?.name||'—'}</strong> | حجم الدفعة: <strong>${batchSize}</strong> وحدة
+  showModal(modal(`⚖️ سجل الوزن والصرف — Dispensing Record`, `
+    <!-- Header -->
+    <div style="padding:12px;background:rgba(56,139,253,.06);border:1px solid rgba(56,139,253,.2);border-radius:10px;margin-bottom:14px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px">
+        <div><span style="color:var(--muted)">المنتج:</span> <strong>${escapeHtml(prod?.name||'—')}</strong></div>
+        <div><span style="color:var(--muted)">رقم التشغيلة:</span> <strong>${escapeHtml(order?.batchNumber||'—')}</strong></div>
+        <div><span style="color:var(--muted)">حجم الدفعة:</span> <strong>${fmtN(batchSize)} وحدة</strong></div>
+      </div>
     </div>
 
-    ${bom.length ? bom.map(b=>{
-      const mat = getById('materials',b.materialId);
+    <!-- تحذير 21 CFR -->
+    <div style="padding:10px;background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.2);border-radius:8px;margin-bottom:14px;font-size:11px;color:var(--red)">
+      ⚖️ <strong>21 CFR 211.101(c):</strong> يجب أن يتحقق شخص ثانٍ من: (١) اعتماد المادة، (٢) صحة الوزن، (٣) صحة التسمية
+    </div>
+
+    <!-- مواد الوصفة -->
+    ${bom.length ? `
+    <div style="font-weight:700;font-size:12px;margin-bottom:10px;color:var(--text)">قائمة المواد — ${bom.length} مادة</div>
+    ${bom.map(b=>{
       const rec = existing.find(d=>d.materialId===b.materialId)||{};
-      // Calculate required qty for batch
       const reqQty = (b.correctedQuantity||b.quantityPerUnit) * batchSize;
-      const reqKg  = (reqQty/1000).toFixed(3); // convert mg→g→kg
+      const mat = getById('materials',b.materialId);
+      const matApproved = (getAll('materialReceipts')||[]).some(r=>
+        r.materialId===b.materialId && r.status==='approved' && Number(r.remainingQuantity||0)>0);
       return `
-      <div style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+      <div style="padding:12px;border:1px solid ${rec.actualWeighed?'rgba(46,160,67,.3)':'var(--border)'};border-radius:10px;margin-bottom:10px;background:${rec.actualWeighed?'rgba(46,160,67,.04)':'var(--bg)'}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
           <div>
-            <div style="font-weight:700;font-size:13px">${b.materialName}</div>
-            <div style="font-size:11px;color:var(--muted)">
-              نظري/وحدة: ${b.quantityPerUnit} ${b.unit} |
+            <div style="font-weight:700;font-size:13px">${escapeHtml(b.materialName)} ${b.additionOrder?`<span style="font-size:10px;color:var(--muted)">#${b.additionOrder}</span>`:''}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px">
+              مرحلة: ${b.additionStage||'الصرف'} | 
+              نظري/وحدة: ${(b.quantityPerUnit||0).toFixed(3)} ${b.unit} | 
               ${b.assay_pct&&b.assay_pct!==100?`Assay: ${b.assay_pct}% | `:''}
               ${b.lod_pct&&b.lod_pct>0?`LOD: ${b.lod_pct}% | `:''}
               ${b.overage_pct&&b.overage_pct>0?`Overage: ${b.overage_pct}% | `:''}
-              <strong>مطلوب: ${(b.correctedQuantity||b.quantityPerUnit).toFixed(3)} ${b.unit}/وحدة</strong>
+              <strong>مصحح: ${((b.correctedQuantity||b.quantityPerUnit)||0).toFixed(4)} ${b.unit}/وحدة</strong>
             </div>
           </div>
-          <div style="text-align:left;font-size:12px">
-            <div style="color:var(--blue);font-weight:700">مطلوب للدفعة: ${((b.correctedQuantity||b.quantityPerUnit)*batchSize/1000).toFixed(3)} كجم</div>
+          <div style="text-align:left;font-size:11px">
+            <div style="font-weight:700;color:var(--blue)">مطلوب للدفعة:</div>
+            <div style="font-size:14px;font-weight:700;color:var(--blue)">${fmtN(reqQty)} ${b.unit}</div>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
           <div>
-            <label style="font-size:10px;color:var(--muted);display:block">الكمية الفعلية الموزونة (g)</label>
-            <input type="number" id="disp-qty-${b.materialId}" value="${rec.actualWeighed||''}" placeholder="${((b.correctedQuantity||b.quantityPerUnit)*batchSize/1000*1000).toFixed(0)}"
-              style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;color:var(--text)"
-              oninput="checkDispensing(${b.materialId},${(b.correctedQuantity||b.quantityPerUnit)*batchSize})">
+            <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">الكمية الفعلية الموزونة *</label>
+            <input type="number" id="disp-qty-${b.materialId}"
+              value="${rec.actualWeighed||''}"
+              placeholder="${reqQty.toFixed(2)}"
+              oninput="checkDispensing(${b.materialId},${reqQty})"
+              style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:12px;color:var(--text)">
           </div>
           <div>
-            <label style="font-size:10px;color:var(--muted);display:block">رقم الدفعة المستخدمة</label>
-            <input type="text" id="disp-batch-${b.materialId}" value="${rec.usedBatchNo||''}" placeholder="LOT#"
-              style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;color:var(--text)">
+            <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">رقم دفعة المادة (LOT#)</label>
+            <input type="text" id="disp-batch-${b.materialId}"
+              value="${escapeHtml(rec.usedBatchNo||'')}" placeholder="LOT-XXXX"
+              style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:12px;color:var(--text)">
           </div>
-          <div id="disp-status-${b.materialId}" style="display:flex;align-items:flex-end">
-            ${rec.actualWeighed?`<span class="badge b-green">✅ موزون</span>`:'<span class="badge b-gray">معلق</span>'}
+          <div id="disp-status-${b.materialId}" style="display:flex;align-items:flex-end;gap:4px;flex-wrap:wrap">
+            ${matApproved?'<span class="badge b-green" style="font-size:10px">QC ✅</span>':'<span class="badge b-red" style="font-size:10px">غير معتمد ❌</span>'}
+            ${rec.actualWeighed?'<span class="badge b-green" style="font-size:10px">موزون</span>':'<span class="badge b-gray" style="font-size:10px">معلق</span>'}
           </div>
         </div>
+        ${b.specialConditions?`<div style="margin-top:6px;font-size:10px;color:var(--amber)">⚠️ شروط خاصة: ${escapeHtml(b.specialConditions)}</div>`:''}
       </div>`;
-    }).join('') : '<div class="empty">لا توجد وصفة BOM لهذا المنتج — أضف BOM أولاً</div>'}
+    }).join('')}` : '<div style="padding:16px;text-align:center;color:var(--muted)">⚠️ لا توجد وصفة BOM — أضف BOM أولاً</div>'}
+
+    <!-- توقيع شخصين — إلزامي 21 CFR 211.101(c) -->
+    <div style="padding:14px;background:rgba(188,128,240,.06);border:1px solid rgba(188,128,240,.2);border-radius:10px;margin-top:14px;margin-bottom:14px">
+      <div style="font-weight:700;font-size:12px;color:#bc80f0;margin-bottom:10px">
+        ✍️ توقيع الشخصين — Two-Person Verification
+        <span style="font-weight:400;color:var(--muted);font-size:10px"> (21 CFR 211.101c — إلزامي)</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:6px">الشخص الأول: الوازن (Weigher)</div>
+          ${fg('الاسم', inp('disp-weigher','text','','اسم الكيميائي / الصيدلاني'))}
+          ${fg('اسم الميزان ورقم معايرته', inp('disp-balance','text','','مثال: Balance-03 / Cal#2024-089'))}
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:6px">الشخص الثاني: المتحقق (Checker)</div>
+          ${fg('الاسم', inp('disp-checker','text','','يجب أن يكون شخصاً مختلفاً'))}
+          ${fg('توقيت التحقق', inp('disp-check-time','datetime-local',''))}
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);padding:8px;background:var(--hover);border-radius:6px">
+        📋 يتحقق الشخص الثاني من: ✓ المادة معتمدة QC &nbsp;|&nbsp; ✓ الوزن صحيح &nbsp;|&nbsp; ✓ التسمية صحيحة
+      </div>
+    </div>
 
     <div class="form-actions">
       <button class="btn btn-green" onclick="saveDispensingRecord(${orderId})">💾 حفظ سجل الوزن</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>`));
-}
-
-function checkDispensing(matId, requiredQty){
-  const actual = Number(document.getElementById('disp-qty-'+matId)?.value||0);
-  const status = document.getElementById('disp-status-'+matId);
-  if(!status||!actual) return;
-  const variance = Math.abs((actual-requiredQty)/requiredQty*100);
-  const ok = variance <= 1.0; // ±1% acceptable
-  status.innerHTML = ok ?
-    `<span class="badge b-green">✅ مقبول</span>` :
-    `<span class="badge b-${variance<=3?'amber':'red'}">⚠️ انحراف ${variance.toFixed(1)}%</span>`;
-}
-
-function saveDispensingRecord(orderId){
-  const order = getById('productionOrders', orderId);
-  const bom = getAll('productBOM').filter(b=>b.productId===order?.productId);
-  const batchSize = Number(order?.quantity||0);
-  let saved = 0;
-
-  bom.forEach(b=>{
-    const actual = Number(document.getElementById('disp-qty-'+b.materialId)?.value||0);
-    const batchNo = document.getElementById('disp-batch-'+b.materialId)?.value||'';
-    if(actual>0){
-      const required = (b.correctedQuantity||b.quantityPerUnit)*batchSize;
-      const variance_pct = ((actual-required)/required*100).toFixed(2);
-      const existing = getAll('dispensingRecords').find(d=>d.productionOrderId===orderId&&d.materialId===b.materialId);
-      const data = {
-        productionOrderId:orderId, materialId:b.materialId,
-        materialName:b.materialName, theoreticalQty:required,
-        actualWeighed:actual, usedBatchNo:batchNo,
-        variance_pct, dispensedAt:new Date().toISOString(),
-        dispensedBy:_authUser?.name||'—'
-      };
-      existing ? update('dispensingRecords',existing.id,data) : insert('dispensingRecords',data);
-      saved++;
-    }
-  });
-  closeModal();
-  showNotif&&showNotif(`✅ تم حفظ سجل الوزن لـ ${saved} مادة`,'success');
-  openProductionStages(orderId);
-}
-
-function showDispensingTable(orderId){
-  const records = getAll('dispensingRecords').filter(d=>d.productionOrderId===orderId);
-  if(!records.length) return '<div style="color:var(--muted);font-size:12px">لا توجد سجلات وزن — اضغط "سجل الوزن والصرف"</div>';
-  return tbl(
-    ['المادة','الكمية النظرية (g)','الموزون الفعلي (g)','الانحراف %','رقم الدفعة','الحالة'],
-    records.map(r=>{
-      const vPct = Number(r.variance_pct||0);
-      const ok = Math.abs(vPct)<=1;
-      return tr(r.materialName||'—', fmtN(r.theoreticalQty), fmtN(r.actualWeighed),
-        `<span class="${ok?'text-green':Math.abs(vPct)<=3?'text-amber':'text-red'} fw7">${vPct>0?'+':''}${vPct}%</span>`,
-        r.usedBatchNo||'—',
-        ok?'<span class="badge b-green">مقبول</span>':
-           Math.abs(vPct)<=3?'<span class="badge b-amber">تحذير</span>':'<span class="badge b-red">انحراف</span>'
-      );
-    })
-  ,'tbl_dispensing');
-}
-
-
-// ════════════════════════════════════════════════════════════════
-// المطابقة النهائية — Final Reconciliation
-// ════════════════════════════════════════════════════════════════
-
-function showReconciliation(orderId){
-  const order = getById('productionOrders', orderId);
-  const prod  = getById('products', order?.productId);
-  const stages= getAll('productionStages').filter(s=>s.productionOrderId===orderId).sort((a,b)=>a.stageNumber-b.stageNumber);
-  const dispRec = getAll('dispensingRecords').filter(d=>d.productionOrderId===orderId);
-
-  // Total inputs
-  const totalInput = dispRec.reduce((s,d)=>s+Number(d.actualWeighed||0),0)/1000; // kg
-  // Total output (from last stage or inventory)
-  const lastStage  = stages.filter(s=>s.status==='completed').pop();
-  const totalOutput= lastStage ? Number(lastStage.weightAfter||0) : 0;
-  // Samples
-  const qcSamples  = 0.5; // assume 0.5 kg samples
-  // Unaccounted
-  const unaccounted= totalInput - totalOutput - qcSamples;
-  const reconciled = Math.abs(unaccounted/totalInput*100) <= 1.0;
-
-  showModal(modal(`⚖️ المطابقة النهائية — ${prod?.name||'—'}`,`
-    <div style="padding:14px;background:rgba(${reconciled?'46,160,67':'248,81,73'},.08);border:1px solid rgba(${reconciled?'46,160,67':'248,81,73'},.25);border-radius:8px;margin-bottom:16px;text-align:center">
-      <div style="font-size:20px;font-weight:700;color:var(--${reconciled?'green-light':'red'})">${reconciled?'✅ المطابقة ناجحة':'❌ المطابقة فاشلة — يلزم تحقيق'}</div>
-    </div>
-
-    <table style="width:100%;font-size:13px;margin-bottom:14px">
-      <tbody>
-        <tr style="border-bottom:1px solid var(--border)">
-          <td style="padding:10px;font-weight:700">المدخلات (Input)</td>
-          <td style="padding:10px;text-align:left;font-weight:700;color:var(--blue)">${totalInput.toFixed(3)} kg</td>
-        </tr>
-        <tr style="border-bottom:1px solid var(--border)">
-          <td style="padding:10px">المنتج التام (Output)</td>
-          <td style="padding:10px;text-align:left;color:var(--green-light)">${totalOutput.toFixed(3)} kg</td>
-        </tr>
-        <tr style="border-bottom:1px solid var(--border)">
-          <td style="padding:10px">عينات QC (Samples)</td>
-          <td style="padding:10px;text-align:left;color:var(--amber)">${qcSamples.toFixed(3)} kg</td>
-        </tr>
-        <tr style="border-bottom:2px solid var(--border);font-weight:700">
-          <td style="padding:10px">الفرق غير المفسَّر</td>
-          <td style="padding:10px;text-align:left;color:var(--${Math.abs(unaccounted)<=0.5?'green-light':'red'})">${unaccounted.toFixed(3)} kg (${totalInput>0?(unaccounted/totalInput*100).toFixed(2):0}%)</td>
-        </tr>
-      </tbody>
-    </table>
-
-    ${stages.length ? `
-    <div style="font-weight:700;font-size:13px;margin-bottom:8px">الحصيلة في كل مرحلة:</div>
-    ${stages.map(s=>{
-      const yPct = s.weightBefore>0?(s.weightAfter/s.weightBefore*100).toFixed(1):null;
-      const ok = yPct && Number(yPct)>=Number(s.minYield||95);
-      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
-        <span>${s.stageNumber}. ${s.stageName}</span>
-        <span class="fw7 ${ok?'text-green':'text-red'}">${yPct?yPct+'%':'—'} / ${s.minYield}%</span>
-      </div>`;
-    }).join('')}` : '<div style="color:var(--muted);font-size:12px">لا توجد مراحل مسجلة بعد</div>'}
-
-    ${!reconciled?`
-    <div style="margin-top:14px">
-      ${fg('تفسير الفرق *',`<textarea id="recon-explain" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif" placeholder="اشرح سبب الفرق غير المفسَّر..."></textarea>`)}
-    </div>`:''}
-
-    <div class="form-actions">
-      ${!reconciled?`<button class="btn btn-green" onclick="saveReconciliation(${orderId},${totalInput},${totalOutput},${qcSamples},${unaccounted})">💾 حفظ مع تفسير</button>`:''}
-      <button class="btn btn-white" onclick="exportReconciliationPDF(${orderId})">🖨️ طباعة</button>
+      <button class="btn btn-white" onclick="printDispensingRecord(${orderId})">🖨️ طباعة السجل الرسمي</button>
       <button class="btn btn-ghost" onclick="closeModal()">إغلاق</button>
     </div>`));
 }
 
-function saveReconciliation(orderId,input,output,samples,unaccounted){
-  const explain = document.getElementById('recon-explain')?.value||'';
-  if(!explain.trim()) return alert('يرجى كتابة تفسير للفرق');
-  update('productionOrders',orderId,{
-    reconciled:true, reconciliationDate:today(),
-    reconInput:input, reconOutput:output, reconSamples:samples,
-    reconUnaccounted:unaccounted, reconExplanation:explain,
-    reconBy:_authUser?.name||'—'
+function checkDispensing(matId, requiredQty){
+  const actual  = Number(document.getElementById('disp-qty-'+matId)?.value||0);
+  const status  = document.getElementById('disp-status-'+matId);
+  if(!status||!actual) return;
+  const variance = ((actual - requiredQty) / requiredQty * 100);
+  const absVar   = Math.abs(variance);
+  const sign     = variance > 0 ? '+' : '';
+  const matApproved = status.innerHTML.includes('QC ✅');
+  let badge = '';
+  if(absVar <= 1.0)       badge = `<span class="badge b-green" style="font-size:10px">✅ مقبول (${sign}${variance.toFixed(1)}%)</span>`;
+  else if(absVar <= 3.0)  badge = `<span class="badge b-amber" style="font-size:10px">⚠️ تحذير (${sign}${variance.toFixed(1)}%)</span>`;
+  else                    badge = `<span class="badge b-red" style="font-size:10px">❌ انحراف (${sign}${variance.toFixed(1)}%)</span>`;
+  status.innerHTML = (matApproved?'<span class="badge b-green" style="font-size:10px">QC ✅</span>':'<span class="badge b-red" style="font-size:10px">غير معتمد</span>') + badge;
+}
+
+function saveDispensingRecord(orderId){
+  const order    = getById('productionOrders', orderId);
+  const bom      = (getAll('productBOM')||[]).filter(b=>b.productId===order?.productId);
+  const batchSize = Number(order?.quantity||0);
+  const weigher  = val('disp-weigher')||'—';
+  const checker  = val('disp-checker')||'—';
+  const balance  = val('disp-balance')||'—';
+  const checkTime = document.getElementById('disp-check-time')?.value||new Date().toISOString();
+
+  if(!weigher||weigher==='—') return alert('يرجى إدخال اسم الوازن (Weigher)');
+  if(!checker||checker==='—') return alert('يرجى إدخال اسم المتحقق (Checker)');
+  if(weigher === checker)     return alert('يجب أن يكون الوازن والمتحقق شخصين مختلفين\n(21 CFR 211.101c)');
+
+  let saved = 0;
+  bom.forEach(b=>{
+    const actual  = Number(document.getElementById('disp-qty-'+b.materialId)?.value||0);
+    const batchNo = document.getElementById('disp-batch-'+b.materialId)?.value||'';
+    if(!actual) return;
+    const required   = (b.correctedQuantity||b.quantityPerUnit)*batchSize;
+    const variance   = ((actual-required)/required*100).toFixed(2);
+    const existingRec = getAll('dispensingRecords').find(d=>d.productionOrderId===orderId&&d.materialId===b.materialId);
+    const data = {
+      productionOrderId: orderId,
+      materialId:   b.materialId,
+      materialName: b.materialName,
+      additionStage: b.additionStage||'dispensing',
+      additionOrder: b.additionOrder||1,
+      theoreticalQty: required,
+      correctedQty:   (b.correctedQuantity||b.quantityPerUnit)*batchSize,
+      actualWeighed:  actual,
+      usedBatchNo:    batchNo,
+      variance_pct:   variance,
+      unit:           b.unit||'',
+      weigherName:    weigher,
+      checkerName:    checker,
+      balanceName:    balance,
+      checkerTime:    checkTime,
+      dispensedAt:    new Date().toISOString(),
+      dispensedBy:    _authUser?.name||'—',
+    };
+    existingRec ? update('dispensingRecords',existingRec.id,data) : insert('dispensingRecords',data);
+    saved++;
   });
+
   closeModal();
-  showNotif&&showNotif('✅ تم حفظ المطابقة','success');
+  showNotif&&showNotif(`✅ تم حفظ سجل الوزن لـ ${saved} مادة بتوقيع الشخصين`,'success');
+  go('production');
+}
+
+function printDispensingRecord(orderId){
+  const order   = getById('productionOrders', orderId);
+  const prod    = getById('products', order?.productId);
+  const cmo     = getById('cmos', order?.cmoId);
+  const records = getAll('dispensingRecords').filter(d=>d.productionOrderId===orderId);
+  const batchSize = Number(order?.quantity||0);
+
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html dir="rtl"><head>
+  <meta charset="UTF-8"><title>سجل الوزن والصرف</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:12px;margin:20px;color:#000}
+    h1{font-size:16px;text-align:center;border-bottom:2px solid #000;padding-bottom:8px}
+    table{width:100%;border-collapse:collapse;margin:10px 0}
+    th,td{border:1px solid #000;padding:6px;text-align:right}
+    th{background:#f0f0f0;font-weight:700}
+    .sig-box{border:1px solid #000;min-height:50px;padding:8px;margin-top:4px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;border:1px solid #000;padding:10px;margin:10px 0}
+    .info-item{font-size:11px}
+    .info-item span{font-weight:700;display:block}
+    @media print{.no-print{display:none}}
+  </style></head><body>
+  <h1>سجل الوزن والصرف الرسمي<br>Official Dispensing Record</h1>
+  <div style="text-align:center;font-size:11px;color:#666;margin-bottom:10px">
+    مبني على: 21 CFR 211.101(c) — WHO GMP — ALCOA++ Principles
+  </div>
+  
+  <div class="info-grid">
+    <div class="info-item">المنتج<span>${prod?.name||'—'}</span></div>
+    <div class="info-item">رقم التشغيلة<span>${order?.batchNumber||'—'}</span></div>
+    <div class="info-item">رقم الأمر<span>${order?.orderNumber||'—'}</span></div>
+    <div class="info-item">التاريخ<span>${today()}</span></div>
+    <div class="info-item">حجم الدفعة<span>${fmtN(batchSize)} وحدة</span></div>
+    <div class="info-item">المصنع CMO<span>${cmo?.name||'—'}</span></div>
+    <div class="info-item">الشكل الدوائي<span>${prod?.dosageForm||'—'}</span></div>
+    <div class="info-item">حالة الأمر<span>${order?.status||'—'}</span></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>#</th><th>المادة</th><th>مرحلة الإضافة</th>
+        <th>الكمية النظرية</th><th>الكمية المصححة</th>
+        <th>الكمية الفعلية</th><th>الانحراف%</th>
+        <th>رقم الدفعة</th><th>الحالة</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${records.length ? records.sort((a,b)=>(a.additionOrder||99)-(b.additionOrder||99)).map((r,i)=>{
+        const vPct = Number(r.variance_pct||0);
+        const ok   = Math.abs(vPct)<=1;
+        return `<tr>
+          <td style="text-align:center">${i+1}</td>
+          <td><strong>${r.materialName||'—'}</strong></td>
+          <td style="font-size:10px">${r.additionStage||'—'}</td>
+          <td style="text-align:center">${fmtN(r.theoreticalQty)} ${r.unit}</td>
+          <td style="text-align:center">${fmtN(r.correctedQty)} ${r.unit}</td>
+          <td style="text-align:center;font-weight:700">${fmtN(r.actualWeighed)} ${r.unit}</td>
+          <td style="text-align:center;color:${ok?'green':'red'};font-weight:700">${vPct>0?'+':''}${vPct}%</td>
+          <td>${r.usedBatchNo||'—'}</td>
+          <td style="text-align:center">${ok?'✅ مقبول':'⚠️ انحراف'}</td>
+        </tr>`;
+      }).join('') : '<tr><td colspan="9" style="text-align:center;color:#999">لا توجد بيانات وزن مسجلة</td></tr>'}
+    </tbody>
+  </table>
+
+  <div class="grid2" style="margin-top:20px">
+    <div>
+      <strong>الشخص الأول: الوازن (Weigher)</strong>
+      <div class="info-item" style="margin:4px 0">الاسم: <span>${records[0]?.weigherName||'___________'}</span></div>
+      <div class="info-item" style="margin:4px 0">الميزان: <span>${records[0]?.balanceName||'___________'}</span></div>
+      <div class="info-item" style="margin:4px 0">التاريخ والوقت: <span>${records[0]?.dispensedAt?new Date(records[0].dispensedAt).toLocaleString('ar-EG'):'___________'}</span></div>
+      <div style="margin-top:8px">التوقيع:<div class="sig-box"></div></div>
+    </div>
+    <div>
+      <strong>الشخص الثاني: المتحقق (Checker)</strong>
+      <div class="info-item" style="margin:4px 0">الاسم: <span>${records[0]?.checkerName||'___________'}</span></div>
+      <div class="info-item" style="margin:4px 0">وقت التحقق: <span>${records[0]?.checkerTime?new Date(records[0].checkerTime).toLocaleString('ar-EG'):'___________'}</span></div>
+      <div class="info-item" style="margin:4px 0">تحقق من: ✓ المادة معتمدة &nbsp;✓ الوزن صحيح &nbsp;✓ التسمية صحيحة</div>
+      <div style="margin-top:8px">التوقيع:<div class="sig-box"></div></div>
+    </div>
+  </div>
+
+  <div style="margin-top:16px;padding:10px;border:1px solid #000">
+    <strong>مراجعة QA:</strong>
+    <div style="margin-top:6px">تمت المراجعة بواسطة: ___________________ | التاريخ: ___________________ | التوقيع: ___________________</div>
+  </div>
+
+  <div class="no-print" style="text-align:center;margin-top:20px">
+    <button onclick="window.print()" style="padding:10px 24px;font-size:14px;cursor:pointer">🖨️ طباعة</button>
+  </div>
+  </body></html>`);
+  w.document.close();
 }
 
 
-// ════════════════════════════════════════════════════════════════
-// تحديث BPR ليشمل مراحل الإنتاج والمطابقة
-// ════════════════════════════════════════════════════════════════
+// ── ٥. قرار الإفراج الرسمي — Batch Release Decision ────────────────────────
 
-window._origShowBPR2 = window.showBPR;
-window.showBPR = function(orderId){
-  // Call original BPR
-  if(window._origShowBPR2) window._origShowBPR2(orderId);
+function showBatchRelease(orderId){
+  const order  = getById('productionOrders', orderId);
+  const prod   = getById('products', order?.productId);
+  const stages = getAll('productionStages').filter(s=>s.productionOrderId===orderId);
+  const qcChecks = getAll('qualityChecks').filter(q=>q.productionOrderId===orderId||q.batchNumber===order?.batchNumber);
+  const dispRecs = getAll('dispensingRecords').filter(d=>d.productionOrderId===orderId);
+  const deviations = getAll('deviations').filter(d=>d.productionOrderId===orderId);
 
-  // Add stages section after a moment
-  setTimeout(()=>{
-    const content = document.getElementById('pg-content');
-    if(!content) return;
+  // Auto-build checklist
+  const checklist = [
+    {item:'سجل الوزن والصرف مكتمل بتوقيع شخصين', ok: dispRecs.length>0 && dispRecs.every(d=>d.weigherName&&d.checkerName)},
+    {item:'كل مراحل الإنتاج مكتملة',               ok: stages.length>0 && stages.every(s=>s.status==='completed')},
+    {item:'نتائج IPC ضمن الحدود المقبولة',          ok: stages.every(s=>!Object.values(s.ipcResults||{}).includes('fail'))},
+    {item:'حصيلة كل مرحلة ضمن الحدود',             ok: stages.every(s=>!s.weightBefore||!s.weightAfter||(s.weightAfter/s.weightBefore*100)>=(s.minYield||95))},
+    {item:'نتائج QC النهائية ناجحة',                ok: qcChecks.length>0 && qcChecks.every(q=>q.result==='ناجح')},
+    {item:'الانحرافات المفتوحة = صفر',              ok: !deviations.some(d=>d.status==='open')},
+    {item:'المطابقة النهائية مكتملة',               ok: !!order?.reconciled},
+  ];
 
-    const stages = getAll('productionStages').filter(s=>s.productionOrderId===orderId);
-    if(!stages.length) return;
+  const allGreen = checklist.every(c=>c.ok);
+  const releaseNo = `REL-${new Date().getFullYear()}-${(Date.now()%10000).toString().padStart(4,'0')}`;
 
-    const stagesDiv = document.createElement('div');
-    stagesDiv.className = 'card';
-    stagesDiv.style.marginTop = '16px';
-    stagesDiv.innerHTML = `
-      <div class="card-head"><h2>📊 مراحل الإنتاج والحصيلة</h2></div>
-      <div style="padding:16px">
-        ${stages.sort((a,b)=>a.stageNumber-b.stageNumber).map(s=>{
-          const yPct = s.weightBefore>0?(s.weightAfter/s.weightBefore*100).toFixed(1):null;
-          const ok = yPct&&Number(yPct)>=(s.minYield||95);
-          return `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
-            <div style="width:24px;text-align:center;font-weight:700;color:var(--muted);font-size:12px">${s.stageNumber}</div>
-            <div style="flex:1"><strong>${s.stageName}</strong></div>
-            <div style="font-size:12px;color:var(--muted)">${s.weightBefore||'—'} → ${s.weightAfter||'—'} kg</div>
-            <div><span class="badge ${ok?'b-green':'b-red'}">${yPct?yPct+'%':'—'}</span></div>
-            <div><span class="badge ${s.status==='completed'?'b-green':s.status==='deviated'?'b-red':'b-gray'}">${s.status==='completed'?'✅ مكتملة':s.status==='deviated'?'⚠️ انحراف':'معلقة'}</span></div>
-          </div>`;
-        }).join('')}
+  showModal(modal(`🚀 قرار الإفراج — Batch Release Decision`, `
+    <div style="padding:12px;background:rgba(${allGreen?'46,160,67':'248,81,73'},.08);border:1px solid rgba(${allGreen?'46,160,67':'248,81,73'},.25);border-radius:10px;margin-bottom:14px;font-weight:700;font-size:13px;text-align:center">
+      ${allGreen
+        ? '✅ جميع بنود المراجعة مستوفاة — يمكن الإفراج'
+        : '❌ يوجد بنود غير مستوفاة — راجع القائمة أدناه'}
+    </div>
+
+    <!-- قائمة التحقق -->
+    <div style="margin-bottom:14px">
+      <div style="font-weight:700;font-size:12px;margin-bottom:8px">📋 قائمة مراجعة QA — Batch Review Checklist:</div>
+      ${checklist.map(c=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
+        <span style="font-size:16px">${c.ok?'✅':'❌'}</span>
+        <span style="${!c.ok?'color:var(--red)':''}">${c.item}</span>
+      </div>`).join('')}
+    </div>
+
+    <!-- القرار الرسمي -->
+    <div style="padding:14px;background:rgba(188,128,240,.06);border:1px solid rgba(188,128,240,.2);border-radius:10px;margin-bottom:14px">
+      <div style="font-weight:700;font-size:12px;color:#bc80f0;margin-bottom:10px">⚖️ القرار الرسمي — Official Decision</div>
+      <div class="form-row">
+        ${fg('القرار *', sel('release-decision',[
+          {v:'released',  l:'✅ مُفرج (Released) — للتداول والتوزيع'},
+          {v:'rejected',  l:'❌ مرفوض (Rejected) — لا يصلح للتداول'},
+          {v:'on_hold',   l:'⏸️ معلق (On Hold) — انتظار معلومات إضافية'},
+        ], allGreen?'released':'on_hold'))}
+        ${fg('رقم إذن الإفراج', inp('release-no','text',releaseNo,'تلقائي'))}
+      </div>
+      ${fg('الصيدلاني المسؤول / QP', inp('release-qp','text',_authUser?.name||'','يجب أن يكون صيدلانياً مرخصاً'))}
+      ${fg('سبب القرار / تعليق QA', `<textarea id="release-comment" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif" placeholder="اكتب أي ملاحظات أو تحفظات QA..."></textarea>`)}
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveBatchRelease(${orderId})">✅ تأكيد القرار وحفظه</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+function saveBatchRelease(orderId){
+  const decision  = val('release-decision');
+  const releaseNo = val('release-no');
+  const qp        = val('release-qp');
+  const comment   = document.getElementById('release-comment')?.value||'';
+  if(!decision) return alert('يرجى اختيار القرار');
+  if(!qp)       return alert('يرجى إدخال اسم الصيدلاني المسؤول');
+
+  update('productionOrders', orderId, {
+    status:          decision,
+    batchRelease:    decision,
+    releaseNumber:   releaseNo,
+    releaseBy:       qp,
+    releaseDate:     today(),
+    releaseDateTime: new Date().toISOString(),
+    releaseComment:  comment,
+  });
+
+  // If released → add to finished goods inventory automatically
+  if(decision==='released'){
+    const order = getById('productionOrders', orderId);
+    const prod  = getById('products', order?.productId);
+    const existingInv = (getAll('inventory')||[]).find(i=>i.productionOrderId===orderId);
+    if(!existingInv && order){
+      insert('inventory',{
+        productId:   order.productId,
+        productName: prod?.name||'',
+        batchNumber: order.batchNumber,
+        quantity:    order.quantity,
+        unitCost:    order.unitCost||0,
+        releaseNumber: releaseNo,
+        releaseDate:   today(),
+        productionOrderId: orderId,
+        source: 'production_release',
+      });
+    }
+  }
+
+  closeModal();
+  const labels = {released:'✅ تم الإفراج', rejected:'❌ تم الرفض', on_hold:'⏸️ تم التعليق'};
+  showNotif&&showNotif(`${labels[decision]||'تم'} — رقم الإذن: ${releaseNo}`,'success');
+  go('production');
+}
+
+
+// ── ٦. CMO Scorecard — تقييم أداء المصانع ──────────────────────────────────
+
+PAGES.cmoscorecard = function(){
+  const cmos  = getAll('cmos');
+  const orders = getAll('productionOrders');
+
+  setPage('📊 تقييم أداء المصانع CMO Scorecard','تقييم شهري تلقائي لكل مصنع تعاقدي',
+    `<button class="btn btn-white" onclick="go('cmos')">← المصانع</button>`,
+    `<div style="display:flex;flex-direction:column;gap:16px">
+    ${cmos.map(cmo=>{
+      const cmoOrders = orders.filter(o=>o.cmoId===cmo.id);
+      const total     = cmoOrders.length;
+      if(!total) return '';
+
+      // On-time delivery
+      const delivered = cmoOrders.filter(o=>o.status==='released'||o.status==='completed');
+      const onTime    = delivered.filter(o=>{
+        if(!o.expectedDate||!o.releaseDate) return false;
+        return new Date(o.releaseDate) <= new Date(o.expectedDate);
+      });
+      const onTimePct = delivered.length ? Math.round(onTime.length/delivered.length*100) : 0;
+
+      // Right First Time (no deviations)
+      const allDeviations = getAll('deviations');
+      const rft = delivered.filter(o=>{
+        const devs = allDeviations.filter(d=>d.productionOrderId===o.id);
+        return !devs.some(d=>d.severity==='critical'||d.severity==='major');
+      });
+      const rftPct = delivered.length ? Math.round(rft.length/delivered.length*100) : 0;
+
+      // Average actual cost vs estimated
+      const withCost = cmoOrders.filter(o=>o.actualCost&&o.totalCost);
+      const avgCostVariance = withCost.length
+        ? withCost.reduce((s,o)=>s+((o.actualCost-o.totalCost)/o.totalCost*100),0)/withCost.length
+        : 0;
+
+      // Overall score (weighted)
+      const score = Math.round(onTimePct*0.4 + rftPct*0.4 + Math.max(0,100-Math.abs(avgCostVariance))*0.2);
+      const grade = score>=90?{l:'A',c:'var(--green-light)'}:score>=75?{l:'B',c:'var(--blue)'}:score>=60?{l:'C',c:'var(--amber)'}:{l:'D',c:'var(--red)'};
+
+      return `
+      <div class="card" style="padding:16px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+          <div>
+            <div style="font-size:16px;font-weight:700">${escapeHtml(cmo.name||'—')}</div>
+            <div style="font-size:12px;color:var(--muted)">${cmo.country||'—'} | ${total} تشغيلة إجمالاً</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:40px;font-weight:700;color:${grade.c};line-height:1">${grade.l}</div>
+            <div style="font-size:12px;color:var(--muted)">${score}%</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+          ${[
+            {l:'التسليم في الموعد',    v:onTimePct+'%',   c:onTimePct>=90?'var(--green-light)':onTimePct>=75?'var(--amber)':'var(--red)'},
+            {l:'نجاح أول مرة (RFT)',  v:rftPct+'%',      c:rftPct>=90?'var(--green-light)':rftPct>=75?'var(--amber)':'var(--red)'},
+            {l:'انحراف التكلفة',       v:(avgCostVariance>0?'+':'')+avgCostVariance.toFixed(1)+'%', c:Math.abs(avgCostVariance)<=5?'var(--green-light)':'var(--red)'},
+            {l:'الدفعات المسلمة',      v:delivered.length+'/'+total, c:'var(--text)'},
+          ].map(item=>`
+          <div style="padding:12px;background:var(--hover);border-radius:8px;text-align:center">
+            <div style="font-size:18px;font-weight:700;color:${item.c}">${item.v}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px">${item.l}</div>
+          </div>`).join('')}
+        </div>
+
+        <!-- Progress bars -->
+        <div style="font-size:12px;margin-bottom:4px;display:flex;justify-content:space-between"><span>التسليم في الموعد</span><strong>${onTimePct}%</strong></div>
+        <div style="height:8px;background:var(--border);border-radius:4px;margin-bottom:8px"><div style="height:100%;width:${onTimePct}%;background:${onTimePct>=90?'var(--green)':'var(--amber)'};border-radius:4px"></div></div>
+
+        <div style="font-size:12px;margin-bottom:4px;display:flex;justify-content:space-between"><span>نجاح أول مرة (Right First Time)</span><strong>${rftPct}%</strong></div>
+        <div style="height:8px;background:var(--border);border-radius:4px;margin-bottom:8px"><div style="height:100%;width:${rftPct}%;background:${rftPct>=90?'var(--green)':'var(--amber)'};border-radius:4px"></div></div>
+
+        <div style="font-size:11px;color:var(--muted);margin-top:8px">
+          ${cmo.gmpCertificate?`🏆 شهادة GMP: ${escapeHtml(cmo.gmpCertificate)}`:''} 
+          ${cmo.lastAuditDate?`| آخر تدقيق: ${cmo.lastAuditDate}`:''}
+        </div>
       </div>`;
-    content.appendChild(stagesDiv);
-  }, 200);
+    }).join('')}
+    </div>`
+  );
 };
 
 
-// ════════════════════════════════════════════════════════════════
-// إضافة زر "مراحل الإنتاج" في صفحة أوامر الإنتاج
-// ════════════════════════════════════════════════════════════════
+// ── ٧. تكلفة فعلية vs تقديرية — Actual vs Standard Cost ──────────────────────
+
+function calcActualCost(orderId){
+  const order     = getById('productionOrders', orderId);
+  if(!order) return;
+  const batchMats = getAll('batchMaterials').filter(m=>m.productionOrderId===orderId);
+  const matCost   = batchMats.reduce((s,m)=>s+Number(m.quantity||0)*Number(m.unitCostAtTime||0),0);
+  const cmoCost   = Number(order.cmoBaseCost||order.totalCost||0);
+  const actualTotal = matCost + cmoCost;
+  const qty        = Number(order.quantity||1);
+  const actualUnit = actualTotal / qty;
+  const stdUnit    = Number(order.unitCost||0);
+  const variance   = stdUnit > 0 ? ((actualUnit-stdUnit)/stdUnit*100).toFixed(1) : null;
+
+  update('productionOrders', orderId, {
+    actualCost:     actualTotal,
+    actualUnitCost: actualUnit,
+    costVariancePct: variance,
+    materialsCost:  matCost,
+  });
+
+  return {actualTotal, actualUnit, matCost, cmoCost, variance};
+}
+
+
+// ── ٨. تحديث صفحة الإنتاج لتشمل كل الميزات الجديدة ────────────────────────
 
 window._origProductionPage2 = PAGES.production;
 PAGES.production = function(){
-  if(window._origProductionPage2) window._origProductionPage2();
-  // Patch action buttons to add stages button
-  setTimeout(()=>{
-    document.querySelectorAll('#tbl_production tbody tr').forEach(row=>{
-      const actionCell = row.querySelector('td:last-child');
-      if(actionCell && !actionCell.querySelector('.stages-btn')){
-        // We can't easily get the order ID here, so we'll patch in the tbl call
-      }
-    });
-  }, 150);
+  const rows      = getAll('productionOrders');
+  const batchMats = getAll('batchMaterials');
+  const stages    = getAll('productionStages');
+  const dispRecs  = getAll('dispensingRecords');
+
+  const calcBatchCost = (orderId) => {
+    const mats = batchMats.filter(m=>m.productionOrderId===orderId);
+    return mats.reduce((s,m)=>s+Number(m.quantity||0)*Number(m.unitCostAtTime||0),0);
+  };
+
+  const STATUS_MAP = {
+    'draft':       {l:'مسودة',          c:'b-gray'},
+    'approved':    {l:'معتمد',          c:'b-blue'},
+    'in_progress': {l:'جاري',           c:'b-amber'},
+    'completed':   {l:'منجز',           c:'b-green'},
+    'qa_review':   {l:'مراجعة QA',      c:'b-purple'},
+    'released':    {l:'مُفرج ✅',        c:'b-green'},
+    'rejected':    {l:'مرفوض ❌',        c:'b-red'},
+    'on_hold':     {l:'معلق ⏸️',         c:'b-amber'},
+    'pending':     {l:'قيد الانتظار',   c:'b-gray'},
+    'received':    {l:'مستلم',          c:'b-green'},
+    'cancelled':   {l:'ملغي',           c:'b-red'},
+  };
+
+  const totalRows   = rows.length;
+  const released    = rows.filter(r=>r.status==='released').length;
+  const inProd      = rows.filter(r=>r.status==='in_progress').length;
+  const qaReview    = rows.filter(r=>r.status==='qa_review').length;
+  const totalCost   = rows.reduce((s,o)=>s+calcBatchCost(o.id)+Number(o.cmoBaseCost||o.totalCost||0),0);
+
+  setPage('🏭 أوامر الإنتاج','إدارة التشغيلات الدوائية — GMP Compliant',
+    `<div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-green" onclick="addProduction()">+ أمر إنتاج جديد</button>
+      <button class="btn btn-white" onclick="go('bom')">📋 وصفات BOM</button>
+      <button class="btn btn-white" onclick="go('productionstages')">🔬 مراحل الإنتاج</button>
+      <button class="btn btn-white" onclick="go('cmoscorecard')">📊 Scorecard المصانع</button>
+    </div>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي الأوامر</div><div class="val">${totalRows}</div></div>
+      <div class="stat-card"><div class="lbl">مُفرجة ✅</div><div class="val text-green">${released}</div></div>
+      <div class="stat-card"><div class="lbl">جارية 🔄</div><div class="val text-blue">${inProd}</div></div>
+      <div class="stat-card"><div class="lbl">مراجعة QA 🔬</div><div class="val text-amber">${qaReview}</div></div>
+    </div>
+    <div class="card">${tbl(
+      ['رقم التشغيلة','المنتج','المصنع','الكمية','تكلفة المواد','تكلفة الوحدة','الحالة','الإجراءات'],
+      rows.sort((a,b)=>(b.orderDate||'')>(a.orderDate||'')?1:-1).map(o=>{
+        const prod  = getById('products',o.productId);
+        const cmo   = getById('cmos',o.cmoId);
+        const matC  = calcBatchCost(o.id);
+        const totC  = matC + Number(o.cmoBaseCost||o.totalCost||0);
+        const unitC = Number(o.quantity||1) > 0 ? totC/Number(o.quantity) : 0;
+        const st    = STATUS_MAP[o.status] || {l:o.status||'—', c:'b-gray'};
+        const stagesDone = stages.filter(s=>s.productionOrderId===o.id&&s.status==='completed').length;
+        const dispDone   = dispRecs.filter(d=>d.productionOrderId===o.id).length;
+
+        return tr(
+          `<div style="font-size:12px"><code class="fw7">${escapeHtml(o.batchNumber||o.orderNumber||'—')}</code>
+           <div style="font-size:10px;color:var(--muted);margin-top:2px">${escapeHtml(o.orderNumber||'')}</div></div>`,
+          `<strong>${escapeHtml(prod?.name||'—')}</strong>
+           <div style="font-size:10px;color:var(--muted)">${prod?.dosageForm||'—'}</div>`,
+          escapeHtml(cmo?.name||'—'),
+          `${fmtN(o.quantity)} وحدة`,
+          `${fmt(matC)} ج.م`,
+          `<div style="font-size:12px">${unitC>0?fmt(unitC)+' ج.م':'—'}
+           ${o.costVariancePct?`<div style="font-size:10px;color:${Number(o.costVariancePct)>10?'var(--red)':'var(--muted)'}">فرق: ${o.costVariancePct}%</div>`:''}
+          </div>`,
+          `<div style="display:flex;flex-direction:column;gap:3px">
+            <span class="badge ${st.c}">${st.l}</span>
+            ${dispDone>0?`<span style="font-size:10px;color:var(--muted)">⚖️ موزون</span>`:''}
+            ${stagesDone>0?`<span style="font-size:10px;color:var(--muted)">🔬 ${stagesDone} مراحل</span>`:''}
+          </div>`,
+          `<div class="action-bar" style="gap:3px;flex-wrap:wrap">
+            <button class="btn btn-sm" style="background:rgba(56,139,253,.12);color:var(--blue);border:1px solid rgba(56,139,253,.25);font-size:10px" onclick="openProductionStages(${o.id})">🔬 المراحل</button>
+            <button class="btn btn-sm" style="background:rgba(46,160,67,.12);color:var(--green-light);border:1px solid rgba(46,160,67,.25);font-size:10px" onclick="showDispensingRecord(${o.id})">⚖️ الوزن</button>
+            ${o.status!=='released'&&o.status!=='rejected'
+              ?`<button class="btn btn-sm" style="background:rgba(188,128,240,.12);color:#bc80f0;border:1px solid rgba(188,128,240,.25);font-size:10px" onclick="showBatchRelease(${o.id})">🚀 إفراج</button>`
+              :''}
+            <button class="btn btn-white btn-sm" style="font-size:10px" onclick="showBPR(${o.id})">📋 BPR</button>
+            <button class="icon-btn edit" onclick="editProduction(${o.id})">${ic.edit}</button>
+            <button class="icon-btn del" onclick="removeBatchOrder(${o.id})">${ic.del}</button>
+          </div>`
+        );
+      })
+    ,'tbl_production')}</div>`
+  );
 };
 
 
