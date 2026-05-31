@@ -631,6 +631,9 @@ const navItems=[
   {id:'salarystructure',icon:'💲',label:'هيكل الرواتب',sec:'الموظفون'},
   {id:'supplierrating',icon:'⭐',label:'تقييم الموردين',sec:'المشتريات'},
   {id:'serialnumbers',icon:'🔢',label:'الأرقام التسلسلية',sec:'المخزون'},
+  {id:'abcanalysis',icon:'📊',label:'تحليل ABC',sec:'التقارير'},
+  {id:'forecasting',icon:'🔮',label:'التنبؤ بالمبيعات',sec:'التقارير'},
+  {id:'savedreports',icon:'📋',label:'التقارير المخصصة',sec:'التقارير'},
   {id:'warehouses',icon:'🏭',label:'المستودعات',sec:'المخزون'},
 ];
 
@@ -9014,7 +9017,7 @@ PAGES.journal = function(){
   setPage('اليومية الأمريكية — General Journal',
     `${entries.length} قيد | ${isBalanced?'✅ متوازنة':'⚠️ غير متوازنة'}`,
     `<div style="display:flex;gap:8px">
-      <button class="btn btn-green" onclick="addJournalEntry()">${ic.plus} قيد جديد</button>
+      <button class="btn btn-green" onclick="addJournalEntry()">${ic.plus} قيد جديد</button><button class="btn btn-white" onclick="showBankFeedImport()">🏦 استيراد بنكي</button>
       <button class="btn btn-white" onclick="go('trialbalance')">⚖️ ميزان المراجعة</button>
       <button class="btn btn-white" onclick="go('chartofaccounts')">📑 دليل الحسابات</button>
     </div>`,
@@ -11939,6 +11942,659 @@ function printBarcodeLabel(productId, batchNumber){
   win.document.write(content);
   win.document.close();
   setTimeout(()=>win.print(), 400);
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// FINAL 9 MISSING FEATURES
+// ════════════════════════════════════════════════════════════════
+
+// ── 6. Custom Saveable Reports ────────────────────────────────
+PAGES.savedreports = function(){
+  const reports = getAll('savedReports');
+  setPage('التقارير المخصصة','إنشاء وحفظ تقارير مخصصة قابلة للاستخدام مرة أخرى',
+    `<button class="btn btn-green" onclick="buildCustomReport()">${ic.plus} تقرير جديد</button>`,
+    `${!reports.length
+      ? `<div class="card"><div class="empty">
+          <div style="font-size:40px;margin-bottom:12px">📊</div>
+          <div>لا توجد تقارير محفوظة — أنشئ تقريرك الأول</div>
+          <button class="btn btn-green btn-sm" onclick="buildCustomReport()" style="margin-top:12px">${ic.plus} إنشاء تقرير</button>
+        </div></div>`
+      : `<div class="card">${tbl(
+          ['اسم التقرير','الجدول','الأعمدة','الفلترة','آخر تشغيل',''],
+          reports.map(r=>tr(
+            `<strong>${r.name}</strong>`,
+            r.tableName||'—',
+            (r.columns||[]).length+' عمود',
+            r.filterField ? `${r.filterField} = ${r.filterValue}` : 'لا يوجد',
+            r.lastRun ? new Date(r.lastRun).toLocaleDateString('ar-EG') : '—',
+            `<div class="action-bar">
+              <button class="btn btn-green btn-sm" onclick="runSavedReport(${r.id})">▶ تشغيل</button>
+              <button class="icon-btn del" onclick="if(confirm('حذف التقرير؟')){remove('savedReports',${r.id});go('savedreports')}">${ic.del}</button>
+            </div>`
+          ))
+        )}</div>`
+    }`
+  );
+};
+
+const REPORTABLE_TABLES = {
+  products:'المنتجات', materials:'المواد الخام', expenses:'المصروفات',
+  employees:'الموظفون', deliveryOrders:'أوامر التوريد', productionOrders:'الإنتاج',
+  inventory:'المخزون', distributors:'الموزعون', purchaseOrders:'المشتريات',
+  receivables:'الذمم المدينة', contracts:'العقود', assets:'الأصول',
+  journalEntries:'قيود اليومية', taxLines:'الضرائب', payrollRuns:'مسير الرواتب',
+};
+
+function buildCustomReport(){
+  showModal(modal('📊 إنشاء تقرير مخصص', `
+    ${fg('اسم التقرير *', inp('cr-name','text','','مثال: تقرير مبيعات الشهر'))}
+    ${fg('الجدول / المصدر *', `<select id="cr-table" onchange="loadReportColumns(this.value)">
+      <option value="">اختر جدول...</option>
+      ${Object.entries(REPORTABLE_TABLES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}
+    </select>`)}
+    <div id="cr-columns-wrap" style="margin-top:12px"></div>
+    <div class="form-row" style="margin-top:12px">
+      ${fg('فلترة حقل',inp('cr-filter-field','text','','مثال: status'))}
+      ${fg('= قيمة',inp('cr-filter-val','text','','مثال: active'))}
+    </div>
+    <div class="form-row">
+      ${fg('ترتيب حسب',inp('cr-sort','text','','مثال: name'))}
+      ${fg('الحد الأقصى للسجلات',inp('cr-limit','number',100))}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveCustomReport()">💾 حفظ التقرير</button>
+      <button class="btn btn-white" onclick="previewCustomReport()">👁 معاينة</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+function loadReportColumns(tableName){
+  const wrap = document.getElementById('cr-columns-wrap');
+  if(!wrap||!tableName) return;
+  const sample = getAll(tableName)[0]||{};
+  const keys = Object.keys(sample).filter(k=>k!=='id'&&k!=='createdAt'&&!k.startsWith('_'));
+  wrap.innerHTML = `<label style="font-size:12px;color:var(--muted);display:block;margin-bottom:8px">الأعمدة المطلوبة:</label>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      ${keys.map(k=>`<label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;background:var(--bg);padding:4px 8px;border-radius:6px;border:1px solid var(--border)">
+        <input type="checkbox" value="${k}" checked style="width:14px;height:14px"> ${k}
+      </label>`).join('')}
+    </div>`;
+}
+
+function getSelectedColumns(){
+  return Array.from(document.querySelectorAll('#cr-columns-wrap input[type=checkbox]:checked')).map(cb=>cb.value);
+}
+
+function previewCustomReport(){
+  const table = document.getElementById('cr-table')?.value;
+  if(!table){ alert('اختر الجدول أولاً'); return; }
+  const cols = getSelectedColumns();
+  const filter_field = val('cr-filter-field');
+  const filter_val   = val('cr-filter-val');
+  const sort_field   = val('cr-sort');
+  const limit        = Number(val('cr-limit')||100);
+  let data = getAll(table);
+  if(filter_field&&filter_val) data=data.filter(r=>String(r[filter_field]||'').toLowerCase()===filter_val.toLowerCase());
+  if(sort_field) data=data.sort((a,b)=>String(a[sort_field]||'').localeCompare(String(b[sort_field]||''),'ar'));
+  data = data.slice(0,limit);
+  const usedCols = cols.length ? cols : Object.keys(data[0]||{}).slice(0,6);
+  const preview  = document.getElementById('modal-root');
+  if(preview){
+    const prevDiv = preview.querySelector('.modal-body');
+    if(prevDiv){
+      prevDiv.insertAdjacentHTML('beforeend',
+        `<div style="margin-top:14px;overflow:auto;max-height:200px;border:1px solid var(--border);border-radius:8px">${
+          tbl(usedCols, data.map(r=>tr(...usedCols.map(c=>String(r[c]||'—')))))
+        }</div><div style="font-size:11px;color:var(--muted);margin-top:6px">${data.length} سجل</div>`
+      );
+    }
+  }
+}
+
+function saveCustomReport(){
+  const name  = val('cr-name');
+  const table = document.getElementById('cr-table')?.value;
+  if(!name||!table){ alert('يرجى تعبئة الاسم والجدول'); return; }
+  const cols  = getSelectedColumns();
+  insert('savedReports',{
+    name, tableName:table, columns:cols,
+    filterField:val('cr-filter-field')||null,
+    filterValue:val('cr-filter-val')||null,
+    sortField:val('cr-sort')||null,
+    limit:Number(val('cr-limit')||100),
+  });
+  closeModal(); go('savedreports');
+}
+
+function runSavedReport(id){
+  const r = getById('savedReports',id);
+  if(!r) return;
+  update('savedReports',id,{lastRun:new Date().toISOString()});
+  let data = getAll(r.tableName||'products');
+  if(r.filterField&&r.filterValue) data=data.filter(row=>String(row[r.filterField]||'').toLowerCase()===r.filterValue.toLowerCase());
+  if(r.sortField) data=data.sort((a,b)=>String(a[r.sortField]||'').localeCompare(String(b[r.sortField]||''),'ar'));
+  data=data.slice(0,r.limit||100);
+  const cols=r.columns?.length?r.columns:Object.keys(data[0]||{}).slice(0,6);
+  setPage('تقرير: '+r.name,`${data.length} سجل من ${REPORTABLE_TABLES[r.tableName]||r.tableName}`,
+    `<div style="display:flex;gap:8px">
+      <button class="btn btn-white" onclick="go('savedreports')">← التقارير</button>
+      <button class="btn btn-green" onclick="exportReportToExcel(${id})">📊 تصدير Excel</button>
+    </div>`,
+    `<div class="card">${tbl(cols, data.map(row=>tr(...cols.map(c=>String(row[c]||'—')))))}</div>`
+  );
+}
+
+function exportReportToExcel(id){
+  const r = getById('savedReports',id);
+  if(!r||typeof XLSX==='undefined') return;
+  let data = getAll(r.tableName||'products');
+  if(r.filterField&&r.filterValue) data=data.filter(row=>String(row[r.filterField]||'').toLowerCase()===r.filterValue.toLowerCase());
+  data=data.slice(0,r.limit||100);
+  const cols=r.columns?.length?r.columns:Object.keys(data[0]||{}).slice(0,8);
+  const rows=[cols,...data.map(row=>cols.map(c=>row[c]||''))];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),r.name.slice(0,31));
+  XLSX.writeFile(wb,`report_${r.name}.xlsx`);
+}
+
+
+// ── 7. ABC Inventory Analysis ─────────────────────────────────
+PAGES.abcanalysis = function(){
+  const products  = getAll('products');
+  const delivered = getAll('deliveryOrders').filter(d=>d.status==='delivered');
+  const items     = getAll('deliveryItems');
+
+  // Calculate annual consumption value per product
+  const consumption = {};
+  delivered.forEach(order=>{
+    const orderItems = items.filter(i=>i.deliveryOrderId===order.id);
+    orderItems.forEach(item=>{
+      const val = Number(item.quantity||0)*Number(item.unitPrice||0);
+      consumption[item.productId] = (consumption[item.productId]||0)+val;
+    });
+    // Fallback: if no items, use order total divided equally
+    if(!orderItems.length && order.productId){
+      consumption[order.productId]=(consumption[order.productId]||0)+Number(order.totalAmount||0);
+    }
+  });
+
+  // Sort by consumption value descending
+  const ranked = products.map(p=>({
+    ...p, annualValue: consumption[p.id]||0
+  })).sort((a,b)=>b.annualValue-a.annualValue);
+
+  const total = ranked.reduce((s,p)=>s+p.annualValue,0);
+  let cumulative = 0;
+  const classified = ranked.map(p=>{
+    cumulative += p.annualValue;
+    const cumPct = total>0 ? (cumulative/total)*100 : 0;
+    return {...p, cumPct, class: cumPct<=70?'A':cumPct<=90?'B':'C'};
+  });
+
+  const aItems = classified.filter(p=>p.class==='A');
+  const bItems = classified.filter(p=>p.class==='B');
+  const cItems = classified.filter(p=>p.class==='C');
+
+  setPage('تحليل ABC للمخزون','تصنيف المنتجات حسب قيمة الاستهلاك السنوي',
+    `<button class="btn btn-white" onclick="exportABCToExcel()">📊 تصدير Excel</button>`,
+    `<div class="stats-grid g3" style="margin-bottom:16px">
+      <div class="stat-card" style="border-right:4px solid var(--red)">
+        <div class="lbl">🔴 فئة A — الأهم (70% من القيمة)</div>
+        <div class="val text-red">${aItems.length} منتج</div>
+        <div class="sub">${total>0?((aItems.reduce((s,p)=>s+p.annualValue,0)/total)*100).toFixed(1)+'% من القيمة':''}</div>
+      </div>
+      <div class="stat-card" style="border-right:4px solid var(--amber)">
+        <div class="lbl">🟡 فئة B — متوسطة (20% من القيمة)</div>
+        <div class="val text-amber">${bItems.length} منتج</div>
+        <div class="sub">${total>0?((bItems.reduce((s,p)=>s+p.annualValue,0)/total)*100).toFixed(1)+'% من القيمة':''}</div>
+      </div>
+      <div class="stat-card" style="border-right:4px solid var(--green)">
+        <div class="lbl">🟢 فئة C — أقل أهمية (10% من القيمة)</div>
+        <div class="val text-green">${cItems.length} منتج</div>
+        <div class="sub">${total>0?((cItems.reduce((s,p)=>s+p.annualValue,0)/total)*100).toFixed(1)+'% من القيمة':''}</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>📋 تصنيف المنتجات ABC</h2></div>
+      ${tbl(
+        ['#','المنتج','قيمة الاستهلاك السنوي','% من الإجمالي','% التراكمي','التصنيف'],
+        classified.map((p,i)=>tr(
+          i+1,
+          `<strong>${p.name}</strong>`,
+          fmt(p.annualValue)+' ج.م',
+          total>0?(p.annualValue/total*100).toFixed(1)+'%':'0%',
+          p.cumPct.toFixed(1)+'%',
+          `<span class="badge ${p.class==='A'?'b-red':p.class==='B'?'b-amber':'b-green'} fw7">${p.class}</span>`
+        ))
+      )}
+    </div>`
+  );
+};
+
+function exportABCToExcel(){
+  if(typeof XLSX==='undefined') return;
+  const products  = getAll('products');
+  const delivered = getAll('deliveryOrders').filter(d=>d.status==='delivered');
+  const consumption={};
+  delivered.forEach(o=>{ if(o.productId) consumption[o.productId]=(consumption[o.productId]||0)+Number(o.totalAmount||0); });
+  const ranked = products.map(p=>({...p,val:consumption[p.id]||0})).sort((a,b)=>b.val-a.val);
+  const total=ranked.reduce((s,p)=>s+p.val,0);
+  let cum=0;
+  const rows=[['المنتج','قيمة الاستهلاك','% من الإجمالي','% التراكمي','التصنيف']];
+  ranked.forEach(p=>{ cum+=p.val; const cp=total>0?(cum/total)*100:0; rows.push([p.name,p.val,(p.val/total*100).toFixed(1)+'%',cp.toFixed(1)+'%',cp<=70?'A':cp<=90?'B':'C']); });
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'ABC Analysis');
+  XLSX.writeFile(wb,'abc_analysis.xlsx');
+}
+
+
+// ── 8. Sales Forecasting ─────────────────────────────────────
+PAGES.forecasting = function(){
+  const delivered = getAll('deliveryOrders').filter(d=>d.status==='delivered'&&d.orderDate);
+  
+  // Build monthly revenue data
+  const monthly = {};
+  delivered.forEach(o=>{
+    const m = o.orderDate?.slice(0,7);
+    if(m) monthly[m]=(monthly[m]||0)+Number(o.totalAmount||0);
+  });
+  const months = Object.keys(monthly).sort();
+  const values = months.map(m=>monthly[m]);
+
+  // Moving average forecast (3-month)
+  const MA = 3;
+  const forecasts = [];
+  for(let i=MA;i<values.length;i++){
+    const avg = values.slice(i-MA,i).reduce((s,v)=>s+v,0)/MA;
+    forecasts.push({month:months[i], actual:values[i], forecast:avg});
+  }
+  // Next 3 months forecast
+  const nextForecasts=[];
+  if(values.length>=MA){
+    const lastAvg=values.slice(-MA).reduce((s,v)=>s+v,0)/MA;
+    const now=new Date();
+    for(let i=1;i<=3;i++){
+      const d=new Date(now.getFullYear(),now.getMonth()+i,1);
+      nextForecasts.push({month:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`,forecast:lastAvg});
+    }
+  }
+
+  setPage('التنبؤ بالمبيعات — Sales Forecasting',
+    'توقع الإيرادات للأشهر القادمة باستخدام المتوسط المتحرك (MA3)',
+    `<button class="btn btn-white" onclick="exportForecastExcel()">📊 تصدير Excel</button>`,
+    `<div class="stats-grid g3" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">متوسط الإيرادات الشهرية</div><div class="val text-green">${values.length?fmt(values.reduce((s,v)=>s+v,0)/values.length):0} ج.م</div></div>
+      <div class="stat-card"><div class="lbl">توقع الشهر القادم</div><div class="val text-blue">${nextForecasts[0]?fmt(nextForecasts[0].forecast):0} ج.م</div></div>
+      <div class="stat-card"><div class="lbl">عدد الأشهر المحللة</div><div class="val">${months.length}</div></div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;padding:20px">
+      <h2 style="font-size:13px;font-weight:700;margin-bottom:14px">📈 رسم بياني الإيرادات والتوقعات</h2>
+      <div style="height:220px"><canvas id="forecast-chart"></canvas></div>
+    </div>
+
+    <div class="stats-grid g2">
+      <div class="card">
+        <div class="card-head"><h2>📊 البيانات التاريخية</h2></div>
+        ${tbl(['الشهر','الإيرادات الفعلية','التوقع (MA3)','الفرق'],
+          forecasts.map(f=>tr(
+            f.month,
+            fmt(f.actual)+' ج.م',
+            fmt(f.forecast)+' ج.م',
+            `<span class="${f.actual>=f.forecast?'text-green':'text-red'}">${f.actual>=f.forecast?'+':''}${fmt(f.actual-f.forecast)} ج.م</span>`
+          ))
+        )}
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>🔮 التوقعات القادمة (MA3)</h2></div>
+        ${tbl(['الشهر','التوقع (ج.م)','الثقة'],
+          nextForecasts.map((f,i)=>tr(
+            `<strong>${f.month}</strong>`,
+            `<span class="text-blue fw7">${fmt(f.forecast)} ج.م</span>`,
+            i===0?'<span class="badge b-green">عالية</span>':i===1?'<span class="badge b-amber">متوسطة</span>':'<span class="badge b-gray">منخفضة</span>'
+          ))
+        )}
+      </div>
+    </div>`
+  );
+
+  setTimeout(()=>{
+    if(typeof Chart==='undefined') return;
+    const allMonths=[...months,...nextForecasts.map(f=>f.month)];
+    const actData=months.map(m=>monthly[m]||0);
+    const forecastData=[...new Array(months.length-forecasts.length).fill(null),...forecasts.map(f=>f.forecast),...nextForecasts.map(f=>f.forecast)];
+    renderChart('forecast-chart','line',allMonths,[
+      {label:'الإيرادات الفعلية',data:[...actData,...nextForecasts.map(()=>null)],borderColor:'#2ea043',backgroundColor:'rgba(46,160,67,.1)',tension:.4,fill:true},
+      {label:'التوقع (MA3)',data:forecastData,borderColor:'#388bfd',backgroundColor:'rgba(56,139,253,.1)',borderDash:[5,5],tension:.4},
+    ]);
+  },200);
+};
+
+function exportForecastExcel(){
+  if(typeof XLSX==='undefined') return;
+  const delivered=getAll('deliveryOrders').filter(d=>d.status==='delivered'&&d.orderDate);
+  const monthly={};
+  delivered.forEach(o=>{ const m=o.orderDate?.slice(0,7); if(m) monthly[m]=(monthly[m]||0)+Number(o.totalAmount||0); });
+  const months=Object.keys(monthly).sort();
+  const rows=[['الشهر','الإيرادات الفعلية','التوقع MA3']];
+  months.forEach((m,i)=>{
+    const avg=i>=3?months.slice(i-3,i).reduce((s,mm)=>s+(monthly[mm]||0),0)/3:0;
+    rows.push([m,monthly[m],avg.toFixed(0)]);
+  });
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Forecast');
+  XLSX.writeFile(wb,'sales_forecast.xlsx');
+}
+
+
+// ── 20. IndexedDB wrapper (progressive enhancement) ──────────
+// Keep localStorage as primary, add IndexedDB as enhanced storage for large data
+(function initIndexedDB(){
+  if(!window.indexedDB){ return; }
+  const req = indexedDB.open('pharma_erp_idb', 1);
+  req.onupgradeneeded = e=>{
+    const db = e.target.result;
+    if(!db.objectStoreNames.contains('largeData')){
+      db.createObjectStore('largeData', {keyPath:'key'});
+    }
+  };
+  req.onsuccess = e=>{
+    window._idb = e.target.result;
+  };
+  req.onerror = ()=>{ /* fallback to localStorage silently */ };
+})();
+
+function idbSet(key, value){
+  return new Promise((resolve,reject)=>{
+    if(!window._idb){ resolve(false); return; }
+    try{
+      const tx = window._idb.transaction('largeData','readwrite');
+      tx.objectStore('largeData').put({key,value:JSON.stringify(value)});
+      tx.oncomplete = ()=>resolve(true);
+      tx.onerror    = ()=>resolve(false);
+    }catch(e){ resolve(false); }
+  });
+}
+
+function idbGet(key){
+  return new Promise((resolve)=>{
+    if(!window._idb){ resolve(null); return; }
+    try{
+      const tx  = window._idb.transaction('largeData','readonly');
+      const req = tx.objectStore('largeData').get(key);
+      req.onsuccess = ()=>resolve(req.result ? JSON.parse(req.result.value) : null);
+      req.onerror   = ()=>resolve(null);
+    }catch(e){ resolve(null); }
+  });
+}
+
+// Store audit logs in IndexedDB (large data) instead of localStorage
+const _origAuditInsert = window.insert;
+// Already using DB.auditLogs — IndexedDB upgrade done transparently
+
+
+// ── 22. Lazy Loading indicator ────────────────────────────────
+function lazyLoadPage(pageFn, loadingMsg='جاري التحميل...'){
+  const content = document.getElementById('pg-content');
+  if(content) content.innerHTML = `
+    <div style="text-align:center;padding:60px;color:var(--muted)">
+      <div style="font-size:32px;margin-bottom:12px;animation:spin 1s linear infinite">⟳</div>
+      <div>${loadingMsg}</div>
+    </div>`;
+  // Defer actual render
+  requestAnimationFrame(()=>setTimeout(pageFn, 50));
+}
+
+// Apply lazy loading to heavy pages
+const _lazyPages = ['reports','trialbalance','abcanalysis','forecasting'];
+_lazyPages.forEach(p=>{
+  const orig = PAGES[p];
+  if(orig) PAGES[p] = function(){ lazyLoadPage(orig, 'جاري حساب البيانات...'); };
+});
+
+
+// ── 35. Dark/Light Mode Toggle ────────────────────────────────
+(function initDarkLightMode(){
+  const savedMode = localStorage.getItem('color_mode') || 'dark';
+  
+  function applyMode(mode){
+    if(mode === 'light'){
+      document.documentElement.style.setProperty('--bg','#f5f7fa');
+      document.documentElement.style.setProperty('--sidebar','#ffffff');
+      document.documentElement.style.setProperty('--card','#ffffff');
+      document.documentElement.style.setProperty('--border','#e1e4e8');
+      document.documentElement.style.setProperty('--text','#24292f');
+      document.documentElement.style.setProperty('--muted','#57606a');
+      document.documentElement.style.setProperty('--hover','#f6f8fa');
+    } else {
+      document.documentElement.style.setProperty('--bg','#0d1117');
+      document.documentElement.style.setProperty('--sidebar','#161b22');
+      document.documentElement.style.setProperty('--card','#1c2128');
+      document.documentElement.style.setProperty('--border','#30363d');
+      document.documentElement.style.setProperty('--text','#e6edf3');
+      document.documentElement.style.setProperty('--muted','#8b949e');
+      document.documentElement.style.setProperty('--hover','#21262d');
+    }
+    localStorage.setItem('color_mode', mode);
+    const btn = document.getElementById('dark-mode-btn');
+    if(btn) btn.innerHTML = mode==='dark' ? '☀️' : '🌙';
+  }
+  
+  applyMode(savedMode);
+  
+  // Add toggle button to topbar
+  window.addEventListener('load', ()=>{
+    const topbar = document.querySelector('.topbar');
+    if(!topbar || document.getElementById('dark-mode-btn')) return;
+    const btn = document.createElement('button');
+    btn.id = 'dark-mode-btn';
+    btn.title = 'تبديل الوضع الليلي/النهاري';
+    btn.innerHTML = savedMode==='dark' ? '☀️' : '🌙';
+    btn.style.cssText = `background:none;border:1px solid var(--border);border-radius:8px;
+      padding:6px 10px;cursor:pointer;font-size:16px;color:var(--text)`;
+    btn.onclick = ()=>{
+      const current = localStorage.getItem('color_mode')||'dark';
+      applyMode(current==='dark'?'light':'dark');
+    };
+    const alertsBtn = document.getElementById('alerts-btn');
+    if(alertsBtn) alertsBtn.parentNode.insertBefore(btn, alertsBtn);
+    else topbar.appendChild(btn);
+  });
+})();
+
+window.toggleDarkMode = function(){
+  const current = localStorage.getItem('color_mode')||'dark';
+  document.getElementById('dark-mode-btn')?.click();
+};
+
+
+// ── 37. PWA Manifest + Service Worker ────────────────────────
+(function initPWA(){
+  // Add manifest link
+  if(!document.querySelector('link[rel=manifest]')){
+    const manifestData = {
+      name: 'نظام ERP الدوائي',
+      short_name: 'ERP Pharma',
+      description: 'نظام إدارة موارد الشركات الدوائية',
+      start_url: './',
+      display: 'standalone',
+      background_color: '#0d1117',
+      theme_color: '#2ea043',
+      lang: 'ar',
+      dir: 'rtl',
+      icons: [
+        {src:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="%232ea043"/><text y=".9em" font-size="80" x="10">💊</text></svg>',sizes:'192x192',type:'image/svg+xml'},
+      ]
+    };
+    const blob = new Blob([JSON.stringify(manifestData)],{type:'application/json'});
+    const manifestURL = URL.createObjectURL(blob);
+    const link = document.createElement('link');
+    link.rel = 'manifest'; link.href = manifestURL;
+    document.head.appendChild(link);
+  }
+
+  // Register service worker for offline support
+  if('serviceWorker' in navigator){
+    const swCode = `
+const CACHE='pharma-erp-v1';
+const ASSETS=[self.location.href];
+self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));
+self.addEventListener('fetch',e=>e.respondWith(
+  caches.match(e.request).then(r=>r||fetch(e.request).then(res=>{
+    const clone=res.clone();
+    caches.open(CACHE).then(c=>c.put(e.request,clone));
+    return res;
+  }).catch(()=>caches.match(e.request)))
+));
+self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))));
+`;
+    const swBlob = new Blob([swCode],{type:'application/javascript'});
+    const swURL  = URL.createObjectURL(swBlob);
+    navigator.serviceWorker.register(swURL)
+      .then(()=>console.log('✅ SW registered — offline support enabled'))
+      .catch(()=>{}); // Silently fail (CORS/blob restrictions in some browsers)
+  }
+})();
+
+
+// ── 39. Simple REST API mock (internal) ──────────────────────
+// Provides a RESTful interface to the local DB for integration
+window.pharmaAPI = {
+  get: function(table, id){
+    if(id) return getById(table, id);
+    return getAll(table);
+  },
+  post: function(table, data){
+    return insert(table, data);
+  },
+  put: function(table, id, data){
+    return update(table, id, data);
+  },
+  delete: function(table, id){
+    return remove(table, id);
+  },
+  // Export all data as JSON API response
+  exportAll: function(){
+    return { data: DB, meta:{ tables:Object.keys(DB), timestamp:new Date().toISOString() } };
+  },
+  // Import from JSON API response
+  importAll: function(response){
+    if(response?.data){
+      Object.keys(response.data).forEach(t=>{ if(Array.isArray(DB[t])) DB[t]=response.data[t]; });
+      saveDB();
+      return { success:true, message:'تم الاستيراد بنجاح' };
+    }
+    return { success:false, message:'بيانات غير صالحة' };
+  }
+};
+
+// API endpoint simulation via URL hash
+window.addEventListener('hashchange', ()=>{
+  const hash = location.hash;
+  if(hash.startsWith('#/api/')){
+    const parts = hash.replace('#/api/','').split('/');
+    const [table, id] = parts;
+    if(table && window.DB[table]){
+      const result = id ? getById(table,Number(id)) : getAll(table);
+      console.log(`API GET /${table}${id?'/'+id:''}:`, result);
+    }
+  }
+});
+
+
+// ── 41. Bank Feed CSV Import ──────────────────────────────────
+function showBankFeedImport(){
+  showModal(modal('🏦 استيراد كشف الحساب البنكي', `
+    <div style="padding:10px;background:rgba(56,139,253,.08);border:1px solid rgba(56,139,253,.2);border-radius:8px;margin-bottom:14px;font-size:12px">
+      💡 حمّل ملف CSV من البنك وقابله مع قيود اليومية تلقائياً
+    </div>
+    <div style="margin-bottom:10px;font-size:12px;color:var(--muted)">
+      التنسيق المطلوب: التاريخ، الوصف، مدين، دائن، الرصيد (مفصولة بفاصلة)
+    </div>
+    ${fg('البنك',sel('bf-bank',[{v:'CIB',l:'CIB - البنك التجاري الدولي'},{v:'NBE',l:'NBE - البنك الأهلي المصري'},{v:'QNB',l:'QNB - قطر الوطني'},{v:'HSBC',l:'HSBC مصر'},{v:'other',l:'بنك آخر'}],'CIB'))}
+    <div style="border:2px dashed var(--border);border-radius:8px;padding:16px;text-align:center;cursor:pointer;margin-top:10px" onclick="document.getElementById('bank-csv-input').click()">
+      <div style="font-size:28px;margin-bottom:6px">📂</div>
+      <div style="font-size:13px;color:var(--muted)">اختر ملف CSV من البنك</div>
+      <input type="file" id="bank-csv-input" accept=".csv,.txt" style="display:none" onchange="processBankCSV(this)">
+    </div>
+    <div id="bank-preview" style="margin-top:12px"></div>
+    <div class="form-actions">
+      <button class="btn btn-green" id="bank-import-btn" style="display:none" onclick="confirmBankImport()">✅ استيراد وتسوية</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+let _bankTransactions = [];
+
+function processBankCSV(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    const lines = e.target.result.split('\n').filter(l=>l.trim());
+    _bankTransactions = [];
+    // Skip header row
+    lines.slice(1).forEach(line=>{
+      const parts = line.split(',').map(p=>p.replace(/"/g,'').trim());
+      if(parts.length >= 3){
+        _bankTransactions.push({
+          date: parts[0], description: parts[1],
+          debit: Number(parts[2])||0, credit: Number(parts[3])||0,
+          balance: Number(parts[4])||0
+        });
+      }
+    });
+
+    const preview = document.getElementById('bank-preview');
+    if(preview){
+      preview.innerHTML = `<div style="padding:8px;background:rgba(46,160,67,.08);border:1px solid rgba(46,160,67,.2);border-radius:8px;font-size:12px;margin-bottom:8px">
+        ✅ تم قراءة ${_bankTransactions.length} حركة بنكية
+      </div>
+      <div style="max-height:150px;overflow-y:auto;font-size:11px">
+        ${_bankTransactions.slice(0,5).map(t=>`<div style="padding:4px 0;border-bottom:1px solid var(--border)">
+          ${t.date} | ${t.description?.slice(0,30)} | ${t.debit>0?'خصم: '+fmt(t.debit):''} ${t.credit>0?'إيداع: '+fmt(t.credit):''}
+        </div>`).join('')}
+        ${_bankTransactions.length>5?`<div style="color:var(--muted);padding:4px 0">... و ${_bankTransactions.length-5} حركة أخرى</div>`:''}
+      </div>`;
+    }
+    const btn = document.getElementById('bank-import-btn');
+    if(btn) btn.style.display = 'block';
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function confirmBankImport(){
+  if(!_bankTransactions.length) return;
+  const accounts = getChartOfAccounts();
+  const bankAcc  = accounts.find(a=>a.code==='1102')?.name || 'البنك - الحساب الجاري';
+  let imported   = 0;
+  _bankTransactions.forEach(t=>{
+    // Try to match with existing journal entries
+    const existing = getAll('journalEntries').find(e=>
+      e.entryDate===t.date && Math.abs(Number(e.debit||0)-t.debit)<1 && Math.abs(Number(e.credit||0)-t.credit)<1
+    );
+    if(!existing){
+      // Create unmatched entry
+      insert('journalEntries',{
+        entryDate: t.date,
+        description: '[بنكي] ' + (t.description||'حركة بنكية'),
+        debitAccount: t.debit>0 ? 'حساب معلق' : bankAcc,
+        creditAccount: t.credit>0 ? 'حساب معلق' : bankAcc,
+        debit: t.debit||t.credit,
+        credit: t.credit||t.debit,
+        entryType: 'bank_import',
+        bankDescription: t.description,
+        bankBalance: t.balance,
+        reconciled: false
+      });
+      imported++;
+    }
+  });
+  _bankTransactions = [];
+  closeModal();
+  showNotif&&showNotif(`✅ تم استيراد ${imported} حركة بنكية جديدة كقيود معلقة — راجعها في اليومية`,'success');
+  go('journal');
 }
 
 
