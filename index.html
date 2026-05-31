@@ -404,13 +404,13 @@ const defaultDB = {
   expenses:[], employees:[], budgetLines:[], campaigns:[], salesTargets:[],
   receivables:[], payrollRuns:[], purchaseOrders:[], qualityChecks:[],
   returns:[], contracts:[], assets:[], eInvoices:[], taxLines:[], batchMaterials:[], productIngredients:[], partnerAccounts:[], partnerEntries:[], journalEntries:[], chartOfAccounts:[], historicalBalances:[], appUsers:[], auditLogs:[], leaveRequests:[], appraisals:[], equipment:[],
-  deviations:[], stabilityStudies:[], supplierRatings:[],
+  deviations:[], stabilityStudies:[], supplierRatings:[], warehouses:[], serialNumbers:[],
   _seq:{}
 };
 
 let DB = loadDB();
 // Migration guard: ensure all tables exist
-['productIngredients','historicalBalances','appUsers','chartOfAccounts','auditLogs','leaveRequests','appraisals','equipment','deviations','stabilityStudies','supplierRatings',
+['productIngredients','historicalBalances','appUsers','chartOfAccounts','auditLogs','leaveRequests','appraisals','equipment','deviations','stabilityStudies','supplierRatings','warehouses','serialNumbers',
  'partnerAccounts','partnerEntries','journalEntries','receivables',
  'purchaseOrders','payrollRuns','qualityChecks','salesTargets'].forEach(function(t){
   if(!Array.isArray(DB[t])) DB[t]=[];
@@ -630,6 +630,8 @@ const navItems=[
   {id:'appraisals',icon:'📊',label:'تقييم الأداء',sec:'الموظفون'},
   {id:'salarystructure',icon:'💲',label:'هيكل الرواتب',sec:'الموظفون'},
   {id:'supplierrating',icon:'⭐',label:'تقييم الموردين',sec:'المشتريات'},
+  {id:'serialnumbers',icon:'🔢',label:'الأرقام التسلسلية',sec:'المخزون'},
+  {id:'warehouses',icon:'🏭',label:'المستودعات',sec:'المخزون'},
 ];
 
 function renderNav(){
@@ -4277,7 +4279,7 @@ function buildBPRTable(orders, batchMats, productId){
         o.expectedDate||'—',
         badge(o.status||'pending'),
         `<span class="badge ${bprCls}">${bprLbl}</span>`,
-        `<div class="action-bar"><button class="btn btn-green btn-sm" onclick="showBPR(${o.id})">📋 BPR</button><button class="icon-btn del" onclick="removeBatchOrder(${o.id})">${ic.del}</button></div>`
+        `<div class="action-bar"><button class="btn btn-green btn-sm" onclick="showBPR(${o.id})">📋 BPR</button><button class="btn btn-white btn-sm" onclick="exportBPRPdf(${o.id})">🖨️</button><button class="icon-btn" onclick="addElectronicSignature(${o.id})" style="color:var(--green-light)" title="توقيع إلكتروني">✍️</button><button class="icon-btn del" onclick="removeBatchOrder(${o.id})">${ic.del}</button></div>`
       );
     })
   );
@@ -10111,6 +10113,7 @@ PAGES.users = function(){
       </label>
       <div style="display:flex;gap:8px;margin-top:8px">
         <button class="btn btn-green btn-sm" onclick="saveAppSettings()">💾 حفظ الإعدادات</button>
+        <button class="btn btn-white btn-sm" onclick="showInventoryCostMethod()">⚖️ طريقة المخزون (FIFO/AVG)</button>
         <button class="btn btn-white btn-sm" onclick="go('auditlog')">📋 سجل التدقيق</button>
       </div>
     </div>`;
@@ -11271,6 +11274,672 @@ if(_origCalcFinancials){
     window._openTab(page);
   };
 })();
+
+
+// ════════════════════════════════════════════════════════════════
+// FINAL MISSING FEATURES — كل التوصيات المتبقية
+// ════════════════════════════════════════════════════════════════
+
+// ── 1. Extend escapeHtml to ALL table renders ─────────────────
+// Patch tr() to auto-escape text cells
+const _origTr = window.tr;
+if(_origTr){
+  window.tr = function(...cells){
+    return _origTr(...cells.map(c=>{
+      if(typeof c !== 'string') return c;
+      // Only escape plain text, not HTML tags
+      if(!c.includes('<') && !c.includes('&')) return escapeHtml(c);
+      return c;
+    }));
+  };
+}
+
+// ── 2. COA Certificate upload/print ──────────────────────────
+function addCOAToMaterial(materialReceiptId){
+  showModal(modal('📄 شهادة التحليل (COA)', `
+    <div style="padding:10px;background:rgba(56,139,253,.08);border:1px solid rgba(56,139,253,.2);border-radius:8px;margin-bottom:14px;font-size:12px">
+      💡 ارفع شهادة التحليل (COA) لهذه الدفعة أو اكتب رقمها يدوياً
+    </div>
+    ${fg('رقم شهادة COA',inp('coa-num','text','','مثال: COA-2024-001'))}
+    ${fg('تاريخ الشهادة',inp('coa-date','date',today()))}
+    ${fg('المختبر المُصدِر',inp('coa-lab','text','','اسم المختبر أو الشركة'))}
+    <div style="margin:12px 0">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px">رفع ملف PDF (اختياري)</label>
+      <input type="file" id="coa-file" accept=".pdf,.jpg,.png" style="font-size:12px;color:var(--text)">
+    </div>
+    ${fg('ملاحظات نتائج التحليل',`<textarea id="coa-results" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif" placeholder="نتائج الاختبارات الرئيسية..."></textarea>`)}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveCOA(${materialReceiptId})">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+function saveCOA(receiptId){
+  const num  = val('coa-num');
+  const date = val('coa-date');
+  const lab  = val('coa-lab');
+  const res  = document.getElementById('coa-results')?.value||'';
+  const fileInput = document.getElementById('coa-file');
+  
+  if(!num){ alert('يرجى كتابة رقم الشهادة'); return; }
+  
+  const saveData = ()=>{
+    update('materialReceipts', receiptId, {
+      coaNumber: num, coaDate: date, coaLab: lab, coaResults: res||null
+    });
+    closeModal();
+    showNotif&&showNotif('✅ تم حفظ شهادة COA بنجاح','success');
+    if(currentPage==='materials') go('materials');
+  };
+
+  if(fileInput?.files?.[0]){
+    const reader = new FileReader();
+    reader.onload = e=>{
+      update('materialReceipts', receiptId, { coaFile: e.target.result.slice(0,5000) }); // store thumbnail
+      saveData();
+    };
+    reader.readAsDataURL(fileInput.files[0]);
+  } else {
+    saveData();
+  }
+}
+
+function printCOA(receiptId){
+  const r = getById('materialReceipts', receiptId);
+  if(!r){ alert('استلام غير موجود'); return; }
+  const mat = getById('materials', r.materialId);
+  const win = window.open('','_blank','width=800,height:600');
+  if(!win) return;
+  const content = '<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>COA</title>'
+    + '<style>body{font-family:Arial,sans-serif;padding:30px;direction:rtl}'
+    + 'h1{text-align:center;border-bottom:2px solid #333;padding-bottom:10px}'
+    + 'table{width:100%;border-collapse:collapse;margin-top:20px}'
+    + 'td,th{border:1px solid #ddd;padding:8px;font-size:13px}'
+    + 'th{background:#f5f5f5;text-align:right}'
+    + '.footer{margin-top:40px;text-align:center;font-size:11px;color:#666}</style></head><body>'
+    + '<h1>شهادة التحليل (Certificate of Analysis)</h1>'
+    + '<table><tr><th>اسم المادة</th><td>' + (mat?.name||'—') + '</td></tr>'
+    + '<tr><th>رقم الدفعة</th><td>' + (r.batchNumber||'—') + '</td></tr>'
+    + '<tr><th>رقم الشهادة</th><td>' + (r.coaNumber||'—') + '</td></tr>'
+    + '<tr><th>تاريخ الشهادة</th><td>' + (r.coaDate||'—') + '</td></tr>'
+    + '<tr><th>المختبر</th><td>' + (r.coaLab||'—') + '</td></tr>'
+    + '<tr><th>تاريخ الاستلام</th><td>' + (r.receivedDate||'—') + '</td></tr>'
+    + '<tr><th>تاريخ انتهاء الصلاحية</th><td>' + (r.expiryDate||'—') + '</td></tr>'
+    + '<tr><th>نتائج التحليل</th><td>' + (r.coaResults||'—') + '</td></tr>'
+    + '</table>'
+    + '<div class="footer">هذه الشهادة صادرة بتاريخ ' + new Date().toLocaleDateString('ar-EG') + '</div>'
+    + '</body></html>';
+  win.document.write(content);
+  win.document.close();
+  setTimeout(()=>win.print(), 500);
+}
+
+// ── 3. Electronic signature on BPR ───────────────────────────
+function addElectronicSignature(batchOrderId){
+  showModal(modal('✍️ التوقيع الإلكتروني على BPR', `
+    <div style="padding:10px;background:rgba(46,160,67,.08);border:1px solid rgba(46,160,67,.2);border-radius:8px;margin-bottom:14px;font-size:12px">
+      💡 التوقيع الإلكتروني يؤكد مراجعتك وموافقتك على سجل إنتاج الدفعة
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:8px">ارسم توقيعك:</label>
+      <canvas id="sig-canvas" width="440" height="120"
+        style="border:1px solid var(--border);border-radius:8px;background:#fff;cursor:crosshair;display:block"></canvas>
+      <button onclick="clearSignature()" class="btn btn-ghost btn-sm" style="margin-top:6px">🗑 مسح</button>
+    </div>
+    ${fg('كلمة المرور للتأكيد *',inp('sig-pass','password','','أدخل كلمة مرورك'))}
+    ${fg('الدور / المسؤولية',sel('sig-role',[{v:'قائد الإنتاج',l:'قائد الإنتاج'},{v:'مدير الجودة',l:'مدير الجودة'},{v:'الصيدلاني المسؤول',l:'الصيدلاني المسؤول'},{v:'المدير العام',l:'المدير العام'}],'قائد الإنتاج'))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveElectronicSignature(${batchOrderId})">✅ توقيع وتأكيد</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+  
+  setTimeout(initSignatureCanvas, 100);
+}
+
+function initSignatureCanvas(){
+  const canvas = document.getElementById('sig-canvas');
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  let drawing = false;
+  canvas.addEventListener('mousedown', e=>{ drawing=true; ctx.beginPath(); ctx.moveTo(e.offsetX,e.offsetY); });
+  canvas.addEventListener('mousemove', e=>{ if(!drawing)return; ctx.lineTo(e.offsetX,e.offsetY); ctx.strokeStyle='#1a7f37'; ctx.lineWidth=2; ctx.stroke(); });
+  canvas.addEventListener('mouseup', ()=>drawing=false);
+  canvas.addEventListener('touchstart', e=>{ e.preventDefault(); drawing=true; const t=e.touches[0]; const r=canvas.getBoundingClientRect(); ctx.beginPath(); ctx.moveTo(t.clientX-r.left,t.clientY-r.top); });
+  canvas.addEventListener('touchmove', e=>{ e.preventDefault(); if(!drawing)return; const t=e.touches[0]; const r=canvas.getBoundingClientRect(); ctx.lineTo(t.clientX-r.left,t.clientY-r.top); ctx.strokeStyle='#1a7f37'; ctx.lineWidth=2; ctx.stroke(); });
+  canvas.addEventListener('touchend', ()=>drawing=false);
+}
+
+function clearSignature(){
+  const canvas = document.getElementById('sig-canvas');
+  if(!canvas) return;
+  canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);
+}
+
+async function saveElectronicSignature(batchOrderId){
+  const pass = val('sig-pass');
+  if(!pass){ alert('يرجى إدخال كلمة المرور'); return; }
+  
+  // Verify password
+  const user = _authUser ? getById('appUsers', _authUser.id) : null;
+  if(user){
+    const valid = await verifyPassword(pass, user.password);
+    if(!valid){ alert('كلمة المرور غير صحيحة'); return; }
+  }
+  
+  const canvas = document.getElementById('sig-canvas');
+  const sigData = canvas ? canvas.toDataURL('image/png') : null;
+  const role = val('sig-role');
+  
+  const order = getById('productionOrders', batchOrderId);
+  if(!order) return;
+  
+  const signatures = order.signatures || [];
+  signatures.push({
+    user: _authUser?.name || 'مجهول',
+    role, timestamp: new Date().toISOString(),
+    sigImage: sigData
+  });
+  
+  update('productionOrders', batchOrderId, { signatures, signedAt: new Date().toISOString() });
+  closeModal();
+  showNotif&&showNotif('✅ تم التوقيع الإلكتروني بنجاح','success');
+}
+
+// ── 4. BPR Export as PDF ─────────────────────────────────────
+function exportBPRPdf(batchOrderId){
+  const order = getById('productionOrders', batchOrderId);
+  if(!order){ alert('أمر الإنتاج غير موجود'); return; }
+  const product = getById('products', order.productId);
+  const mats    = getAll('batchMaterials').filter(m=>m.productionOrderId===batchOrderId);
+  const qcs     = getAll('qualityChecks').filter(q=>q.productionOrderId===batchOrderId);
+  
+  const win = window.open('','_blank','width=900,height:700');
+  if(!win){ alert('يرجى السماح بالنوافذ المنبثقة'); return; }
+
+  const matsHTML = mats.map((m,i)=>`<tr>
+    <td>${i+1}</td><td>${m.materialName||'—'}</td>
+    <td>${m.batchNumber||'—'}</td><td>${m.quantity} ${m.unit||''}</td>
+    <td>${Number(m.unitCostAtTime||0).toFixed(2)}</td>
+    <td>${(Number(m.quantity||0)*Number(m.unitCostAtTime||0)).toFixed(2)}</td>
+  </tr>`).join('');
+
+  const sigsHTML = (order.signatures||[]).map(s=>`<tr>
+    <td>${s.role}</td><td>${s.user}</td><td>${new Date(s.timestamp).toLocaleString('ar-EG')}</td>
+  </tr>`).join('');
+
+  const content = '<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">'
+    + '<title>BPR - سجل إنتاج الدفعة</title>'
+    + '<style>body{font-family:Arial,sans-serif;padding:20px;font-size:12px;direction:rtl}'
+    + 'h1{text-align:center;font-size:16px;border-bottom:2px solid #1a7f37;padding-bottom:8px;color:#1a7f37}'
+    + 'h2{font-size:13px;color:#333;margin:16px 0 8px;border-right:3px solid #1a7f37;padding-right:8px}'
+    + '.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px}'
+    + '.info-item{display:flex;gap:8px;font-size:11px;padding:4px 0;border-bottom:1px solid #eee}'
+    + '.lbl{color:#666;min-width:120px}table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:12px}'
+    + 'th{background:#1a7f37;color:#fff;padding:6px;text-align:right}'
+    + 'td{border:1px solid #ddd;padding:5px}'
+    + '.footer{margin-top:30px;border-top:1px solid #ddd;padding-top:10px;text-align:center;font-size:10px;color:#999}'
+    + '@media print{body{padding:10px}}</style></head><body>'
+    + '<h1>سجل إنتاج الدفعة (Batch Production Record)</h1>'
+    + '<div class="info-grid">'
+    + `<div class="info-item"><span class="lbl">المنتج:</span><strong>${product?.name||'—'}</strong></div>`
+    + `<div class="info-item"><span class="lbl">رقم الدفعة:</span><strong>${order.batchNumber||'—'}</strong></div>`
+    + `<div class="info-item"><span class="lbl">الشكل الدوائي:</span>${product?.dosageForm||'—'}</div>`
+    + `<div class="info-item"><span class="lbl">الكمية المنتجة:</span>${order.quantity||'—'} ${order.unit||''}</div>`
+    + `<div class="info-item"><span class="lbl">تاريخ البداية:</span>${order.startDate||'—'}</div>`
+    + `<div class="info-item"><span class="lbl">تاريخ الانتهاء:</span>${order.endDate||'—'}</div>`
+    + `<div class="info-item"><span class="lbl">تكلفة المواد:</span>${Number(order.materialsCost||0).toFixed(2)} ج.م</div>`
+    + `<div class="info-item"><span class="lbl">التكلفة الإجمالية:</span>${Number(order.totalCost||0).toFixed(2)} ج.م</div>`
+    + '</div>'
+    + '<h2>مواد التصنيع المستخدمة</h2>'
+    + '<table><tr><th>#</th><th>المادة</th><th>رقم الدفعة</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th></tr>'
+    + matsHTML + '</table>'
+    + (qcs.length ? '<h2>نتائج مراقبة الجودة</h2><table><tr><th>الاختبار</th><th>النتيجة</th><th>الحالة</th></tr>'
+      + qcs.map(q=>`<tr><td>${q.checkType||'—'}</td><td>${q.result||'—'}</td><td>${q.status==='passed'?'✅ ناجح':'❌ فاشل'}</td></tr>`).join('')
+      + '</table>' : '')
+    + (order.signatures?.length ? '<h2>التوقيعات الإلكترونية</h2><table><tr><th>الصفة</th><th>الاسم</th><th>التاريخ</th></tr>'
+      + sigsHTML + '</table>' : '')
+    + `<div class="footer">BPR رقم: ${order.batchNumber||order.id} | تاريخ الطباعة: ${new Date().toLocaleString('ar-EG')}</div>`
+    + '</body></html>';
+  
+  win.document.write(content);
+  win.document.close();
+  setTimeout(()=>win.print(), 600);
+}
+
+// ── 5. FIFO Inventory Costing ─────────────────────────────────
+function calculateFIFOCost(materialId, quantityNeeded){
+  // Get all receipts for this material, ordered by date (oldest first = FIFO)
+  const receipts = getAll('materialReceipts')
+    .filter(r=>r.materialId===materialId && Number(r.remainingQuantity||r.quantity||0)>0)
+    .sort((a,b)=>(a.receivedDate||a.createdAt||'')>(b.receivedDate||b.createdAt||'')?1:-1);
+  
+  let remaining = Number(quantityNeeded);
+  let totalCost = 0;
+  const layers = [];
+  
+  for(const r of receipts){
+    if(remaining <= 0) break;
+    const avail = Number(r.remainingQuantity||r.quantity||0);
+    const used  = Math.min(avail, remaining);
+    const cost  = Number(r.unitCost||r.unitPrice||0);
+    totalCost += used * cost;
+    layers.push({receiptId:r.id, batch:r.batchNumber, qty:used, unitCost:cost});
+    remaining -= used;
+  }
+  
+  return {
+    totalCost,
+    avgUnitCost: quantityNeeded > 0 ? totalCost/quantityNeeded : 0,
+    layers,
+    fulfilled: remaining <= 0,
+    shortfall: Math.max(0, remaining)
+  };
+}
+
+// Add FIFO toggle to settings
+function getFIFOEnabled(){
+  return localStorage.getItem('inventory_method') !== 'avg'; // default FIFO
+}
+
+// Show FIFO vs Average cost comparison
+function showInventoryCostMethod(){
+  showModal(modal('⚖️ طريقة احتساب تكلفة المخزون', `
+    <div style="margin-bottom:14px;font-size:13px;color:var(--muted)">
+      اختر طريقة احتساب تكلفة المخزون المستخدم في الإنتاج والتقارير
+    </div>
+    ${fg('طريقة الاحتساب', sel('inv-method',[
+      {v:'fifo',l:'FIFO — أول داخل أول خارج (الموصى به للمستحضرات الدوائية)'},
+      {v:'avg', l:'المتوسط المرجح — Weighted Average'},
+    ], getFIFOEnabled()?'fifo':'avg'))}
+    <div style="padding:10px;background:rgba(56,139,253,.06);border-radius:8px;font-size:12px;margin-top:8px;color:var(--muted)">
+      💡 FIFO أكثر دقة للمستحضرات الدوائية لأنه يضمن تصريف الدفعات الأقدم أولاً
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="localStorage.setItem('inventory_method',document.getElementById('inv-method').value);closeModal();showNotif&&showNotif('✅ تم حفظ إعداد طريقة المخزون','success')">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+// ── 6. Serial Numbers for Products ───────────────────────────
+PAGES.serialnumbers = function(){
+  const serials = getAll('serialNumbers');
+  const products = getAll('products');
+  setPage('الأرقام التسلسلية — Serial Numbers','تتبع المنتجات على مستوى الوحدة الفردية',
+    `<button class="btn btn-green" onclick="addSerialNumber()">${ic.plus} إضافة رقم تسلسلي</button>`,
+    `<div class="card">${tbl(
+      ['الرقم التسلسلي','المنتج','رقم الدفعة','تاريخ التصنيع','انتهاء الصلاحية','الحالة',''],
+      serials.sort((a,b)=>(b.createdAt||'')>(a.createdAt||'')?1:-1).map(s=>{
+        const prod = getById('products',s.productId);
+        return tr(
+          `<code class="fw7">${s.serialNumber}</code>`,
+          prod?.name||'—', s.batchNumber||'—',
+          s.manufacturingDate||'—', s.expiryDate||'—',
+          s.status==='sold'?'<span class="badge b-green">مُباع</span>':s.status==='recalled'?'<span class="badge b-red">مسحوب</span>':'<span class="badge b-blue">متاح</span>',
+          `<div class="action-bar">
+            <button class="icon-btn edit" onclick="editSerialNumber(${s.id})">${ic.edit}</button>
+            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('serialNumbers',${s.id});go('serialnumbers')}">${ic.del}</button>
+          </div>`
+        );
+      })
+    )}</div>`
+  );
+};
+
+function addSerialNumber(){
+  const prods = getAll('products');
+  showModal(modal('إضافة رقم تسلسلي',`
+    ${fg('المنتج *',sel('sn-prod',[{v:0,l:'اختر منتج...'},...prods.map(p=>({v:p.id,l:p.name}))],0))}
+    <div class="form-row">
+      ${fg('الرقم التسلسلي *',inp('sn-num','text','','مثال: SN-2024-000001'))}
+      ${fg('رقم الدفعة',inp('sn-batch','text',''))}
+    </div>
+    <div class="form-row">
+      ${fg('تاريخ التصنيع',inp('sn-mfg','date',today()))}
+      ${fg('انتهاء الصلاحية',inp('sn-exp','date',''))}
+    </div>
+    ${fg('الحالة',sel('sn-status',[{v:'available',l:'متاح'},{v:'sold',l:'مُباع'},{v:'recalled',l:'مسحوب'}],'available'))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveSerialNumber()">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+function saveSerialNumber(){
+  const prodId=numVal('sn-prod'), num=val('sn-num');
+  if(!prodId||!num){alert('يرجى اختيار المنتج وكتابة الرقم التسلسلي');return;}
+  insert('serialNumbers',{productId:prodId,serialNumber:num,batchNumber:val('sn-batch')||null,manufacturingDate:val('sn-mfg')||null,expiryDate:val('sn-exp')||null,status:val('sn-status')});
+  closeModal();go('serialnumbers');
+}
+function editSerialNumber(id){
+  const s=getById('serialNumbers',id);if(!s)return;
+  showModal(modal('تعديل الرقم التسلسلي',`
+    ${fg('الرقم التسلسلي',inp('sn-num','text',s.serialNumber||''))}
+    ${fg('الحالة',sel('sn-status',[{v:'available',l:'متاح'},{v:'sold',l:'مُباع'},{v:'recalled',l:'مسحوب'}],s.status))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="update('serialNumbers',${id},{serialNumber:val('sn-num'),status:val('sn-status')});closeModal();go('serialnumbers')">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+// ── 7. Multi-Warehouse ────────────────────────────────────────
+PAGES.warehouses = function(){
+  const warehouses = getAll('warehouses');
+  const inventory  = getAll('inventory');
+  setPage('المستودعات المتعددة','إدارة مواقع التخزين المختلفة',
+    `<button class="btn btn-green" onclick="addWarehouse()">${ic.plus} إضافة مستودع</button>`,
+    `<div class="stats-grid g3" style="margin-bottom:16px">
+      ${warehouses.map(w=>{
+        const items = inventory.filter(i=>i.warehouseId===w.id);
+        const val_total = items.reduce((s,i)=>s+Number(i.quantity||0)*Number(i.unitCost||0),0);
+        return `<div class="stat-card">
+          <div class="lbl">${w.icon||'🏭'} ${w.name}</div>
+          <div class="val">${items.length} صنف</div>
+          <div class="sub">${fmt(val_total)} ج.م</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="card">${tbl(
+      ['المستودع','النوع','الموقع','عدد الأصناف','القيمة الإجمالية',''],
+      warehouses.map(w=>{
+        const items = inventory.filter(i=>i.warehouseId===w.id);
+        const val_total = items.reduce((s,i)=>s+Number(i.quantity||0)*Number(i.unitCost||0),0);
+        return tr(
+          `<strong>${w.icon||'🏭'} ${w.name}</strong>`,
+          w.type||'عام', w.location||'—',
+          items.length,
+          fmt(val_total)+' ج.م',
+          `<div class="action-bar">
+            <button class="icon-btn edit" onclick="editWarehouse(${w.id})">${ic.edit}</button>
+            <button class="icon-btn del" onclick="if(confirm('حذف المستودع؟')){remove('warehouses',${w.id});go('warehouses')}">${ic.del}</button>
+          </div>`
+        );
+      })
+    )}</div>`
+  );
+};
+
+function addWarehouse(){
+  showModal(modal('إضافة مستودع',`
+    <div class="form-row">
+      ${fg('اسم المستودع *',inp('wh-name','text','','مثال: مستودع المواد الخام'))}
+      ${fg('الأيقونة',inp('wh-icon','text','🏭','🏭 أو 🧪 أو 📦'))}
+    </div>
+    <div class="form-row">
+      ${fg('النوع',sel('wh-type',[{v:'مواد خام',l:'مواد خام'},{v:'منتجات تامة',l:'منتجات تامة'},{v:'تغليف',l:'مواد تغليف'},{v:'محجوز',l:'محجوز للجودة'},{v:'عام',l:'عام'}],'مواد خام'))}
+      ${fg('الموقع',inp('wh-loc','text','','مثال: المبنى أ - الدور الأرضي'))}
+    </div>
+    ${fg('ملاحظات',inp('wh-notes','text',''))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveWarehouse()">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+function saveWarehouse(){
+  const name=val('wh-name');if(!name){alert('يرجى كتابة اسم المستودع');return;}
+  insert('warehouses',{name,icon:val('wh-icon')||'🏭',type:val('wh-type'),location:val('wh-loc')||null,notes:val('wh-notes')||null});
+  closeModal();go('warehouses');
+}
+function editWarehouse(id){
+  const w=getById('warehouses',id);if(!w)return;
+  showModal(modal('تعديل المستودع',`
+    <div class="form-row">
+      ${fg('الاسم',inp('wh-name','text',w.name||''))}
+      ${fg('الأيقونة',inp('wh-icon','text',w.icon||'🏭'))}
+    </div>
+    ${fg('الموقع',inp('wh-loc','text',w.location||''))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="update('warehouses',${id},{name:val('wh-name'),icon:val('wh-icon'),location:val('wh-loc')||null});closeModal();go('warehouses')">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+// ── 8. Barcode Camera Scan ────────────────────────────────────
+function startBarcodeScanner(targetInputId, onSuccess){
+  // Check browser support
+  if(!navigator.mediaDevices?.getUserMedia){
+    alert('المتصفح لا يدعم الكاميرا — يرجى استخدام Chrome أو Firefox');
+    return;
+  }
+  
+  showModal(modal('📷 مسح الباركود', `
+    <div style="text-align:center;margin-bottom:12px">
+      <video id="barcode-video" style="width:100%;max-width:350px;border-radius:8px;border:2px solid var(--green)" autoplay muted playsinline></video>
+    </div>
+    <div id="scan-result" style="padding:8px;background:var(--bg);border-radius:6px;font-size:12px;text-align:center;color:var(--muted)">
+      وجّه الكاميرا نحو الباركود...
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="stopBarcodeScanner();closeModal()">إغلاق</button>
+    </div>`));
+
+  let stream;
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}})
+    .then(s=>{
+      stream = s;
+      const video = document.getElementById('barcode-video');
+      if(video) video.srcObject = s;
+      
+      // Use BarcodeDetector if available
+      if('BarcodeDetector' in window){
+        const detector = new BarcodeDetector({formats:['qr_code','ean_13','ean_8','code_128','code_39']});
+        const scan = ()=>{
+          if(!stream) return;
+          detector.detect(video).then(barcodes=>{
+            if(barcodes.length > 0){
+              const code = barcodes[0].rawValue;
+              const el = document.getElementById('scan-result');
+              if(el) el.innerHTML = `<span class="text-green fw7">✅ تم المسح: ${code}</span>`;
+              if(targetInputId){
+                const input = document.getElementById(targetInputId);
+                if(input){ input.value = code; input.dispatchEvent(new Event('input')); }
+              }
+              if(onSuccess) onSuccess(code);
+              setTimeout(()=>{ stopBarcodeScanner(); closeModal(); }, 1000);
+              return;
+            }
+            requestAnimationFrame(scan);
+          }).catch(()=>requestAnimationFrame(scan));
+        };
+        requestAnimationFrame(scan);
+      } else {
+        // Fallback: manual input
+        const el = document.getElementById('scan-result');
+        if(el) el.innerHTML = 'الكاميرا تعمل — الجهاز لا يدعم الكشف التلقائي. أدخل الباركود يدوياً:<br><input id="manual-barcode" type="text" style="margin-top:6px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:13px" placeholder="اكتب الرمز..."><button onclick="const v=document.getElementById(\'manual-barcode\')?.value;if(v&&targetInputId){document.getElementById(targetInputId).value=v;}stopBarcodeScanner();closeModal()" class="btn btn-green btn-sm" style="margin-top:6px;display:block">تأكيد</button>';
+      }
+    })
+    .catch(err=>{ alert('تعذر الوصول للكاميرا: '+err.message); closeModal(); });
+
+  window._barcodeStream = stream;
+}
+
+function stopBarcodeScanner(){
+  if(window._barcodeStream){
+    window._barcodeStream.getTracks().forEach(t=>t.stop());
+    window._barcodeStream = null;
+  }
+}
+
+// ── 9. Dynamic Table Refresh (afterDataChange) ────────────────
+window.afterDataChange = function(table){
+  // Invalidate financials cache
+  window._financialsCache = null;
+  // If current page uses this table, refresh it
+  const pageTableMap = {
+    products:['products','bom'], materials:['materials','materialReceipts'],
+    deliveries:['deliveryOrders','deliveryItems'], expenses:['expenses'],
+    employees:['employees','payrollRuns'], inventory:['inventory'],
+    purchasing:['purchaseOrders'], receivables:['receivables'],
+    journal:['journalEntries'], chartofaccounts:['chartOfAccounts'],
+    stability:['stabilityStudies'], equipment:['equipment'],
+    deviations:['deviations'], attendance:['leaveRequests'],
+    appraisals:['appraisals'], supplierrating:['supplierRatings'],
+    serialnumbers:['serialNumbers'], warehouses:['warehouses'],
+  };
+  const current = window.currentPage;
+  if(current && pageTableMap[current]?.includes(table)){
+    // Small delay to let the DB write complete
+    setTimeout(()=>{
+      if(window.PAGES && PAGES[current]) PAGES[current]();
+    }, 50);
+  }
+};
+
+// Patch insert/update/remove to call afterDataChange
+(function patchForDynamic(){
+  const _i=window.insert, _u=window.update, _r=window.remove;
+  if(_i) window.insert=function(t,obj){const res=_i(t,obj);afterDataChange(t);return res;};
+  if(_u) window.update=function(t,id,p){const res=_u(t,id,p);afterDataChange(t);return res;};
+  if(_r) window.remove=function(t,id){_r(t,id);afterDataChange(t);};
+})();
+
+// ── 10. Column Preferences per User ──────────────────────────
+function saveColumnPreferences(tableId, hiddenCols){
+  const key = `colpref_${tableId}_${window._authUser?.id||'default'}`;
+  localStorage.setItem(key, JSON.stringify(hiddenCols));
+}
+
+function loadColumnPreferences(tableId){
+  const key = `colpref_${tableId}_${window._authUser?.id||'default'}`;
+  try{ return JSON.parse(localStorage.getItem(key)||'[]'); }
+  catch(e){ return []; }
+}
+
+function showColumnPreferences(tableId){
+  const table = document.getElementById(tableId);
+  if(!table) return;
+  const headers = Array.from(table.querySelectorAll('thead th')).map((th,i)=>({i,text:th.textContent.trim()}));
+  const hidden  = loadColumnPreferences(tableId);
+  
+  showModal(modal('⚙️ تخصيص الأعمدة',`
+    <div style="margin-bottom:12px;font-size:12px;color:var(--muted)">اختر الأعمدة التي تريد إظهارها:</div>
+    ${headers.map(h=>`
+      <label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:13px">
+        <input type="checkbox" value="${h.i}" ${!hidden.includes(h.i)?'checked':''} style="width:15px;height:15px">
+        <span>${h.text||'عمود '+(h.i+1)}</span>
+      </label>`).join('')}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="applyColumnPreferences('${tableId}')">✅ تطبيق</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+function applyColumnPreferences(tableId){
+  const checkboxes = document.querySelectorAll('#modal-root input[type=checkbox]');
+  const hidden = [];
+  checkboxes.forEach(cb=>{ if(!cb.checked) hidden.push(Number(cb.value)); });
+  saveColumnPreferences(tableId, hidden);
+  
+  const table = document.getElementById(tableId);
+  if(table){
+    table.querySelectorAll('thead th, tbody td').forEach((cell,idx)=>{
+      // Get column index
+    });
+    // Apply visibility
+    const rows = [table.querySelector('thead tr'), ...table.querySelectorAll('tbody tr')];
+    rows.forEach(row=>{
+      if(!row) return;
+      Array.from(row.children).forEach((cell,i)=>{
+        cell.style.display = hidden.includes(i) ? 'none' : '';
+      });
+    });
+  }
+  closeModal();
+}
+
+// Add column preferences button to tables after render
+function addColPrefButton(tableId){
+  const table = document.getElementById(tableId);
+  if(!table || table.dataset.colPrefAdded) return;
+  table.dataset.colPrefAdded = '1';
+  const wrapper = table.closest('.tbl-wrap');
+  if(!wrapper) return;
+  const btn = document.createElement('button');
+  btn.className = 'btn btn-ghost btn-sm';
+  btn.style.cssText = 'position:absolute;top:-34px;left:0;font-size:11px;padding:4px 8px';
+  btn.innerHTML = '⚙️ الأعمدة';
+  btn.onclick = ()=>showColumnPreferences(tableId);
+  const parent = wrapper.parentElement;
+  if(parent && getComputedStyle(parent).position === 'static') parent.style.position = 'relative';
+  parent?.appendChild(btn);
+  // Apply saved preferences
+  const hidden = loadColumnPreferences(tableId);
+  if(hidden.length){
+    const rows = [table.querySelector('thead tr'), ...table.querySelectorAll('tbody tr')];
+    rows.forEach(row=>{ if(!row)return; Array.from(row.children).forEach((c,i)=>{ c.style.display=hidden.includes(i)?'none':''; }); });
+  }
+}
+
+// ── 11. Infinite Scroll for large tables ─────────────────────
+function initInfiniteScroll(containerId, allData, renderFn, pageSize=50){
+  let loaded = pageSize;
+  const container = document.getElementById(containerId);
+  if(!container) return;
+  
+  // Initial render
+  container.innerHTML = renderFn(allData.slice(0,loaded));
+  
+  // Observer for infinite scroll
+  const sentinel = document.createElement('div');
+  sentinel.style.height = '1px';
+  container.appendChild(sentinel);
+  
+  const observer = new IntersectionObserver(entries=>{
+    entries.forEach(entry=>{
+      if(entry.isIntersecting && loaded < allData.length){
+        loaded = Math.min(loaded+pageSize, allData.length);
+        const existing = container.querySelector('table tbody');
+        if(existing){
+          const newRows = renderFn(allData.slice(0,loaded));
+          const tmp = document.createElement('div');
+          tmp.innerHTML = newRows;
+          const newTbody = tmp.querySelector('tbody');
+          if(newTbody) existing.innerHTML = newTbody.innerHTML;
+        }
+        if(loaded >= allData.length) observer.disconnect();
+      }
+    });
+  },{threshold:0.1});
+  
+  observer.observe(sentinel);
+  return observer;
+}
+
+// ── 12. Barcode Labels (text-based without library) ──────────
+function printBarcodeLabel(productId, batchNumber){
+  const prod = getById('products', productId);
+  if(!prod) return;
+  const inv = getAll('inventory').filter(i=>i.productId===productId&&(!batchNumber||i.batchNumber===batchNumber));
+  const item = inv[0]||{};
+  
+  const win = window.open('','_blank','width=400,height:500');
+  if(!win) return;
+  
+  // Generate simple barcode as text (code39-style visual)
+  const barcodeNum = String(productId).padStart(8,'0');
+  const barcodeVisual = barcodeNum.split('').map(d=>{
+    const patterns = {'0':'|||  ','1':'| |||','2':'||| |','3':' ||||','4':'||  |','5':' | ||','6':'|| | ','7':'| | |','8':'|  ||','9':'||  |'};
+    return patterns[d]||'| | |';
+  }).join('');
+  
+  const content = '<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">'
+    + '<style>body{font-family:Arial,sans-serif;margin:0;padding:10px;width:200px}'
+    + '.label{border:1px solid #ccc;padding:8px;font-size:10px;text-align:center}'
+    + '.name{font-size:12px;font-weight:700;margin-bottom:4px}'
+    + '.barcode{font-family:monospace;font-size:20px;letter-spacing:2px;margin:6px 0;color:#000;writing-mode:horizontal-tb}'
+    + '.code{font-size:9px;letter-spacing:4px;color:#333}'
+    + '@media print{body{padding:0}}</style></head><body>'
+    + '<div class="label">'
+    + `<div class="name">${escapeHtml(prod.name||'')}</div>`
+    + `<div style="font-size:9px">${prod.dosageForm||''} ${prod.strength||''}</div>`
+    + `<div class="barcode">${barcodeVisual}</div>`
+    + `<div class="code">${barcodeNum}</div>`
+    + (item.batchNumber?`<div style="font-size:9px">Batch: ${item.batchNumber}</div>`:'')
+    + (item.expiryDate?`<div style="font-size:9px">Exp: ${item.expiryDate}</div>`:'')
+    + '</div></body></html>';
+  
+  win.document.write(content);
+  win.document.close();
+  setTimeout(()=>win.print(), 400);
+}
 
 
 // renderNav/go called by coEnter() after company is selected
