@@ -1136,7 +1136,7 @@ function renderExpTbl(type){
       badge(e.expenseType),e.category,e.department||'-',e.expenseDate||'-',e.reference||'-',
       `<div class="action-bar"><button class="icon-btn edit" onclick="editExpense(${e.id})">${ic.edit}</button><button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('expenses',${e.id});go('expenses')}">${ic.del}</button><button class="icon-btn" onclick="cloneRecord('expenses',${e.id})" style="color:var(--amber)" title="نسخ">📋</button></div>`
     ))
-  ));
+  ,'tbl_expenses'));
 }
 
 // ═══════════════════════════════════════════════
@@ -1603,7 +1603,7 @@ PAGES.receivables=function(){
         r.notes||'-',
         `<div class="action-bar"><button class="icon-btn edit" onclick="editReceivable(${r.id})">${ic.edit}</button><button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('receivables',${r.id});go('receivables')}">${ic.del}</button></div>`
       ))
-    )}</div>`);
+    ,'tbl_receivables')}</div>`);
 };
 
 PAGES.payroll=function(){
@@ -1629,12 +1629,12 @@ PAGES.payroll=function(){
           `<span class="text-green fw7">${fmt(net)} ج.م</span>`,
           `<button class="icon-btn edit" onclick="editPayrollEmp(${e.id})">${ic.edit}</button>`);
       })
-    )}</div></div>
+    ,'tbl_payroll')}</div></div>
     <div id="pay-hist" class="tab-pane" data-group="pay" style="display:none"><div class="card">${tbl(['الشهر','السنة','عدد الموظفين','إجمالي الصرف','تاريخ الصرف',''],
       runs.map(r=>tr(MONTHS[r.month-1]||r.month,r.year,fmtN(r.employeeCount),
         `<span class="text-green fw7">${fmt(r.totalAmount)} ج.م</span>`,r.payDate||'-',
         `<button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('payrollRuns',${r.id});go('payroll')}">${ic.del}</button>`))
-    )}</div></div>`);
+    ,'tbl_payroll')}</div></div>`);
   initTabs();
 };
 
@@ -1660,7 +1660,7 @@ PAGES.purchasing=function(){
         badge(o.status==='مستلم'?'received':o.status==='ملغي'?'cancelled':'pending'),
         `<div class="action-bar"><button class="icon-btn edit" onclick="editPurchaseOrder(${o.id})">${ic.edit}</button><button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('purchaseOrders',${o.id});go('purchasing')}">${ic.del}</button></div>`
       ))
-    )}</div>`);
+    ,'tbl_purchasing')}</div>`);
 };
 
 PAGES.quality=function(){
@@ -1683,7 +1683,7 @@ PAGES.quality=function(){
         r.result==='ناجح'?'<span class="badge b-green">مُفرَج عنه</span>':'<span class="badge b-red">محجوز</span>',
         `<div class="action-bar"><button class="icon-btn edit" onclick="editQualityCheck(${r.id})">${ic.edit}</button><button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('qualityChecks',${r.id});go('quality')}">${ic.del}</button></div>`
       ))
-    )}</div>`);
+    ,'tbl_quality')}</div>`);
 };
 
 PAGES.expiry=function(){
@@ -1716,7 +1716,7 @@ PAGES.expiry=function(){
             <button class="icon-btn del" onclick="if(confirm('حذف من المخزون؟')){remove('inventory',${i.id});go('expiry')}">${ic.del}</button>
           </div>`);
       })
-    )}</div>`);
+    ,'tbl_expiry')}</div>`);
 };
 
 PAGES.returns=function(){
@@ -1738,7 +1738,7 @@ PAGES.returns=function(){
         badge(r.action==='إتلاف'?'cancelled':r.action==='إعادة مخزون'?'received':'pending'),
         `<button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('returns',${r.id});go('returns')}">${ic.del}</button>`
       ))
-    )}</div>`);
+    ,'tbl_returns')}</div>`);
 };
 
 PAGES.contracts=function(){
@@ -1758,7 +1758,7 @@ PAGES.contracts=function(){
           badge(days<0?'expired':days<=90?'pending':'active'),
           `<div class="action-bar"><button class="icon-btn edit" onclick="editContract(${r.id})">${ic.edit}</button><button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('contracts',${r.id});go('contracts')}">${ic.del}</button><button class="icon-btn" onclick="cloneRecord('contracts',${r.id})" style="color:var(--amber)" title="نسخ">📋</button></div>`);
       })
-    )}</div>`);
+    ,'tbl_contracts')}</div>`);
 };
 
 
@@ -2132,7 +2132,7 @@ PAGES.assets = function(){
           </div>`
         );
       })
-    )}</div>`);
+    ,'tbl_assets')}</div>`);
 };
 
 function assetForm(a={}){
@@ -2489,7 +2489,7 @@ PAGES.taxes = function(){
           <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('taxLines',${t.id});go('taxes')}">${ic.del}</button><button class="icon-btn edit" onclick="editTaxLine(${t.id})">${ic.edit}</button>
         </div>`
       ))
-    )}</div>`);
+    ,'tbl_taxes')}</div>`);
 };
 
 function addTaxLine(){
@@ -2633,7 +2633,7 @@ PAGES.production = function(){
             </div>`
           );
         })
-      )}</div>
+      ,'tbl_production')}</div>
     </div>
 
     <div id="prod-compare" class="tab-pane" data-group="prod" style="display:none">
@@ -2688,7 +2688,7 @@ PAGES.production = function(){
           });
           return result;
         })()
-      )}</div>
+      ,'tbl_production')}</div>
     </div>`);
   initTabs();
 };
@@ -2696,10 +2696,10 @@ PAGES.production = function(){
 // ── حذف أمر إنتاج مع كل موادّه ─────────────────────────────
 function removeBatchOrder(id){
   if(!confirm('حذف أمر الإنتاج وكل المواد المرتبطة به؟')) return;
+  // Efficient bulk delete using filter
+  DB.batchMaterials = (DB.batchMaterials||[]).filter(m => m.productionOrderId !== id);
+  saveDB();
   remove('productionOrders', id);
-  // حذف كل مواد هذه التشغيلة
-  const toRemove = getAll('batchMaterials').filter(m => m.productionOrderId === id);
-  toRemove.forEach(m => remove('batchMaterials', m.id));
   go('production');
 }
 
@@ -2975,7 +2975,7 @@ PAGES.bom = function(){
                 `<button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('productBOM',${b.id});go('bom')}">${ic.del}</button>`
               );
             })
-          )}
+          ,'tbl_bom')}
         </div>
       </div>`;
     }).join('')}
@@ -3558,7 +3558,7 @@ PAGES.materials = function(){
             </div>`
           );
         })
-      )}</div>
+      ,'tbl_materials')}</div>
     </div>
 
     <div id="mat-pkg" class="tab-pane" data-group="mat" style="display:none">
@@ -3582,7 +3582,7 @@ PAGES.materials = function(){
             </div>`
           );
         })
-      )}</div>
+      ,'tbl_materials')}</div>
     </div>
 
     <div id="mat-rcpt" class="tab-pane" data-group="mat" style="display:none">
@@ -3611,7 +3611,7 @@ PAGES.materials = function(){
             </div>`
           );
         })
-      )}</div>
+      ,'tbl_materials')}</div>
     </div>`);
   initTabs();
 };
@@ -3668,7 +3668,7 @@ function showMaterialDetail(id){
             `<span class="badge ${r.status==='approved'||r.status==='released'?'b-green':r.status==='quarantine'?'b-amber':'b-red'}">${{approved:'معتمد',rejected:'مرفوض',quarantine:'محجوز',released:'مُفرَج',expired:'منتهي'}[r.status]||'—'}</span>`
           );
         })
-      )}
+      ,'tbl_materials')}
     </div>
 
     <div id="md-usage" class="tab-pane" data-group="md" style="display:none">
@@ -3686,7 +3686,7 @@ function showMaterialDetail(id){
             b.recordedAt?b.recordedAt.slice(0,10):'—'
           );
         })
-      )}
+      ,'tbl_materials')}
     </div>`));
   setTimeout(()=>initTabs(),100);
 }
@@ -3947,7 +3947,7 @@ PAGES.products = function(){
           </div>`
         );
       })
-    )}</div>`);
+    ,'tbl_products')}</div>`);
 };
 
 // ── صفحة المنتج الكاملة — Product Full Profile ───────────────
@@ -4060,7 +4060,7 @@ function showProductFullPage(productId){
           const cost=Number(b.quantityPerUnit||0)*Number(mat?.unitCost||0);
           return tr(`<strong>${mat?.name||b.materialName||'—'}</strong>`,badge(mat?.materialType||'raw_material'),fmtN(b.quantityPerUnit),mat?.unit||'—',mat?.unitCost?fmt(mat.unitCost)+' ج.م':'—',`<span class="text-red fw7">${fmt(cost)} ج.م</span>`);
         })
-      )}</div>
+      ,'tbl_products')}</div>
     </div>`:'' }
 
     <!-- Production Batches -->
@@ -4088,7 +4088,7 @@ function showProductFullPage(productId){
             badge(o.status||'pending')
           );
         })
-      )}</div>`:'<div class="empty">لا توجد تشغيلات بعد</div>'}
+      ,'tbl_products')}</div>`:'<div class="empty">لا توجد تشغيلات بعد</div>'}
     </div>
 
     <!-- Inventory Batches -->
@@ -4109,7 +4109,7 @@ function showProductFullPage(productId){
             days!==null?`<span class="${days<0?'text-red fw7':days<90?'text-amber fw7':'text-green'}">${days<0?'منتهي':days+' يوم'}</span>`:'—'
           );
         })
-      )}</div>`:'<div class="empty">لا يوجد مخزون حالياً</div>'}
+      ,'tbl_products')}</div>`:'<div class="empty">لا يوجد مخزون حالياً</div>'}
     </div>`
   );
 };
@@ -4271,7 +4271,7 @@ function buildBPRTable(orders, batchMats, productId){
         `<div class="action-bar"><button class="btn btn-green btn-sm" onclick="showBPR(${o.id})">📋 BPR</button><button class="btn btn-white btn-sm" onclick="exportBPRPdf(${o.id})">🖨️</button><button class="icon-btn" onclick="addElectronicSignature(${o.id})" style="color:var(--green-light)" title="توقيع إلكتروني">✍️</button><button class="icon-btn del" onclick="removeBatchOrder(${o.id})">${ic.del}</button></div>`
       );
     })
-  );
+  ,'tbl_batchrecords');
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -4799,7 +4799,7 @@ function reportCOGS(F){
         p.sellPrice?`<span class="text-green fw7">${fmt(p.sellPrice)} ج.م</span>`:'—',
         p.sellPrice&&p.unitCost?`<span class="${p.margin>=0.2?'text-green':p.margin>=0.05?'text-amber':'text-red'} fw7">${(p.margin*100).toFixed(1)}%</span>`:'—'
       )) : [tr('<span class="text-muted">أضف أوامر إنتاج ومواد لتظهر التكاليف هنا</span>')]
-    )}
+    ,'tbl_batchrecords')}
   </div>
 
   <div class="card" style="margin-top:16px">
@@ -4827,7 +4827,7 @@ function reportCOGS(F){
           m.totalQty?fmt(m.totalCost/m.totalQty)+' ج.م':'—',
           m.receipts.size
         ))
-      );
+      ,'tbl_batchrecords');
     })()}
   </div>`;
 }
@@ -4894,7 +4894,7 @@ function reportExpenses(F){
           d?`<span class="text-blue">${fmt(d)} ج.م</span>`:'—',
           i?`<span class="text-purple">${fmt(i)} ج.م</span>`:'—');
       })
-    )}
+    ,'tbl_batchrecords')}
   </div>`;
 }
 
@@ -4945,7 +4945,7 @@ function reportBudget(F){
           over?'<span class="badge b-red">تجاوز</span>':warn?'<span class="badge b-amber">تنبيه</span>':'<span class="badge b-green">جيد</span>'
         );
       })
-    )}
+    ,'tbl_batchrecords')}
   </div>`;
 }
 
@@ -4988,7 +4988,7 @@ function reportInventory(F){
             days!==null?(days<0?'<span class="badge b-red">منتهي</span>':days<90?'<span class="badge b-amber">تنبيه</span>':'<span class="badge b-green">جيد</span>'):'—'
           );
         })
-      )}
+      ,'tbl_batchrecords')}
     </div>
 
     <div class="card">
@@ -5005,7 +5005,7 @@ function reportInventory(F){
             low?'<span class="badge b-red">تحت الحد</span>':'<span class="badge b-green">كافي</span>'
           );
         })
-      )}
+      ,'tbl_batchrecords')}
     </div>
   </div>`;
 }
@@ -5093,7 +5093,7 @@ function reportTax(F){
           t.period||'—',t.dueDate||'—',
           badge(t.status==='مدفوع'?'received':t.status==='معلق'?'pending':'cancelled')
         ))
-      )}
+      ,'tbl_batchrecords')}
     </div>
   </div>`;
 }
@@ -6963,7 +6963,7 @@ function buildJournalTable(entries){
         <button class="icon-btn del" onclick="if(confirm('حذف القيد؟')){remove('journalEntries',${e.id});go('journal')}">${ic.del}</button>
       </div>`
     ))
-  );
+  ,'tbl_partners');
 }
 
 function addJournalEntry(prefill){
@@ -7624,7 +7624,7 @@ function editDelivery(id){
   const dists=getAll('distributors');
   const dOpts=[{v:0,l:'اختر موزع...'},...dists.map(d=>({v:d.id,l:d.name}))];
   showModal(modal('تعديل أمر توريد',`
-    ${fg('الموزع *',sel('do-dist',dOpts,o.distributorId))}
+    ${fg('الموزع *',smartSelect('do-dist',dOpts,o.distributorId))}
     <div class="form-row">
       ${fg('رقم الأمر',inp('do-num','text',o.orderNumber))}
       ${fg('تاريخ الأمر',inp('do-date','date',o.orderDate))}
@@ -7899,7 +7899,7 @@ PAGES.vat = function(){
               <button class="icon-btn del" onclick="if(confirm('حذف القيد؟')){remove('taxLines',${t.id});go('vat')}">${ic.del}</button>
             </div>`
           ))
-        ) : '<div class="empty">لا توجد قيود يدوية — القيود تُحسب تلقائياً من أوامر التوريد والمشتريات</div>'}
+        ,'tbl_vat') : '<div class="empty">لا توجد قيود يدوية — القيود تُحسب تلقائياً من أوامر التوريد والمشتريات</div>'}
       </div>
     </div>
 
@@ -7913,7 +7913,7 @@ PAGES.vat = function(){
             fmt(d.totalAmount||0)+' ج.م',pct.toFixed(1)+'%',
             `<span class="text-red fw7">${fmt(d.vatAmount||0)} ج.م</span>`);
         })
-      )}
+      ,'tbl_vat')}
     </div>`);
 };
 
@@ -7968,7 +7968,7 @@ PAGES.salesvstarget = function(){
           </div>`
         );
       })
-    )}</div>`);
+    ,'tbl_salesvstarget')}</div>`);
 };
 
 function addTarget(){
@@ -8416,7 +8416,7 @@ PAGES.shareholders = function(){
               </div>`
             );
           })
-        )}
+        ,'tbl_shareholders')}
       </div>
     </div>` : ''}
   `);
@@ -9989,7 +9989,7 @@ PAGES.auditlog = function(){
             `<span style="font-size:12px">${tableLabels[l.table]||l.table}</span>`,
             l.details ? `<span style="font-size:11px;color:var(--muted)">${escapeHtml(String(l.details))}</span>` : '—'
           ))
-        )}</div>`
+        ,'tbl_auditlog')}</div>`
     }`
   );
 };
@@ -10593,7 +10593,7 @@ PAGES.attendance = function(){
           </div>`:'—'
         );
       })
-    )}</div>`
+    ,'tbl_attendance')}</div>`
   );
 };
 
@@ -10644,7 +10644,7 @@ PAGES.appraisals = function(){
           </div>`
         );
       })
-    )}</div>`
+    ,'tbl_appraisals')}</div>`
   );
 };
 
@@ -10707,7 +10707,7 @@ PAGES.salarystructure = function(){
           `<button class="icon-btn edit" onclick="editSalaryStructure(${e.id})">${ic.edit}</button>`
         );
       })
-    )}</div>`
+    ,'tbl_salarystructure')}</div>`
   );
 };
 
@@ -10769,7 +10769,7 @@ PAGES.stability = function(){
           </div>`
         );
       })
-    )}</div>`
+    ,'tbl_stability')}</div>`
   );
 };
 
@@ -10856,7 +10856,7 @@ PAGES.equipment = function(){
           </div>`
         );
       })
-    )}</div>`
+    ,'tbl_equipment')}</div>`
   );
 };
 function addEquipment(){
@@ -10935,7 +10935,7 @@ PAGES.deviations = function(){
           <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('deviations',${d.id});go('deviations')}">${ic.del}</button>
         </div>`
       ))
-    )}</div>`
+    ,'tbl_deviations')}</div>`
   );
 };
 
@@ -11054,7 +11054,7 @@ PAGES.supplierrating = function(){
             `<span class="badge ${avg>=75?'b-green':avg>=60?'b-amber':'b-red'}">${grade}</span>`
           );
         })
-      )}
+      ,'tbl_supplierrating')}
     </div>
     <div class="card">${tbl(
       ['المورد','تاريخ التقييم','جودة المواد','الالتزام بالتسليم','السعر','الإجمالي','ملاحظات',''],
@@ -11065,7 +11065,7 @@ PAGES.supplierrating = function(){
         r.notes||'—',
         `<button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('supplierRatings',${r.id});go('supplierrating')}">${ic.del}</button>`
       ))
-    )}</div>`
+    ,'tbl_supplierrating')}</div>`
   );
 };
 
@@ -11570,7 +11570,7 @@ PAGES.serialnumbers = function(){
           </div>`
         );
       })
-    )}</div>`
+    ,'tbl_serialnumbers')}</div>`
   );
 };
 
@@ -11642,7 +11642,7 @@ PAGES.warehouses = function(){
           </div>`
         );
       })
-    )}</div>`
+    ,'tbl_warehouses')}</div>`
   );
 };
 
@@ -11959,7 +11959,7 @@ PAGES.savedreports = function(){
               <button class="icon-btn del" onclick="if(confirm('حذف التقرير؟')){remove('savedReports',${r.id});go('savedreports')}">${ic.del}</button>
             </div>`
           ))
-        )}</div>`
+        ,'tbl_savedreports')}</div>`
     }`
   );
 };
@@ -12153,7 +12153,7 @@ PAGES.abcanalysis = function(){
           p.cumPct.toFixed(1)+'%',
           `<span class="badge ${p.class==='A'?'b-red':p.class==='B'?'b-amber':'b-green'} fw7">${p.class}</span>`
         ))
-      )}
+      ,'tbl_abcanalysis')}
     </div>`
   );
 };
@@ -12230,7 +12230,7 @@ PAGES.forecasting = function(){
             fmt(f.forecast)+' ج.م',
             `<span class="${f.actual>=f.forecast?'text-green':'text-red'}">${f.actual>=f.forecast?'+':''}${fmt(f.actual-f.forecast)} ج.م</span>`
           ))
-        )}
+        ,'tbl_forecasting')}
       </div>
       <div class="card">
         <div class="card-head"><h2>🔮 التوقعات القادمة (MA3)</h2></div>
@@ -12240,7 +12240,7 @@ PAGES.forecasting = function(){
             `<span class="text-blue fw7">${fmt(f.forecast)} ج.م</span>`,
             i===0?'<span class="badge b-green">عالية</span>':i===1?'<span class="badge b-amber">متوسطة</span>':'<span class="badge b-gray">منخفضة</span>'
           ))
-        )}
+        ,'tbl_forecasting')}
       </div>
     </div>`
   );
