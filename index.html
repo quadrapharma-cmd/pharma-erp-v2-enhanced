@@ -1131,7 +1131,7 @@ reports(){
 function renderExpTbl(type){
   const rows=(window._exAll||[]).filter(e=>type==='all'||e.expenseType===type);
   setHTML('ex-all',tbl(['الوصف','المبلغ','النوع','الفئة','القسم','التاريخ','المرجع',''],
-    rows.map(e=>tr(`<strong>${e.description}</strong>`,
+    rows.map(e=>tr(`<strong>${escapeHtml(e.description||'')}</strong>`,
       `<span class="${e.expenseType==='direct'?'text-blue':'text-purple'} fw7">${fmt(e.amount)} ج.م</span>`,
       badge(e.expenseType),e.category,e.department||'-',e.expenseDate||'-',e.reference||'-',
       `<div class="action-bar"><button class="icon-btn edit" onclick="editExpense(${e.id})">${ic.edit}</button><button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('expenses',${e.id});go('expenses')}">${ic.del}</button><button class="icon-btn" onclick="cloneRecord('expenses',${e.id})" style="color:var(--amber)" title="نسخ">📋</button></div>`
@@ -1658,7 +1658,9 @@ PAGES.purchasing=function(){
         o.totalAmount?`<span class="text-blue fw7">${fmt(o.totalAmount)} ج.م</span>`:'-',
         o.orderDate||'-',
         badge(o.status==='مستلم'?'received':o.status==='ملغي'?'cancelled':'pending'),
-        `<div class="action-bar"><button class="icon-btn edit" onclick="editPurchaseOrder(${o.id})">${ic.edit}</button><button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('purchaseOrders',${o.id});go('purchasing')}">${ic.del}</button></div>`
+        `<div class="action-bar">${o.status!=='مستلم'?`<button class="btn btn-green btn-sm" onclick="confirmPOReceived(${o.id})">✅ تأكيد الاستلام</button>`:''}
+              <button class="icon-btn edit" onclick="editPurchaseOrder(${o.id})">${ic.edit}</button>
+              <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('purchaseOrders',${o.id});go('purchasing')}">${ic.del}</button></div>`
       ))
     ,'tbl_purchasing')}</div>`);
 };
@@ -2696,8 +2698,27 @@ PAGES.production = function(){
 // ── حذف أمر إنتاج مع كل موادّه ─────────────────────────────
 function removeBatchOrder(id){
   if(!confirm('حذف أمر الإنتاج وكل المواد المرتبطة به؟')) return;
-  // Efficient bulk delete using filter
-  DB.batchMaterials = (DB.batchMaterials||[]).filter(m => m.productionOrderId !== id);
+  // B8 FIX: Restore stock and remainingQuantity before deletion
+  const mats = (DB.batchMaterials||[]).filter(m=>m.productionOrderId===id);
+  mats.forEach(function(bm){
+    // Restore material stock
+    const mat = getById('materials', bm.materialId);
+    if(mat) update('materials', bm.materialId, {
+      currentStock: String(Number(mat.currentStock||0) + Number(bm.quantity||0))
+    });
+    // Restore receipt remainingQuantity
+    if(bm.receiptId){
+      const rec = getById('materialReceipts', bm.receiptId);
+      if(rec){
+        const restored = Number(rec.remainingQuantity||0) + Number(bm.quantity||0);
+        update('materialReceipts', bm.receiptId, {
+          remainingQuantity: Math.min(restored, Number(rec.quantity||restored)),
+          usedQuantity: Math.max(0, Number(rec.usedQuantity||0) - Number(bm.quantity||0))
+        });
+      }
+    }
+  });
+  DB.batchMaterials = (DB.batchMaterials||[]).filter(m=>m.productionOrderId!==id);
   saveDB();
   remove('productionOrders', id);
   go('production');
@@ -2875,10 +2896,24 @@ function saveBatchMaterial(productionOrderId){
 function removeBatchMaterial(id, productionOrderId){
   if(!confirm('حذف هذه المادة من التشغيلة؟')) return;
   const bm = getById('batchMaterials', id);
-  // Return stock
-  if(bm) {
+  if(bm){
+    // Restore material currentStock
     const mat = getById('materials', bm.materialId);
-    if(mat) update('materials', bm.materialId, { currentStock: String(Number(mat.currentStock||0)+Number(bm.quantity||0)) });
+    if(mat) update('materials', bm.materialId, {
+      currentStock: String(Number(mat.currentStock||0) + Number(bm.quantity||0))
+    });
+    // B1/B8 FIX: Restore remainingQuantity in materialReceipt
+    if(bm.receiptId){
+      const receipt = getById('materialReceipts', bm.receiptId);
+      if(receipt){
+        const restored = Number(receipt.remainingQuantity||0) + Number(bm.quantity||0);
+        const usedBack  = Math.max(0, Number(receipt.usedQuantity||0) - Number(bm.quantity||0));
+        update('materialReceipts', bm.receiptId, {
+          remainingQuantity: Math.min(restored, Number(receipt.quantity||restored)),
+          usedQuantity: usedBack
+        });
+      }
+    }
   }
   remove('batchMaterials', id);
   closeModal();
@@ -3349,9 +3384,9 @@ function saveBatchMaterialFromReceipt(productionOrderId){
     materialType: mat?.materialType||'raw_material',
     unit: sel.unit,
     quantity: qty,
-    unitCostAtTime: sel.unitCost,     // السعر من الفاتورة مباشرةً
+    unitCostAtTime: sel.unitCost,
     totalCost: qty * Number(sel.unitCost||0),
-    receiptId: sel.receiptId,         // رابط للدفعة
+    receiptId: sel.receiptId,
     receiptBatch: receipt?.batchNumber||null,
     invoiceNumber: receipt?.invoiceNumber||null,
     invoiceDate: receipt?.receiptDate||null,
@@ -3359,10 +3394,20 @@ function saveBatchMaterialFromReceipt(productionOrderId){
     recordedAt: new Date().toISOString()
   });
 
-  // خصم من مخزون المادة
+  // B1: خصم من مخزون المادة وتحديث remainingQuantity في سجل الاستلام
   if(mat){
     update('materials', sel.matId, {
       currentStock: String(Math.max(0, Number(mat.currentStock||0) - qty))
+    });
+  }
+  // B1 FIX: تحديث remainingQuantity في سجل الاستلام لضمان دقة FIFO
+  if(receipt){
+    const oldRemaining = Number(receipt.remainingQuantity ?? receipt.quantity ?? 0);
+    const newRemaining = Math.max(0, oldRemaining - qty);
+    const usedQty = Number(receipt.usedQuantity||0) + qty;
+    update('materialReceipts', receipt.id, {
+      remainingQuantity: newRemaining,
+      usedQuantity: usedQty
     });
   }
 
@@ -4268,7 +4313,7 @@ function buildBPRTable(orders, batchMats, productId){
         o.expectedDate||'—',
         badge(o.status||'pending'),
         `<span class="badge ${bprCls}">${bprLbl}</span>`,
-        `<div class="action-bar"><button class="btn btn-green btn-sm" onclick="showBPR(${o.id})">📋 BPR</button><button class="btn btn-white btn-sm" onclick="exportBPRPdf(${o.id})">🖨️</button><button class="icon-btn" onclick="addElectronicSignature(${o.id})" style="color:var(--green-light)" title="توقيع إلكتروني">✍️</button><button class="icon-btn del" onclick="removeBatchOrder(${o.id})">${ic.del}</button></div>`
+        `<div class="action-bar">${o.status!=="completed"?`<button class="btn btn-green btn-sm" onclick="completeProduction(${o.id})">✅ إتمام</button>`:"<span class=\"badge b-green\">مكتمل</span>"}<button class="btn btn-white btn-sm" onclick="showBPR(${o.id})">📋 BPR</button><button class="btn btn-ghost btn-sm" onclick="exportBPRPdf(${o.id})">🖨️</button><button class="icon-btn" onclick="addElectronicSignature(${o.id})" style="color:var(--green-light)" title="توقيع">✍️</button><button class="icon-btn del" onclick="removeBatchOrder(${o.id})">${ic.del}</button></div>`
       );
     })
   ,'tbl_batchrecords');
@@ -11454,6 +11499,7 @@ function exportBPRPdf(batchOrderId){
 
   const sigsHTML = (order.signatures||[]).map(s=>`<tr>
     <td>${s.role}</td><td>${s.user}</td><td>${new Date(s.timestamp).toLocaleString('ar-EG')}</td>
+    <td>${s.sigImage ? '<img src="'+s.sigImage+'" style="height:40px;max-width:120px;border:1px solid #ddd;border-radius:4px">' : '—'}</td>
   </tr>`).join('');
 
   const content = '<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">'
@@ -11485,7 +11531,7 @@ function exportBPRPdf(batchOrderId){
     + (qcs.length ? '<h2>نتائج مراقبة الجودة</h2><table><tr><th>الاختبار</th><th>النتيجة</th><th>الحالة</th></tr>'
       + qcs.map(q=>`<tr><td>${q.checkType||'—'}</td><td>${q.result||'—'}</td><td>${q.status==='passed'?'✅ ناجح':'❌ فاشل'}</td></tr>`).join('')
       + '</table>' : '')
-    + (order.signatures?.length ? '<h2>التوقيعات الإلكترونية</h2><table><tr><th>الصفة</th><th>الاسم</th><th>التاريخ</th></tr>'
+    + (order.signatures?.length ? '<h2>التوقيعات الإلكترونية</h2><table><tr><th>الصفة</th><th>الاسم</th><th>التاريخ</th><th>التوقيع</th></tr>'
       + sigsHTML + '</table>' : '')
     + `<div class="footer">BPR رقم: ${order.batchNumber||order.id} | تاريخ الطباعة: ${new Date().toLocaleString('ar-EG')}</div>`
     + '</body></html>';
@@ -13252,6 +13298,123 @@ function showHelpIndex(){
   }
 })();
 
+
+
+// ── B2: Complete Production → auto-create inventory entry ────
+function completeProduction(orderId){
+  const order   = getById('productionOrders', orderId);
+  if(!order) return;
+  const product = getById('products', order.productId);
+  if(!product) return alert('المنتج غير موجود');
+
+  showModal(modal('✅ إتمام الإنتاج وإضافة للمخزون', `
+    <div style="padding:10px;background:rgba(46,160,67,.08);border:1px solid rgba(46,160,67,.2);border-radius:8px;margin-bottom:14px;font-size:12px">
+      سيتم إضافة الكمية المنتجة تلقائياً للمخزون وإنشاء سجل استلام.
+    </div>
+    <div class="form-row">
+      ${fg('المنتج', '<span style="padding:8px;font-weight:700;color:var(--text)">' + (product.name||'') + '</span>')}
+      ${fg('الكمية المنتجة', inp('cp-qty','number',order.quantity||0))}
+    </div>
+    <div class="form-row">
+      ${fg('رقم الدفعة', inp('cp-batch','text',order.batchNumber||('PROD-'+orderId)))}
+      ${fg('تاريخ الإنتاج', inp('cp-date','date',today()))}
+    </div>
+    <div class="form-row">
+      ${fg('تاريخ انتهاء الصلاحية', inp('cp-exp','date',''))}
+      ${fg('المستودع', sel('cp-wh',[{v:0,l:'المستودع الرئيسي'},...getAll('warehouses').map(w=>({v:w.id,l:w.name}))],0))}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveCompleteProduction(${orderId})">✅ إتمام وإضافة للمخزون</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+function saveCompleteProduction(orderId){
+  const order   = getById('productionOrders', orderId);
+  if(!order) return;
+  const product = getById('products', order.productId);
+  const qty     = numVal('cp-qty');
+  const batch   = val('cp-batch');
+  if(!qty || !batch){ alert('يرجى تحديد الكمية ورقم الدفعة'); return; }
+
+  // Add to inventory
+  const invEntry = insert('inventory', {
+    productId:   order.productId,
+    productName: product?.name||'',
+    batchNumber: batch,
+    quantity:    qty,
+    unitCost:    Number(order.unitCost||0),
+    manufacturingDate: val('cp-date')||today(),
+    expiryDate:  val('cp-exp')||null,
+    warehouseId: numVal('cp-wh')||null,
+    productionOrderId: orderId,
+    daysLeft: val('cp-exp') ? Math.floor((new Date(val('cp-exp'))-new Date())/86400000) : 999,
+    source: 'production'
+  });
+
+  // Add to goodsReceipts
+  insert('goodsReceipts', {
+    productId:   order.productId,
+    batchNumber: batch,
+    quantity:    qty,
+    unitCost:    Number(order.unitCost||0),
+    receivedDate: val('cp-date')||today(),
+    source:      'production',
+    productionOrderId: orderId,
+    inventoryId: invEntry.id
+  });
+
+  // Update production order status
+  update('productionOrders', orderId, {
+    status:      'completed',
+    bprStatus:   'released',
+    completedAt: new Date().toISOString(),
+    actualQty:   qty
+  });
+
+  closeModal();
+  showNotif&&showNotif('✅ تم إتمام الإنتاج وإضافة '+qty+' وحدة للمخزون', 'success');
+  go('production');
+}
+
+
+// ── B7: Confirm PO Received → auto-create materialReceipt ───
+function confirmPOReceived(id){
+  const po = getById('purchaseOrders', id);
+  if(!po) return;
+  if(!confirm('تأكيد استلام هذا الطلب؟')) return;
+
+  update('purchaseOrders', id, {status:'مستلم', receivedDate:today()});
+
+  // B7 FIX: Auto-create materialReceipt if material linked
+  if(po.materialId){
+    const mat = getById('materials', po.materialId);
+    const exists = getAll('materialReceipts').find(function(r){ return r.purchaseOrderId===id; });
+    if(!exists){
+      insert('materialReceipts', {
+        materialId:        po.materialId,
+        materialName:      mat?.name || po.materialName || '',
+        quantity:          Number(po.quantity||0),
+        remainingQuantity: Number(po.quantity||0),
+        usedQuantity:      0,
+        unitCost:          Number(po.unitPrice||0),
+        supplier:          po.supplier||null,
+        receivedDate:      today(),
+        purchaseOrderId:   id,
+        status:            'approved',
+        autoCreated:       true
+      });
+      // Update material currentStock
+      if(mat){
+        update('materials', po.materialId, {
+          currentStock: String(Number(mat.currentStock||0) + Number(po.quantity||0))
+        });
+      }
+      showNotif&&showNotif('✅ تم إنشاء سجل استلام مواد تلقائياً في المواد الخام', 'success');
+    }
+  }
+  go('purchasing');
+}
 
 // renderNav/go called by coEnter() after company is selected
 
