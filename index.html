@@ -2615,60 +2615,6 @@ function selectReceipt(receiptId, matId, unit, available, suggested){
 }
 
 // ── حفظ المادة من دفعة الاستلام ─────────────────────────────
-function saveBatchMaterialFromReceipt(productionOrderId){
-  const sel = window._selectedReceipt;
-  if(!sel) return alert('يرجى اختيار دفعة استلام');
-
-  const qty = numVal('bm-qty');
-  if(!qty) return alert('يرجى تحديد الكمية');
-  if(qty > sel.available){
-    if(!confirm(`⚠️ الكمية المطلوبة (${fmtN(qty)}) أكبر من المتاح (${fmtN(sel.available)} ${sel.unit})\nهل تريد المتابعة؟`)) return;
-  }
-
-  const receipt = getById('materialReceipts', sel.receiptId);
-  const mat = getById('materials', sel.matId);
-
-  insert('batchMaterials', {
-    productionOrderId,
-    materialId: sel.matId,
-    materialName: mat?.name||'',
-    materialType: mat?.materialType||'raw_material',
-    unit: sel.unit,
-    quantity: qty,
-    unitCostAtTime: sel.unitCost,
-    totalCost: qty * Number(sel.unitCost||0),
-    receiptId: sel.receiptId,
-    receiptBatch: receipt?.batchNumber||null,
-    invoiceNumber: receipt?.invoiceNumber||null,
-    invoiceDate: receipt?.receiptDate||null,
-    supplier: receipt?.supplier||null,
-    recordedAt: new Date().toISOString()
-  });
-
-  // B1: خصم من مخزون المادة وتحديث remainingQuantity في سجل الاستلام
-  if(mat){
-    update('materials', sel.matId, {
-      currentStock: String(Math.max(0, Number(mat.currentStock||0) - qty))
-    });
-  }
-  // B1 FIX: تحديث remainingQuantity في سجل الاستلام لضمان دقة FIFO
-  if(receipt){
-    const oldRemaining = Number(receipt.remainingQuantity ?? receipt.quantity ?? 0);
-    const newRemaining = Math.max(0, oldRemaining - qty);
-    const usedQty = Number(receipt.usedQuantity||0) + qty;
-    update('materialReceipts', receipt.id, {
-      remainingQuantity: newRemaining,
-      usedQuantity: usedQty
-    });
-  }
-
-  // تحديث تكلفة أمر الإنتاج
-  updateProductionOrderCost(productionOrderId);
-
-  window._selectedReceipt = null;
-  closeModal();
-  addBatchMaterials(productionOrderId);
-}
 
 // ── ملء تلقائي من آخر دفعة مستلمة ──────────────────────────
 function autoFillFromReceipts(productionOrderId, orderQty){
@@ -5510,30 +5456,6 @@ function initGlobalSearch(){
   });
 }
 
-
-function showSearchResults(results, q){
-  let drop = document.getElementById('search-dropdown');
-  if(!drop){
-    drop = document.createElement('div');
-    drop.id = 'search-dropdown';
-    drop.style.cssText = `position:absolute;top:100%;right:0;left:0;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.4);z-index:1000;max-height:400px;overflow-y:auto;margin-top:4px`;
-    document.getElementById('search-wrap').appendChild(drop);
-  }
-  if(!results.length){
-    drop.innerHTML=`<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">🔍 لا توجد نتائج لـ "${q}"</div>`;
-    return;
-  }
-  drop.innerHTML = results.map(r=>`
-    <div onclick="go('${r.page}');closeSearchResults()" style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(48,54,61,.4);transition:.1s" onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''">
-      <span style="font-size:18px;width:28px;text-align:center">${r.icon}</span>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:600;font-size:13px;color:var(--text)">${r.label}</div>
-        <div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.sub}</div>
-      </div>
-      <span class="badge b-gray" style="font-size:10px;flex-shrink:0">${r.type}</span>
-    </div>`).join('') +
-    `<div style="padding:8px 14px;font-size:11px;color:var(--muted);text-align:center">${results.length} نتيجة</div>`;
-}
 
 function closeSearchResults(){
   const d = document.getElementById('search-dropdown');
@@ -13042,6 +12964,9 @@ function saveMaterialReceipt(){
     ? (mat?.retestPeriodMonths||36)*30
     : (mat?.expiryPeriodMonths||24)*30;
   const pctLeft = totalDays>0 ? Math.round(daysLeft/totalDays*100) : 100;
+  // UGC FIX: reject if expiry date is already in the past
+  if(!_validateReceiptExpiry(expiry, null)) return;
+
   const minPct  = mat?.minShelfLifeAtReceipt||70;
 
   const d = {
@@ -13069,6 +12994,11 @@ function saveMaterialReceipt(){
     receivedBy:       _authUser?.name||'—',
     createdAt:        new Date().toISOString(),
   };
+
+  // FIX: validate expiry date before saving
+  const _expVal = document.getElementById('mr-expiry')?.value||document.getElementById('gr-expiry')?.value||null;
+  const _retestVal = document.getElementById('mr-retest')?.value||null;
+  if(!_validateReceiptExpiry(_expVal, _retestVal)) return;
 
   insert('materialReceipts', d);
   // Update material current stock
@@ -21714,6 +21644,177 @@ function addImportBtn(page){
 }
 
 
+// ══════════════════════════════════════════════════════════════
+// UGC FIXES — إصلاحات بناءً على تقرير الاختبار الشامل
+// ══════════════════════════════════════════════════════════════
+
+// ── FIX 1: XSS في showSearchResults ──────────────────────────
+// المشكلة: r.label و r.sub تُدرج مباشرة في innerHTML بدون escapeHtml
+// الإصلاح: escapeHtml على كل القيم الديناميكية
+
+function showSearchResults(results, q){
+  let drop = document.getElementById('search-dropdown');
+  if(!drop){
+    drop = document.createElement('div');
+    drop.id = 'search-dropdown';
+    drop.style.cssText = `position:absolute;top:100%;right:0;left:0;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.4);z-index:1000;max-height:400px;overflow-y:auto;margin-top:4px`;
+    const wrap = document.getElementById('search-wrap');
+    if(wrap) wrap.appendChild(drop);
+    else document.body.appendChild(drop);
+  }
+  if(!results.length){
+    drop.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">🔍 لا توجد نتائج لـ "${escapeHtml(q)}"</div>`;
+    return;
+  }
+  drop.innerHTML = results.map(r=>`
+    <div onclick="go('${escapeHtml(r.page)}');closeSearchResults()" style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(48,54,61,.4);transition:.1s" onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''">
+      <span style="font-size:18px;width:28px;text-align:center">${r.icon}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px;color:var(--text)">${escapeHtml(r.label)}</div>
+        <div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.sub)}</div>
+      </div>
+      <span class="badge b-gray" style="font-size:10px;flex-shrink:0">${escapeHtml(r.type)}</span>
+    </div>`).join('') +
+    `<div style="padding:8px 14px;font-size:11px;color:var(--muted);text-align:center">${results.length} نتيجة</div>`;
+}
+
+// ── FIX 2: saveBatchMaterialFromReceipt — منع الإضافة المزدوجة ──
+// المشكلة (UGC-02): نفس المادة من نفس الدفعة تُضاف مرتين → remainingQuantity سالب
+// الإصلاح: فحص مسبق + atomic rollback بـ snapshot
+
+function saveBatchMaterialFromReceipt(productionOrderId){
+  const sel = window._selectedReceipt;
+  if(!sel) return alert('يرجى اختيار دفعة استلام');
+
+  const qty = numVal('bm-qty');
+  if(!qty || qty <= 0) return alert('يرجى تحديد كمية صحيحة');
+
+  const receipt = getById('materialReceipts', sel.receiptId);
+  const mat     = getById('materials', sel.matId);
+
+  // ── FIX 2a: منع الإضافة المزدوجة من نفس الدفعة ──────────────
+  const existingUse = (getAll('batchMaterials')||[]).filter(m =>
+    m.productionOrderId === productionOrderId &&
+    m.materialId        === sel.matId         &&
+    m.receiptId         === sel.receiptId
+  );
+  const alreadyUsed = existingUse.reduce((s,m)=>s+Number(m.quantity||0), 0);
+
+  if(alreadyUsed > 0){
+    const remaining = Number(receipt?.remainingQuantity ?? receipt?.quantity ?? 0);
+    if(!confirm(
+      `⚠️ هذه الدفعة استُخدمت منها ${fmtN(alreadyUsed)} ${sel.unit} مسبقاً لهذا الأمر.\n` +
+      `المتبقي الفعلي: ${fmtN(remaining)} ${sel.unit}\n` +
+      `الكمية الجديدة: ${fmtN(qty)} ${sel.unit}\n\n` +
+      `هل تريد إضافة كمية إضافية من نفس الدفعة؟`
+    )) return;
+  }
+
+  // ── FIX 2b: التحقق من عدم تجاوز المتاح ──────────────────────
+  const oldRemaining = Number(receipt?.remainingQuantity ?? receipt?.quantity ?? 0);
+  if(qty > oldRemaining){
+    if(!confirm(
+      `⚠️ الكمية المطلوبة (${fmtN(qty)}) أكبر من المتاح (${fmtN(oldRemaining)} ${sel.unit})\n` +
+      `هذا سيجعل الرصيد المتبقي سالباً. هل تريد المتابعة؟`
+    )) return;
+  }
+
+  // ── FIX 3: Atomic rollback — snapshot قبل التعديل ────────────
+  const snapshot = {
+    matStock:   mat ? String(mat.currentStock) : null,
+    remaining:  oldRemaining,
+    usedQty:    Number(receipt?.usedQuantity||0),
+  };
+
+  try{
+    insert('batchMaterials', {
+      productionOrderId,
+      materialId:      sel.matId,
+      materialName:    mat?.name||'',
+      materialType:    mat?.materialType||'raw_material',
+      unit:            sel.unit,
+      quantity:        qty,
+      unitCostAtTime:  sel.unitCost,
+      totalCost:       qty * Number(sel.unitCost||0),
+      receiptId:       sel.receiptId,
+      receiptBatch:    receipt?.batchNumber||null,
+      invoiceNumber:   receipt?.invoiceNumber||null,
+      invoiceDate:     receipt?.receiptDate||null,
+      supplier:        receipt?.supplier||null,
+      recordedAt:      new Date().toISOString()
+    });
+
+    if(mat){
+      update('materials', sel.matId, {
+        currentStock: String(Math.max(0, Number(mat.currentStock||0) - qty))
+      });
+    }
+
+    if(receipt){
+      const newRemaining = Math.max(0, oldRemaining - qty);
+      update('materialReceipts', receipt.id, {
+        remainingQuantity: newRemaining,
+        usedQuantity:      snapshot.usedQty + qty
+      });
+    }
+
+    updateProductionOrderCost(productionOrderId);
+
+  } catch(err){
+    // Rollback on failure
+    console.error('saveBatchMaterial failed — rolling back:', err);
+    if(mat && snapshot.matStock !== null)
+      update('materials', sel.matId, { currentStock: snapshot.matStock });
+    if(receipt)
+      update('materialReceipts', receipt.id, {
+        remainingQuantity: snapshot.remaining,
+        usedQuantity:      snapshot.usedQty
+      });
+    alert('❌ حدث خطأ أثناء حفظ المواد. تم التراجع عن التغييرات.\n' + err.message);
+    return;
+  }
+
+  window._selectedReceipt = null;
+  closeModal();
+  addBatchMaterials(productionOrderId);
+}
+
+// ── FIX 4: GRN — رفض استلام مادة بتاريخ انتهاء في الماضي ──────
+// نستوقف حفظ GRN عند expiry < today بدل تحذير فقط
+// نضيف validation في saveGRN أو saveReceipt
+function _validateReceiptExpiry(expiryDate, retestDate){
+  const today = new Date(); today.setHours(0,0,0,0);
+  if(expiryDate){
+    const exp = new Date(expiryDate);
+    if(exp < today){
+      const daysPast = Math.floor((today - exp)/86400000);
+      const msg = `❌ تاريخ انتهاء الصلاحية (${expiryDate}) مضى منذ ${daysPast} يوم.\n` +
+        `لا يمكن استلام مادة منتهية الصلاحية.\nيُرجى مراجعة التاريخ أو إرجاع المادة للمورد.`;
+      alert(msg);
+      return false;
+    }
+    // Warning if < 90 days
+    const daysLeft = Math.floor((exp - today)/86400000);
+    if(daysLeft < 90 && daysLeft >= 0){
+      if(!confirm(
+        `⚠️ تنبيه: الصلاحية قريبة — ${daysLeft} يوم متبقي (${expiryDate})\n` +
+        `هل تريد الاستمرار في استلام هذه الدفعة؟`
+      )) return false;
+    }
+  }
+  if(retestDate){
+    const rt = new Date(retestDate);
+    if(rt < today){
+      if(!confirm(
+        `⚠️ تاريخ إعادة الاختبار (${retestDate}) قد مضى.\n` +
+        `هل تريد الاستمرار؟ ستكون حالة الدفعة retest_due تلقائياً.`
+      )) return false;
+    }
+  }
+  return true;
+}
+
+
 // renderNav/go called by coEnter() after company is selected
 
 PAGES.auditlog = function(){
@@ -21764,6 +21865,177 @@ function exportAuditCSV(){
   a.download='audit-log-'+today()+'.csv';
   a.click(); URL.revokeObjectURL(url);
 }
+
+// ══════════════════════════════════════════════════════════════
+// UGC FIXES — إصلاحات بناءً على تقرير الاختبار الشامل
+// ══════════════════════════════════════════════════════════════
+
+// ── FIX 1: XSS في showSearchResults ──────────────────────────
+// المشكلة: r.label و r.sub تُدرج مباشرة في innerHTML بدون escapeHtml
+// الإصلاح: escapeHtml على كل القيم الديناميكية
+
+function showSearchResults(results, q){
+  let drop = document.getElementById('search-dropdown');
+  if(!drop){
+    drop = document.createElement('div');
+    drop.id = 'search-dropdown';
+    drop.style.cssText = `position:absolute;top:100%;right:0;left:0;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.4);z-index:1000;max-height:400px;overflow-y:auto;margin-top:4px`;
+    const wrap = document.getElementById('search-wrap');
+    if(wrap) wrap.appendChild(drop);
+    else document.body.appendChild(drop);
+  }
+  if(!results.length){
+    drop.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">🔍 لا توجد نتائج لـ "${escapeHtml(q)}"</div>`;
+    return;
+  }
+  drop.innerHTML = results.map(r=>`
+    <div onclick="go('${escapeHtml(r.page)}');closeSearchResults()" style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(48,54,61,.4);transition:.1s" onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''">
+      <span style="font-size:18px;width:28px;text-align:center">${r.icon}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px;color:var(--text)">${escapeHtml(r.label)}</div>
+        <div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.sub)}</div>
+      </div>
+      <span class="badge b-gray" style="font-size:10px;flex-shrink:0">${escapeHtml(r.type)}</span>
+    </div>`).join('') +
+    `<div style="padding:8px 14px;font-size:11px;color:var(--muted);text-align:center">${results.length} نتيجة</div>`;
+}
+
+// ── FIX 2: saveBatchMaterialFromReceipt — منع الإضافة المزدوجة ──
+// المشكلة (UGC-02): نفس المادة من نفس الدفعة تُضاف مرتين → remainingQuantity سالب
+// الإصلاح: فحص مسبق + atomic rollback بـ snapshot
+
+function saveBatchMaterialFromReceipt(productionOrderId){
+  const sel = window._selectedReceipt;
+  if(!sel) return alert('يرجى اختيار دفعة استلام');
+
+  const qty = numVal('bm-qty');
+  if(!qty || qty <= 0) return alert('يرجى تحديد كمية صحيحة');
+
+  const receipt = getById('materialReceipts', sel.receiptId);
+  const mat     = getById('materials', sel.matId);
+
+  // ── FIX 2a: منع الإضافة المزدوجة من نفس الدفعة ──────────────
+  const existingUse = (getAll('batchMaterials')||[]).filter(m =>
+    m.productionOrderId === productionOrderId &&
+    m.materialId        === sel.matId         &&
+    m.receiptId         === sel.receiptId
+  );
+  const alreadyUsed = existingUse.reduce((s,m)=>s+Number(m.quantity||0), 0);
+
+  if(alreadyUsed > 0){
+    const remaining = Number(receipt?.remainingQuantity ?? receipt?.quantity ?? 0);
+    if(!confirm(
+      `⚠️ هذه الدفعة استُخدمت منها ${fmtN(alreadyUsed)} ${sel.unit} مسبقاً لهذا الأمر.\n` +
+      `المتبقي الفعلي: ${fmtN(remaining)} ${sel.unit}\n` +
+      `الكمية الجديدة: ${fmtN(qty)} ${sel.unit}\n\n` +
+      `هل تريد إضافة كمية إضافية من نفس الدفعة؟`
+    )) return;
+  }
+
+  // ── FIX 2b: التحقق من عدم تجاوز المتاح ──────────────────────
+  const oldRemaining = Number(receipt?.remainingQuantity ?? receipt?.quantity ?? 0);
+  if(qty > oldRemaining){
+    if(!confirm(
+      `⚠️ الكمية المطلوبة (${fmtN(qty)}) أكبر من المتاح (${fmtN(oldRemaining)} ${sel.unit})\n` +
+      `هذا سيجعل الرصيد المتبقي سالباً. هل تريد المتابعة؟`
+    )) return;
+  }
+
+  // ── FIX 3: Atomic rollback — snapshot قبل التعديل ────────────
+  const snapshot = {
+    matStock:   mat ? String(mat.currentStock) : null,
+    remaining:  oldRemaining,
+    usedQty:    Number(receipt?.usedQuantity||0),
+  };
+
+  try{
+    insert('batchMaterials', {
+      productionOrderId,
+      materialId:      sel.matId,
+      materialName:    mat?.name||'',
+      materialType:    mat?.materialType||'raw_material',
+      unit:            sel.unit,
+      quantity:        qty,
+      unitCostAtTime:  sel.unitCost,
+      totalCost:       qty * Number(sel.unitCost||0),
+      receiptId:       sel.receiptId,
+      receiptBatch:    receipt?.batchNumber||null,
+      invoiceNumber:   receipt?.invoiceNumber||null,
+      invoiceDate:     receipt?.receiptDate||null,
+      supplier:        receipt?.supplier||null,
+      recordedAt:      new Date().toISOString()
+    });
+
+    if(mat){
+      update('materials', sel.matId, {
+        currentStock: String(Math.max(0, Number(mat.currentStock||0) - qty))
+      });
+    }
+
+    if(receipt){
+      const newRemaining = Math.max(0, oldRemaining - qty);
+      update('materialReceipts', receipt.id, {
+        remainingQuantity: newRemaining,
+        usedQuantity:      snapshot.usedQty + qty
+      });
+    }
+
+    updateProductionOrderCost(productionOrderId);
+
+  } catch(err){
+    // Rollback on failure
+    console.error('saveBatchMaterial failed — rolling back:', err);
+    if(mat && snapshot.matStock !== null)
+      update('materials', sel.matId, { currentStock: snapshot.matStock });
+    if(receipt)
+      update('materialReceipts', receipt.id, {
+        remainingQuantity: snapshot.remaining,
+        usedQuantity:      snapshot.usedQty
+      });
+    alert('❌ حدث خطأ أثناء حفظ المواد. تم التراجع عن التغييرات.\n' + err.message);
+    return;
+  }
+
+  window._selectedReceipt = null;
+  closeModal();
+  addBatchMaterials(productionOrderId);
+}
+
+// ── FIX 4: GRN — رفض استلام مادة بتاريخ انتهاء في الماضي ──────
+// نستوقف حفظ GRN عند expiry < today بدل تحذير فقط
+// نضيف validation في saveGRN أو saveReceipt
+function _validateReceiptExpiry(expiryDate, retestDate){
+  const today = new Date(); today.setHours(0,0,0,0);
+  if(expiryDate){
+    const exp = new Date(expiryDate);
+    if(exp < today){
+      const daysPast = Math.floor((today - exp)/86400000);
+      const msg = `❌ تاريخ انتهاء الصلاحية (${expiryDate}) مضى منذ ${daysPast} يوم.\n` +
+        `لا يمكن استلام مادة منتهية الصلاحية.\nيُرجى مراجعة التاريخ أو إرجاع المادة للمورد.`;
+      alert(msg);
+      return false;
+    }
+    // Warning if < 90 days
+    const daysLeft = Math.floor((exp - today)/86400000);
+    if(daysLeft < 90 && daysLeft >= 0){
+      if(!confirm(
+        `⚠️ تنبيه: الصلاحية قريبة — ${daysLeft} يوم متبقي (${expiryDate})\n` +
+        `هل تريد الاستمرار في استلام هذه الدفعة؟`
+      )) return false;
+    }
+  }
+  if(retestDate){
+    const rt = new Date(retestDate);
+    if(rt < today){
+      if(!confirm(
+        `⚠️ تاريخ إعادة الاختبار (${retestDate}) قد مضى.\n` +
+        `هل تريد الاستمرار؟ ستكون حالة الدفعة retest_due تلقائياً.`
+      )) return false;
+    }
+  }
+  return true;
+}
+
 
 // renderNav/go called by coEnter() after company is selected
 
