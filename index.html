@@ -415,7 +415,7 @@ const defaultDB = {
   expenses:[], employees:[], budgetLines:[], campaigns:[], salesTargets:[],
   receivables:[], payrollRuns:[], purchaseOrders:[], qualityChecks:[],
   returns:[], contracts:[], assets:[], eInvoices:[], taxLines:[], batchMaterials:[], productIngredients:[], partnerAccounts:[], partnerEntries:[], journalEntries:[], chartOfAccounts:[], historicalBalances:[], appUsers:[], auditLogs:[], leaveRequests:[], appraisals:[], equipment:[],
-  deviations:[], stabilityStudies:[], supplierRatings:[], warehouses:[], serialNumbers:[], savedReports:[], positions:[], departments:[], salaryStructures:[], taxSettings:[], costCenters:[], capa:[], salesInvoices:[], salesOrders:[], drugRegistrations:[], cycleCountRecords:[], productionStages:[], dispensingRecords:[],
+  deviations:[], stabilityStudies:[], supplierRatings:[], warehouses:[], serialNumbers:[], savedReports:[], shareholders:[], forecastData:[], abcRecords:[], supplierScores:[], positions:[], departments:[], salaryStructures:[], taxSettings:[], costCenters:[], capa:[], salesInvoices:[], salesOrders:[], drugRegistrations:[], cycleCountRecords:[], productionStages:[], dispensingRecords:[],
   billOfMaterials:[], accounts:[],
   _seq:{}
 };
@@ -670,6 +670,8 @@ const navItems=[
   {id:'abcanalysis',icon:'📊',label:'تحليل ABC',sec:'التقارير'},
   {id:'forecasting',icon:'🔮',label:'التنبؤ بالمبيعات',sec:'التقارير'},
   {id:'savedreports',icon:'📋',label:'التقارير المخصصة',sec:'التقارير'},
+  {id:'supplierscorecard',icon:'🏭',label:'تقييم الموردين',sec:'التقارير'},
+  {id:'customreport',icon:'📋',label:'التقارير المخصصة',sec:'التقارير'},
   {id:'productionstages',icon:'🔬',label:'مراحل الإنتاج (Stages)',sec:'الإنتاج'},
   {id:'cmoscorecard',icon:'📊',label:'تقييم المصانع Scorecard',sec:'الإنتاج'},
   {id:'cyclecounting',icon:'📊',label:'الجرد الدوري Cycle Count',sec:'المخزون'},
@@ -9813,28 +9815,6 @@ const REPORTABLE_TABLES = {
   journalEntries:'قيود اليومية', taxLines:'الضرائب', payrollRuns:'مسير الرواتب',
 };
 
-function buildCustomReport(){
-  showModal(modal('📊 إنشاء تقرير مخصص', `
-    ${fg('اسم التقرير *', inp('cr-name','text','','مثال: تقرير مبيعات الشهر'))}
-    ${fg('الجدول / المصدر *', `<select id="cr-table" onchange="loadReportColumns(this.value)">
-      <option value="">اختر جدول...</option>
-      ${Object.entries(REPORTABLE_TABLES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}
-    </select>`)}
-    <div id="cr-columns-wrap" style="margin-top:12px"></div>
-    <div class="form-row" style="margin-top:12px">
-      ${fg('فلترة حقل',inp('cr-filter-field','text','','مثال: status'))}
-      ${fg('= قيمة',inp('cr-filter-val','text','','مثال: active'))}
-    </div>
-    <div class="form-row">
-      ${fg('ترتيب حسب',inp('cr-sort','text','','مثال: name'))}
-      ${fg('الحد الأقصى للسجلات',inp('cr-limit','number',100))}
-    </div>
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="saveCustomReport()">💾 حفظ التقرير</button>
-      <button class="btn btn-white" onclick="previewCustomReport()">👁 معاينة</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>`));
-}
 
 function loadReportColumns(tableName){
   const wrap = document.getElementById('cr-columns-wrap');
@@ -9894,23 +9874,6 @@ function saveCustomReport(){
   closeModal(); go('savedreports');
 }
 
-function runSavedReport(id){
-  const r = getById('savedReports',id);
-  if(!r) return;
-  update('savedReports',id,{lastRun:new Date().toISOString()});
-  let data = getAll(r.tableName||'products');
-  if(r.filterField&&r.filterValue) data=data.filter(row=>String(row[r.filterField]||'').toLowerCase()===r.filterValue.toLowerCase());
-  if(r.sortField) data=data.sort((a,b)=>String(a[r.sortField]||'').localeCompare(String(b[r.sortField]||''),'ar'));
-  data=data.slice(0,r.limit||100);
-  const cols=r.columns?.length?r.columns:Object.keys(data[0]||{}).slice(0,6);
-  setPage('تقرير: '+r.name,`${data.length} سجل من ${REPORTABLE_TABLES[r.tableName]||r.tableName}`,
-    `<div style="display:flex;gap:8px">
-      <button class="btn btn-white" onclick="go('savedreports')">← التقارير</button>
-      <button class="btn btn-green" onclick="exportReportToExcel(${id})">📊 تصدير Excel</button>
-    </div>`,
-    `<div class="card">${tbl(cols, data.map(row=>tr(...cols.map(c=>String(row[c]||'—')))))}</div>`
-  );
-}
 
 function exportReportToExcel(id){
   const r = getById('savedReports',id);
@@ -9927,93 +9890,7 @@ function exportReportToExcel(id){
 
 
 // ── 7. ABC Inventory Analysis ─────────────────────────────────
-PAGES.abcanalysis = function(){
-  const products  = getAll('products');
-  const delivered = getAll('deliveryOrders').filter(d=>d.status==='delivered');
-  const items     = getAll('deliveryItems');
-
-  // Calculate annual consumption value per product
-  const consumption = {};
-  delivered.forEach(order=>{
-    const orderItems = items.filter(i=>i.deliveryOrderId===order.id);
-    orderItems.forEach(item=>{
-      const val = Number(item.quantity||0)*Number(item.unitPrice||0);
-      consumption[item.productId] = (consumption[item.productId]||0)+val;
-    });
-    // Fallback: if no items, use order total divided equally
-    if(!orderItems.length && order.productId){
-      consumption[order.productId]=(consumption[order.productId]||0)+Number(order.totalAmount||0);
-    }
-  });
-
-  // Sort by consumption value descending
-  const ranked = products.map(p=>({
-    ...p, annualValue: consumption[p.id]||0
-  })).sort((a,b)=>b.annualValue-a.annualValue);
-
-  const total = ranked.reduce((s,p)=>s+p.annualValue,0);
-  let cumulative = 0;
-  const classified = ranked.map(p=>{
-    cumulative += p.annualValue;
-    const cumPct = total>0 ? (cumulative/total)*100 : 0;
-    return {...p, cumPct, class: cumPct<=70?'A':cumPct<=90?'B':'C'};
-  });
-
-  const aItems = classified.filter(p=>p.class==='A');
-  const bItems = classified.filter(p=>p.class==='B');
-  const cItems = classified.filter(p=>p.class==='C');
-
-  setPage('تحليل ABC للمخزون','تصنيف المنتجات حسب قيمة الاستهلاك السنوي',
-    `<button class="btn btn-white" onclick="exportABCToExcel()">📊 تصدير Excel</button>`,
-    `<div class="stats-grid g3" style="margin-bottom:16px">
-      <div class="stat-card" style="border-right:4px solid var(--red)">
-        <div class="lbl">🔴 فئة A — الأهم (70% من القيمة)</div>
-        <div class="val text-red">${aItems.length} منتج</div>
-        <div class="sub">${total>0?((aItems.reduce((s,p)=>s+p.annualValue,0)/total)*100).toFixed(1)+'% من القيمة':''}</div>
-      </div>
-      <div class="stat-card" style="border-right:4px solid var(--amber)">
-        <div class="lbl">🟡 فئة B — متوسطة (20% من القيمة)</div>
-        <div class="val text-amber">${bItems.length} منتج</div>
-        <div class="sub">${total>0?((bItems.reduce((s,p)=>s+p.annualValue,0)/total)*100).toFixed(1)+'% من القيمة':''}</div>
-      </div>
-      <div class="stat-card" style="border-right:4px solid var(--green)">
-        <div class="lbl">🟢 فئة C — أقل أهمية (10% من القيمة)</div>
-        <div class="val text-green">${cItems.length} منتج</div>
-        <div class="sub">${total>0?((cItems.reduce((s,p)=>s+p.annualValue,0)/total)*100).toFixed(1)+'% من القيمة':''}</div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-head"><h2>📋 تصنيف المنتجات ABC</h2></div>
-      ${tbl(
-        ['#','المنتج','قيمة الاستهلاك السنوي','% من الإجمالي','% التراكمي','التصنيف'],
-        classified.map((p,i)=>tr(
-          i+1,
-          `<strong>${p.name}</strong>`,
-          fmt(p.annualValue)+' ج.م',
-          total>0?(p.annualValue/total*100).toFixed(1)+'%':'0%',
-          p.cumPct.toFixed(1)+'%',
-          `<span class="badge ${p.class==='A'?'b-red':p.class==='B'?'b-amber':'b-green'} fw7">${p.class}</span>`
-        ))
-      ,'tbl_abcanalysis')}
-    </div>`
-  );
-};
-
-function exportABCToExcel(){
-  if(typeof XLSX==='undefined') return;
-  const products  = getAll('products');
-  const delivered = getAll('deliveryOrders').filter(d=>d.status==='delivered');
-  const consumption={};
-  delivered.forEach(o=>{ if(o.productId) consumption[o.productId]=(consumption[o.productId]||0)+Number(o.totalAmount||0); });
-  const ranked = products.map(p=>({...p,val:consumption[p.id]||0})).sort((a,b)=>b.val-a.val);
-  const total=ranked.reduce((s,p)=>s+p.val,0);
-  let cum=0;
-  const rows=[['المنتج','قيمة الاستهلاك','% من الإجمالي','% التراكمي','التصنيف']];
-  ranked.forEach(p=>{ cum+=p.val; const cp=total>0?(cum/total)*100:0; rows.push([p.name,p.val,(p.val/total*100).toFixed(1)+'%',cp.toFixed(1)+'%',cp<=70?'A':cp<=90?'B':'C']); });
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'ABC Analysis');
-  XLSX.writeFile(wb,'abc_analysis.xlsx');
-}
+;
 
 
 // ── 8. Sales Forecasting ─────────────────────────────────────
@@ -20154,6 +20031,681 @@ PAGES.hr = function(){
     </div>`
   );
 };
+
+// ══════════════════════════════════════════════════════════════════
+// 📊 التقارير والتحليل — Reports & Analytics Module
+// ══════════════════════════════════════════════════════════════════
+
+// ── A. تحليل ABC المحسَّن — مع رسم بياني + تصدير Excel ──────────
+
+PAGES.abcanalysis = function(){
+  const products  = getAll('products')||[];
+  const invs      = getAll('salesInvoices')||[];
+  const materials = getAll('materials')||[];
+  const receipts  = getAll('materialReceipts')||[];
+  const filterType= window._abcFilter||'products';
+
+  // ─── حساب قيمة الاستهلاك السنوي ────────────────────────────
+  let items = [];
+
+  if(filterType === 'products'){
+    // مبيعات المنتجات من الفواتير
+    const salesByProd = {};
+    invs.forEach(inv=>{
+      (inv.lines||[]).forEach(l=>{
+        if(l.productId) salesByProd[l.productId] = (salesByProd[l.productId]||0) + Number(l.lineTotal||l.lineSubtotal||0);
+      });
+    });
+    items = products.map(p=>({
+      id:p.id, name:p.name||'—',
+      value: salesByProd[p.id]||0,
+      unit: p.unit||'وحدة', type:'product'
+    }));
+  } else {
+    // مواد خام: قيمة الصرف للإنتاج
+    const usageByMat = {};
+    (getAll('batchMaterials')||[]).forEach(bm=>{
+      usageByMat[bm.materialId]=(usageByMat[bm.materialId]||0)+Number(bm.totalCost||0);
+    });
+    items = materials.map(m=>({
+      id:m.id, name:m.name||'—',
+      value: usageByMat[m.id]||0,
+      unit: m.unit||'', type:'material'
+    }));
+  }
+
+  // ─── خوارزمية ABC ───────────────────────────────────────────
+  const sorted    = items.filter(i=>i.value>0).sort((a,b)=>b.value-a.value);
+  const totalVal  = sorted.reduce((s,i)=>s+i.value,0);
+  let   cumul     = 0;
+  const classified = sorted.map((item,idx)=>{
+    cumul += item.value;
+    const cumPct = totalVal>0 ? cumul/totalVal : 0;
+    const cat    = cumPct<=0.70 ? 'A' : cumPct<=0.90 ? 'B' : 'C';
+    return {...item, cumPct, pct:item.value/totalVal, cat, rank:idx+1};
+  });
+
+  const aItems = classified.filter(i=>i.cat==='A');
+  const bItems = classified.filter(i=>i.cat==='B');
+  const cItems = classified.filter(i=>i.cat==='C');
+  const aVal   = aItems.reduce((s,i)=>s+i.value,0);
+  const bVal   = bItems.reduce((s,i)=>s+i.value,0);
+  const cVal   = cItems.reduce((s,i)=>s+i.value,0);
+
+  const catColor = {A:'var(--red)',B:'var(--amber)',C:'var(--blue)'};
+  const catDesc  = {
+    A:`فئة A — ${aItems.length} بند (${((aItems.length/sorted.length)||0*100).toFixed(0)}% من البنود) = 70% من القيمة → يحتاج رقابة مشددة`,
+    B:`فئة B — ${bItems.length} بند = 20% من القيمة → رقابة دورية`,
+    C:`فئة C — ${cItems.length} بند = 10% من القيمة → رقابة بسيطة`
+  };
+
+  // ─── رسم بياني Pareto مبسط (SVG) ────────────────────────────
+  const chartW=600, chartH=220, pad=40;
+  const maxV = sorted[0]?.value||1;
+  const barW = Math.max(2, (chartW-pad*2) / Math.max(sorted.length,1));
+
+  const bars = classified.slice(0,40).map((item,i)=>{
+    const x = pad + i*barW;
+    const h = ((item.value/maxV)*(chartH-pad-10));
+    const y = chartH-pad-h;
+    const color = item.cat==='A'?'#e74c3c':item.cat==='B'?'#f39c12':'#3498db';
+    return `<rect x="${x}" y="${y}" width="${Math.max(1,barW-1)}" height="${h}" fill="${color}" opacity="0.8">
+      <title>${escapeHtml(item.name)}: ${fmtC(item.value)} (${(item.pct*100).toFixed(1)}%)</title>
+    </rect>`;
+  }).join('');
+
+  // خط Pareto التراكمي
+  let cp = 0;
+  const linePoints = classified.slice(0,40).map((item,i)=>{
+    cp += item.pct;
+    const x = pad + i*barW + barW/2;
+    const y = chartH-pad - cp*(chartH-pad-10);
+    return `${x},${y}`;
+  }).join(' ');
+
+  const paretoChart = `<svg width="${chartW}" height="${chartH}" style="width:100%;max-width:${chartW}px">
+    <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${chartH-pad}" stroke="var(--border)" stroke-width="1"/>
+    <line x1="${pad}" y1="${chartH-pad}" x2="${chartW-pad}" y2="${chartH-pad}" stroke="var(--border)" stroke-width="1"/>
+    ${[0,25,50,75,100].map(v=>{
+      const y=chartH-pad-(v/100)*(chartH-pad-10);
+      return `<line x1="${pad-4}" y1="${y}" x2="${chartW-pad}" y2="${y}" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="3"/>
+        <text x="${pad-6}" y="${y+4}" text-anchor="end" font-size="9" fill="var(--muted)">${v}%</text>`;
+    }).join('')}
+    <text x="10" y="${chartH/2}" transform="rotate(-90,10,${chartH/2})" text-anchor="middle" font-size="9" fill="var(--muted)">القيمة</text>
+    ${bars}
+    <polyline points="${linePoints}" fill="none" stroke="#2ecc71" stroke-width="2"/>
+    <!-- خطوط A/B 70%/90% -->
+    <line x1="${pad + Math.floor(aItems.length*barW)}" y1="${pad}" x2="${pad + Math.floor(aItems.length*barW)}" y2="${chartH-pad}" stroke="#e74c3c" stroke-width="1.5" stroke-dasharray="4"/>
+    <line x1="${pad + Math.floor((aItems.length+bItems.length)*barW)}" y1="${pad}" x2="${pad + Math.floor((aItems.length+bItems.length)*barW)}" y2="${chartH-pad}" stroke="#f39c12" stroke-width="1.5" stroke-dasharray="4"/>
+    <text x="${pad+Math.floor(aItems.length*barW/2)}" y="${pad+8}" text-anchor="middle" font-size="11" fill="#e74c3c" font-weight="bold">A</text>
+    <text x="${pad+Math.floor((aItems.length+aItems.length/2+bItems.length/2)*barW)}" y="${pad+8}" text-anchor="middle" font-size="11" fill="#f39c12" font-weight="bold">B</text>
+    <text x="${chartW-pad-10}" y="${pad+8}" text-anchor="middle" font-size="11" fill="#3498db" font-weight="bold">C</text>
+  </svg>`;
+
+  setPage('📊 تحليل ABC للمخزون','Pareto Analysis — قاعدة 70-90-100%',
+    `<div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn ${filterType==='products'?'btn-green':'btn-white'}" onclick="window._abcFilter='products';go('abcanalysis')">💊 المنتجات</button>
+      <button class="btn ${filterType==='materials'?'btn-green':'btn-white'}" onclick="window._abcFilter='materials';go('abcanalysis')">🧪 المواد الخام</button>
+      <button class="btn btn-white" onclick="exportABCToExcel()">📊 تصدير Excel</button>
+    </div>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي البنود</div><div class="val">${sorted.length}</div></div>
+      <div class="stat-card"><div class="lbl text-red">فئة A — 70% القيمة</div><div class="val text-red">${aItems.length} بند | ${fmtC(aVal)}</div></div>
+      <div class="stat-card"><div class="lbl text-amber">فئة B — 20% القيمة</div><div class="val text-amber">${bItems.length} بند | ${fmtC(bVal)}</div></div>
+      <div class="stat-card"><div class="lbl text-blue">فئة C — 10% القيمة</div><div class="val text-blue">${cItems.length} بند | ${fmtC(cVal)}</div></div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:10px">📈 مخطط Pareto — أعلى 40 بنداً</div>
+      <div style="overflow-x:auto">${paretoChart}</div>
+      <div style="display:flex;gap:12px;font-size:11px;margin-top:6px">
+        <span><span style="display:inline-block;width:12px;height:12px;background:#e74c3c;border-radius:2px;margin-left:4px"></span>A</span>
+        <span><span style="display:inline-block;width:12px;height:12px;background:#f39c12;border-radius:2px;margin-left:4px"></span>B</span>
+        <span><span style="display:inline-block;width:12px;height:12px;background:#3498db;border-radius:2px;margin-left:4px"></span>C</span>
+        <span><span style="display:inline-block;width:16px;height:2px;background:#2ecc71;margin-left:4px;vertical-align:middle"></span>تراكمي %</span>
+      </div>
+    </div>
+
+    <div class="card">
+      ${tbl(
+        ['رتبة','البند','الفئة','القيمة السنوية','% من الكل','% تراكمي','إجراء'],
+        classified.map(item=>tr(
+          item.rank,
+          escapeHtml(item.name),
+          `<span class="badge" style="background:${item.cat==='A'?'rgba(231,76,60,.15)':item.cat==='B'?'rgba(243,156,18,.15)':'rgba(52,152,219,.15)'};color:${catColor[item.cat]};font-weight:700;font-size:13px">${item.cat}</span>`,
+          fmtC(item.value),
+          `${(item.pct*100).toFixed(1)}%`,
+          `<div style="display:flex;align-items:center;gap:6px">
+            <div style="width:60px;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:${Math.min(100,item.cumPct*100).toFixed(0)}%;background:${catColor[item.cat]};border-radius:3px"></div>
+            </div>
+            ${(item.cumPct*100).toFixed(1)}%
+          </div>`,
+          item.cat==='A'
+            ? '<span style="font-size:10px;color:var(--red)">🔴 رقابة مشددة</span>'
+            : item.cat==='B'
+            ? '<span style="font-size:10px;color:var(--amber)">🟡 رقابة دورية</span>'
+            : '<span style="font-size:10px;color:var(--blue)">🔵 رقابة بسيطة</span>'
+        ))
+      ,'tbl_abc')}
+    </div>`
+  );
+};
+
+function exportABCToExcel(){
+  if(typeof XLSX==='undefined'){alert('مكتبة Excel تحمّل، حاول مرة أخرى');return;}
+  const filterType = window._abcFilter||'products';
+  const items_raw  = filterType==='products' ? getAll('products') : getAll('materials');
+  const invs       = getAll('salesInvoices')||[];
+  const salesByProd= {};
+  invs.forEach(inv=>(inv.lines||[]).forEach(l=>{ if(l.productId) salesByProd[l.productId]=(salesByProd[l.productId]||0)+Number(l.lineTotal||0); }));
+  const usageByMat = {};
+  (getAll('batchMaterials')||[]).forEach(bm=>{ usageByMat[bm.materialId]=(usageByMat[bm.materialId]||0)+Number(bm.totalCost||0); });
+
+  const sorted = items_raw.map(i=>({
+    name:i.name, value: filterType==='products'?salesByProd[i.id]||0:usageByMat[i.id]||0
+  })).filter(i=>i.value>0).sort((a,b)=>b.value-a.value);
+
+  const total=sorted.reduce((s,i)=>s+i.value,0);
+  let cumul=0;
+  const rows = sorted.map((item,idx)=>{
+    cumul+=item.value;
+    const pct=total>0?item.value/total:0;
+    const cumPct=total>0?cumul/total:0;
+    const cat=cumPct<=0.70?'A':cumPct<=0.90?'B':'C';
+    return [idx+1,item.name,cat,(item.value).toFixed(2),(pct*100).toFixed(2),(cumPct*100).toFixed(2)];
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['تحليل ABC — '+today(),'','','','',''],
+    ['الرتبة','البند','الفئة','القيمة','% من الكل','% تراكمي'],
+    ...rows
+  ]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'تحليل ABC');
+  XLSX.writeFile(wb,'ABC-Analysis-'+today()+'.xlsx');
+  showNotif&&showNotif('✅ تم تصدير تحليل ABC','success');
+}
+
+// ── B. Supplier Scorecard A/B/C/D ────────────────────────────────
+
+PAGES.supplierscorecard = function(){
+  const suppliers  = [...new Set([
+    ...(getAll('materialReceipts')||[]).map(r=>r.supplier).filter(Boolean),
+    ...(getAll('purchaseOrders')||[]).map(p=>p.supplier||p.supplierName).filter(Boolean),
+  ])];
+  const receipts   = getAll('materialReceipts')||[];
+  const pos        = getAll('purchaseOrders')||[];
+  const qcChecks   = getAll('qualityChecks')||[];
+  const savedScores= getAll('supplierScores')||[];
+
+  const scores = suppliers.map(sup=>{
+    const supPOs     = pos.filter(p=>p.supplier===sup||p.supplierName===sup);
+    const supRcpts   = receipts.filter(r=>r.supplier===sup);
+    const totalPOs   = supPOs.length;
+    const onTime     = supPOs.filter(p=>p.deliveredDate && p.orderDate && p.deliveredDate<=p.expectedDate).length;
+    const totalValue = supPOs.reduce((s,p)=>s+Number(p.totalAmount||p.totalCost||0),0);
+    const rejected   = supRcpts.filter(r=>r.status==='rejected').length;
+    const totalRcpts = supRcpts.length;
+    const passRate   = totalRcpts>0 ? (totalRcpts-rejected)/totalRcpts*100 : 100;
+    const onTimeRate = totalPOs>0 ? onTime/totalPOs*100 : 0;
+    const overdue    = supPOs.filter(p=>p.status==='overdue').length;
+
+    // Manual scores
+    const manual = savedScores.find(s=>s.supplier===sup)||{};
+
+    const qualityScore  = Number(manual.qualityScore ?? Math.min(100,passRate));
+    const deliveryScore = Number(manual.deliveryScore?? Math.min(100,onTimeRate||50));
+    const priceScore    = Number(manual.priceScore   ?? 70);
+    const commScore     = Number(manual.commScore    ?? 70);
+    const docScore      = Number(manual.docScore     ?? 70);
+
+    const overall = (qualityScore*0.35 + deliveryScore*0.30 + priceScore*0.20 + commScore*0.10 + docScore*0.05);
+    const grade   = overall>=85?'A':overall>=70?'B':overall>=55?'C':'D';
+
+    return {
+      supplier:sup, totalPOs, totalValue, passRate, onTimeRate, overdue,
+      qualityScore, deliveryScore, priceScore, commScore, docScore,
+      overall, grade, manual
+    };
+  }).sort((a,b)=>b.overall-a.overall);
+
+  const gradeCount = {A:0,B:0,C:0,D:0};
+  scores.forEach(s=>gradeCount[s.grade]=(gradeCount[s.grade]||0)+1);
+
+  setPage('🏭 تقييم الموردين — Supplier Scorecard',
+    'Vendor Performance Rating A/B/C/D',
+    `<button class="btn btn-green" onclick="addManualSupplierScore()">+ تحديث تقييم يدوي</button>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl text-green">مورد ممتاز A (≥85)</div><div class="val text-green">${gradeCount.A||0}</div></div>
+      <div class="stat-card"><div class="lbl text-blue">جيد B (70-84)</div><div class="val text-blue">${gradeCount.B||0}</div></div>
+      <div class="stat-card"><div class="lbl text-amber">مقبول C (55-69)</div><div class="val text-amber">${gradeCount.C||0}</div></div>
+      <div class="stat-card"><div class="lbl text-red">ضعيف D (<55)</div><div class="val text-red">${gradeCount.D||0}</div></div>
+    </div>
+
+    <div style="padding:10px;background:var(--hover);border-radius:8px;margin-bottom:12px;font-size:11px;color:var(--muted)">
+      📊 معايير التقييم: جودة 35% | توريد في الوقت 30% | السعر 20% | التواصل 10% | الوثائق 5%
+    </div>
+
+    <div class="card">${tbl(
+      ['المورد','التقييم الكلي','جودة 35%','توريد 30%','سعر 20%','تواصل 10%','وثائق 5%','أوامر','قيمة الشراء','تحديث'],
+      scores.map(s=>{
+        const gc = s.grade==='A'?'b-green':s.grade==='B'?'b-blue':s.grade==='C'?'b-amber':'b-red';
+        const bar=(v)=>`<div style="display:flex;align-items:center;gap:4px">
+          <div style="width:40px;height:5px;background:var(--border);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${Math.min(100,v)}%;background:${v>=85?'var(--green)':v>=70?'var(--blue)':v>=55?'var(--amber)':'var(--red)'};border-radius:3px"></div>
+          </div>
+          <span style="font-size:11px">${v.toFixed(0)}</span>
+        </div>`;
+        return tr(
+          escapeHtml(s.supplier),
+          `<div style="text-align:center">
+            <div style="font-size:18px;font-weight:900;color:${s.grade==='A'?'var(--green-light)':s.grade==='B'?'var(--blue)':s.grade==='C'?'var(--amber)':'var(--red)'}">${s.grade}</div>
+            <div style="font-size:11px">${s.overall.toFixed(1)}</div>
+          </div>`,
+          bar(s.qualityScore), bar(s.deliveryScore), bar(s.priceScore), bar(s.commScore), bar(s.docScore),
+          s.totalPOs,
+          fmtC(s.totalValue),
+          `<button class="btn btn-white btn-sm" style="font-size:10px" onclick="editSupplierScore('${escapeHtml(s.supplier)}')">✏️ تعديل</button>`
+        );
+      })
+    ,'tbl_sup_score')}</div>`
+  );
+};
+
+function addManualSupplierScore(){ editSupplierScore(''); }
+function editSupplierScore(sup){
+  const suppliers = [...new Set([
+    ...(getAll('materialReceipts')||[]).map(r=>r.supplier).filter(Boolean),
+    ...(getAll('purchaseOrders')||[]).map(p=>p.supplier||p.supplierName).filter(Boolean),
+  ])];
+  const saved = (getAll('supplierScores')||[]).find(s=>s.supplier===sup)||{};
+  const scoreField=(id,label,val,weight)=>`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <label style="font-size:12px;width:160px">${label} <span style="color:var(--muted)">(${weight}%)</span></label>
+      <input type="number" id="${id}" value="${val||70}" min="0" max="100"
+        oninput="calcSupScore()"
+        style="width:70px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:14px;font-weight:700;color:var(--text)">
+      <div id="${id}-bar" style="flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+        <div id="${id}-fill" style="height:100%;width:${val||70}%;background:var(--green);border-radius:4px"></div>
+      </div>
+    </div>`;
+
+  showModal(modal('🏭 تقييم مورد',`
+    ${fg('اسم المورد *', `<select id="sc-sup" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+      ${suppliers.map(s=>`<option ${s===sup?'selected':''}>${escapeHtml(s)}</option>`).join('')}
+    </select>`)}
+    <div style="margin:12px 0;padding:10px;background:var(--hover);border-radius:8px">
+      ${scoreField('sc-quality','جودة المنتجات',saved.qualityScore,35)}
+      ${scoreField('sc-delivery','الالتزام بالمواعيد',saved.deliveryScore,30)}
+      ${scoreField('sc-price','تنافسية الأسعار',saved.priceScore,20)}
+      ${scoreField('sc-comm','التواصل والاستجابة',saved.commScore,10)}
+      ${scoreField('sc-doc','الوثائق والشهادات',saved.docScore,5)}
+    </div>
+    <div id="sc-total" style="padding:10px;background:rgba(46,160,67,.08);border-radius:8px;text-align:center;font-size:16px;font-weight:700">
+      التقييم الكلي: — / 100
+    </div>
+    ${fg('ملاحظات', `<textarea id="sc-notes" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:12px;color:var(--text);font-family:Cairo,sans-serif">${escapeHtml(saved.notes||'')}</textarea>`)}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveSupplierScore()">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+  setTimeout(()=>calcSupScore(),100);
+}
+
+function calcSupScore(){
+  const q=Number(document.getElementById('sc-quality')?.value||0);
+  const d=Number(document.getElementById('sc-delivery')?.value||0);
+  const p=Number(document.getElementById('sc-price')?.value||0);
+  const c=Number(document.getElementById('sc-comm')?.value||0);
+  const doc=Number(document.getElementById('sc-doc')?.value||0);
+  const total=q*0.35+d*0.30+p*0.20+c*0.10+doc*0.05;
+  const grade=total>=85?'A':total>=70?'B':total>=55?'C':'D';
+  const el=document.getElementById('sc-total');
+  if(el) el.innerHTML=`التقييم الكلي: <span style="color:${grade==='A'?'var(--green-light)':grade==='B'?'var(--blue)':grade==='C'?'var(--amber)':'var(--red)'}">${total.toFixed(1)} / 100 — ${grade}</span>`;
+  ['quality','delivery','price','comm','doc'].forEach((k,i)=>{
+    const v=[q,d,p,c,doc][i];
+    const fill=document.getElementById('sc-'+k+'-fill');
+    if(fill){fill.style.width=v+'%';fill.style.background=v>=85?'var(--green)':v>=70?'var(--blue)':v>=55?'var(--amber)':'var(--red)';}
+  });
+}
+
+function saveSupplierScore(){
+  const sup=document.getElementById('sc-sup')?.value;
+  if(!sup){alert('اختر المورد');return;}
+  const d={
+    supplier:sup,
+    qualityScore:Number(document.getElementById('sc-quality')?.value||70),
+    deliveryScore:Number(document.getElementById('sc-delivery')?.value||70),
+    priceScore:Number(document.getElementById('sc-price')?.value||70),
+    commScore:Number(document.getElementById('sc-comm')?.value||70),
+    docScore:Number(document.getElementById('sc-doc')?.value||70),
+    notes:document.getElementById('sc-notes')?.value||null,
+    updatedAt:today(), updatedBy:_authUser?.name||'—'
+  };
+  const existing=(getAll('supplierScores')||[]).find(s=>s.supplier===sup);
+  existing?update('supplierScores',existing.id,d):insert('supplierScores',d);
+  closeModal(); go('supplierscorecard');
+}
+
+// ── C. الدعاية والمبيعات — Marketing & Campaigns ─────────────────
+
+PAGES.marketing = function(){
+  const campaigns  = getAll('campaigns')||[];
+  const invs       = getAll('salesInvoices')||[];
+  const now        = new Date();
+
+  const activeCamp = campaigns.filter(c=>c.status==='active');
+  const totalBudget= campaigns.reduce((s,c)=>s+Number(c.budget||0),0);
+  const totalSpent = campaigns.reduce((s,c)=>s+Number(c.spent||0),0);
+  const totalRevCamp=campaigns.reduce((s,c)=>s+Number(c.revenueGenerated||0),0);
+  const totalROI   = totalSpent>0 ? ((totalRevCamp-totalSpent)/totalSpent*100) : 0;
+
+  setPage('📢 الدعاية والمبيعات — Marketing',
+    'إدارة الحملات التسويقية وقياس ROI',
+    `<button class="btn btn-green" onclick="addCampaign()">+ حملة جديدة</button>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">حملات نشطة</div><div class="val text-green">${activeCamp.length}</div></div>
+      <div class="stat-card"><div class="lbl">إجمالي الميزانية</div><div class="val">${fmtC(totalBudget)}</div></div>
+      <div class="stat-card"><div class="lbl">إجمالي المنفق</div><div class="val text-amber">${fmtC(totalSpent)}</div></div>
+      <div class="stat-card"><div class="lbl ${totalROI>=0?'text-green':'text-red'}">متوسط ROI</div><div class="val ${totalROI>=0?'text-green':'text-red'}">${totalROI.toFixed(1)}%</div></div>
+    </div>
+    <div class="card">${tbl(
+      ['الحملة','النوع','القناة','من','حتى','الميزانية','المنفق','الإيراد المحقق','ROI','الحالة','إجراء'],
+      campaigns.sort((a,b)=>b.id-a.id).map(c=>{
+        const roi = Number(c.spent||0)>0 ? ((Number(c.revenueGenerated||0)-Number(c.spent||0))/Number(c.spent||0)*100) : 0;
+        const over= Number(c.spent||0)>Number(c.budget||0);
+        return tr(
+          `<strong>${escapeHtml(c.name||'—')}</strong>`,
+          escapeHtml(c.type||'—'),
+          escapeHtml(c.channel||'—'),
+          c.startDate||'—', c.endDate||'—',
+          fmtC(c.budget||0),
+          `<span style="color:${over?'var(--red)':'inherit'}">${fmtC(c.spent||0)}${over?' ⚠️':''}</span>`,
+          fmtC(c.revenueGenerated||0),
+          `<span style="color:${roi>=100?'var(--green-light)':roi>=0?'var(--amber)':'var(--red)'}">${roi.toFixed(1)}%</span>`,
+          `<span class="badge ${c.status==='active'?'b-green':c.status==='completed'?'b-blue':'b-gray'}">${c.status==='active'?'نشطة':c.status==='completed'?'منتهية':'مجدولة'}</span>`,
+          `<div class="action-bar" style="gap:3px">
+            <button class="btn btn-white btn-sm" style="font-size:10px" onclick="updateCampaignROI(${c.id})">تحديث</button>
+            <button class="icon-btn edit" onclick="editCampaign(${c.id})">${ic.edit}</button>
+            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('campaigns',${c.id});go('marketing')}">${ic.del}</button>
+          </div>`
+        );
+      })
+    ,'tbl_camp')}</div>`
+  );
+};
+
+function addCampaign(){ showCampaignForm(); }
+function editCampaign(id){ showCampaignForm(getById('campaigns',id)||{}); }
+
+function showCampaignForm(c={}){
+  showModal(modal(c.id?'تعديل حملة':'📢 حملة تسويقية جديدة',`
+    ${fg('اسم الحملة *', inp('c-name','text',c.name||'',''))}
+    <div class="form-row">
+      ${fg('نوع الحملة', `<select id="c-type" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        ${['ترويج منتج','إطلاق منتج جديد','زيادة التوزيع','تقديم للأطباء','معرض صيدلي','تسويق رقمي','تسويق ميداني','علاقات عامة'].map(t=>`<option ${t===c.type?'selected':''}>${t}</option>`).join('')}
+      </select>`)}
+      ${fg('القناة', `<select id="c-channel" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        ${['مندوبين مبيعات','سوشيال ميديا','طباعة وتوزيع','بريد إلكتروني','تلفزيون/راديو','معارض','مستشفيات','صيدليات'].map(t=>`<option ${t===c.channel?'selected':''}>${t}</option>`).join('')}
+      </select>`)}
+    </div>
+    <div class="form-row">
+      ${fg('تاريخ البداية', inp('c-start','date',c.startDate||today()))}
+      ${fg('تاريخ الانتهاء', inp('c-end','date',c.endDate||''))}
+    </div>
+    <div class="form-row">
+      ${fg('الميزانية المخططة (ج.م)', inp('c-budget','number',c.budget||'',''))}
+      ${fg('المبلغ المنفق فعلياً (ج.م)', inp('c-spent','number',c.spent||0,''))}
+    </div>
+    <div class="form-row">
+      ${fg('الإيراد المحقق من الحملة (ج.م)', inp('c-revenue','number',c.revenueGenerated||0,''))}
+      ${fg('الحالة', `<select id="c-status" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        <option value="scheduled" ${(c.status||'scheduled')==='scheduled'?'selected':''}>مجدولة</option>
+        <option value="active" ${c.status==='active'?'selected':''}>نشطة</option>
+        <option value="completed" ${c.status==='completed'?'selected':''}>منتهية</option>
+        <option value="cancelled" ${c.status==='cancelled'?'selected':''}>ملغاة</option>
+      </select>`)}
+    </div>
+    ${fg('أهداف الحملة / ملاحظات', `<textarea id="c-notes" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:12px;color:var(--text);font-family:Cairo,sans-serif">${escapeHtml(c.objectives||c.notes||'')}</textarea>`)}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveCampaign(${c.id||''})">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+function saveCampaign(id){
+  const name=val('c-name');
+  if(!name)return alert('اسم الحملة إلزامي');
+  const d={
+    name, type:document.getElementById('c-type')?.value||'ترويج منتج',
+    channel:document.getElementById('c-channel')?.value||'—',
+    startDate:document.getElementById('c-start')?.value||today(),
+    endDate:document.getElementById('c-end')?.value||null,
+    budget:numVal('c-budget')||0, spent:numVal('c-spent')||0,
+    revenueGenerated:numVal('c-revenue')||0,
+    status:document.getElementById('c-status')?.value||'scheduled',
+    objectives:document.getElementById('c-notes')?.value||null,
+    updatedAt:today(),
+  };
+  id?update('campaigns',id,d):insert('campaigns',d);
+  closeModal(); go('marketing');
+}
+
+function updateCampaignROI(id){
+  const c=getById('campaigns',id); if(!c) return;
+  const spent=prompt('المبلغ المنفق فعلياً (ج.م):',c.spent||0);
+  const rev  =prompt('الإيراد المحقق من الحملة (ج.م):',c.revenueGenerated||0);
+  if(spent===null||rev===null) return;
+  update('campaigns',id,{spent:Number(spent)||0,revenueGenerated:Number(rev)||0,updatedAt:today()});
+  go('marketing');
+}
+
+// ── D. بناء التقرير المخصص ────────────────────────────────────────
+
+PAGES.customreport = function(){
+  const saved = getAll('savedReports')||[];
+  setPage('📋 التقارير المخصصة','Custom Report Builder — بناء وحفظ أي تقرير',
+    `<button class="btn btn-green" onclick="buildCustomReport()">+ تقرير جديد</button>`,
+    `<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
+
+    <!-- قوالب جاهزة -->
+    <div class="card">
+      <div style="font-weight:700;font-size:13px;margin-bottom:12px">📄 قوالب جاهزة</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${[
+          {id:'top_products',   icon:'💊',  label:'أعلى 10 منتجات مبيعاً',    fn:'runTopProductsReport'},
+          {id:'low_stock',      icon:'⚠️',  label:'المنتجات قليلة المخزون',   fn:'runLowStockReport'},
+          {id:'overdue_inv',    icon:'💳',  label:'الفواتير المتأخرة',         fn:'runOverdueInvoicesReport'},
+          {id:'exp_drugs',      icon:'📅',  label:'الأدوية قاربت الانتهاء',    fn:'runExpiringReport'},
+          {id:'monthly_pl',     icon:'📊',  label:'ملخص الدخل الشهري',        fn:'runMonthlyPLReport'},
+          {id:'gmp_expiry',     icon:'🏛️',  label:'موظفون تنتهي شهاداتهم',   fn:'runGMPExpiryReport'},
+          {id:'distributor_bal',icon:'🤝',  label:'أرصدة الموزعين',           fn:'runDistributorBalReport'},
+          {id:'prod_efficiency',icon:'🏭',  label:'كفاءة الإنتاج',            fn:'runProdEfficiencyReport'},
+        ].map(t=>`<button class="btn btn-white" style="text-align:right;justify-content:flex-start;gap:8px" onclick="${t.fn}()">
+          ${t.icon} ${t.label}
+        </button>`).join('')}
+      </div>
+    </div>
+
+    <!-- التقارير المحفوظة -->
+    <div class="card">
+      <div style="font-weight:700;font-size:13px;margin-bottom:12px">💾 تقاريري المحفوظة (${saved.length})</div>
+      ${saved.length ? `<div style="display:flex;flex-direction:column;gap:6px">
+        ${saved.slice(0,8).map(r=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--hover);border-radius:6px">
+          <div>
+            <div style="font-size:12px;font-weight:700">${escapeHtml(r.name||'—')}</div>
+            <div style="font-size:10px;color:var(--muted)">${r.createdAt?.slice(0,10)||'—'}</div>
+          </div>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-white btn-sm" style="font-size:10px" onclick="runSavedReport(${r.id})">▶ تشغيل</button>
+            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('savedReports',${r.id});go('customreport')}">${ic.del}</button>
+          </div>
+        </div>`).join('')}
+      </div>` : `<div style="color:var(--muted);font-size:12px;padding:20px;text-align:center">لا توجد تقارير محفوظة بعد</div>`}
+    </div>
+    </div>
+
+    <!-- نتيجة التقرير -->
+    <div id="custom-report-result"></div>`
+  );
+};
+
+function buildCustomReport(){
+  showModal(modal('📋 بناء تقرير مخصص',`
+    ${fg('اسم التقرير *', inp('cr-name','text','',''))}
+    <div class="form-row">
+      ${fg('مصدر البيانات', `<select id="cr-source" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        <option value="salesInvoices">فواتير المبيعات</option>
+        <option value="deliveryOrders">أوامر التوزيع</option>
+        <option value="products">المنتجات</option>
+        <option value="employees">الموظفون</option>
+        <option value="materialReceipts">استلام المواد</option>
+        <option value="productionOrders">أوامر الإنتاج</option>
+        <option value="expenses">المصروفات</option>
+        <option value="journalEntries">قيود اليومية</option>
+      </select>`)}
+      ${fg('تصفية (حقل)', `<select id="cr-filter-field" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        <option value="">بدون فلتر</option>
+        <option value="status">الحالة</option>
+        <option value="invoiceDate">التاريخ (من)</option>
+        <option value="department">القسم</option>
+      </select>`)}
+    </div>
+    <div class="form-row">
+      ${fg('قيمة الفلتر', inp('cr-filter-val','text','',''))}
+      ${fg('ترتيب حسب', `<select id="cr-sort" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        <option value="id">رقم السجل</option>
+        <option value="totalAmount">القيمة (تنازلي)</option>
+        <option value="createdAt">تاريخ الإنشاء</option>
+      </select>`)}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="runAndSaveCustomReport()">▶ تشغيل وحفظ</button>
+      <button class="btn btn-white" onclick="runCustomReportPreview()">👁️ معاينة فقط</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+function runCustomReportPreview(){
+  const source = document.getElementById('cr-source')?.value||'salesInvoices';
+  const filterField = document.getElementById('cr-filter-field')?.value;
+  const filterVal   = document.getElementById('cr-filter-val')?.value;
+  const sortBy      = document.getElementById('cr-sort')?.value||'id';
+  let data = getAll(source)||[];
+  if(filterField && filterVal) data = data.filter(r=>String(r[filterField]||'').toLowerCase().includes(filterVal.toLowerCase()));
+  data = data.sort((a,b)=>sortBy==='totalAmount'?Number(b.totalAmount||0)-Number(a.totalAmount||0):b.id-a.id).slice(0,50);
+  const fields = data.length ? Object.keys(data[0]).filter(k=>!['lines','dosageFormData'].includes(k)).slice(0,8) : [];
+  const resultDiv = document.getElementById('custom-report-result');
+  if(resultDiv){
+    resultDiv.innerHTML = `<div class="card"><div style="font-size:12px;font-weight:700;margin-bottom:10px">نتائج (${data.length} سجل من ${source})</div>
+      ${tbl(fields,data.map(r=>tr(...fields.map(f=>escapeHtml(String(r[f]||'—').slice(0,30))))),'tbl_cr_preview')}
+    </div>`;
+  }
+  closeModal();
+}
+
+function runAndSaveCustomReport(){
+  const name = val('cr-name');
+  if(!name){alert('اسم التقرير إلزامي');return;}
+  const config = {
+    name, source:document.getElementById('cr-source')?.value,
+    filterField:document.getElementById('cr-filter-field')?.value,
+    filterVal:document.getElementById('cr-filter-val')?.value,
+    sortBy:document.getElementById('cr-sort')?.value,
+    createdAt:new Date().toISOString(),
+  };
+  insert('savedReports', config);
+  runCustomReportPreview();
+  showNotif&&showNotif('✅ تم حفظ التقرير: '+name,'success');
+}
+
+function runSavedReport(id){
+  const r = getById('savedReports',id); if(!r) return;
+  let data = getAll(r.source)||[];
+  if(r.filterField && r.filterVal) data = data.filter(row=>String(row[r.filterField]||'').toLowerCase().includes(r.filterVal.toLowerCase()));
+  data = data.sort((a,b)=>r.sortBy==='totalAmount'?Number(b.totalAmount||0)-Number(a.totalAmount||0):b.id-a.id).slice(0,100);
+  const fields = data.length ? Object.keys(data[0]).filter(k=>!['lines','dosageFormData'].includes(k)).slice(0,8) : [];
+  const resultDiv = document.getElementById('custom-report-result');
+  if(resultDiv){
+    resultDiv.innerHTML = `<div class="card"><div style="font-size:12px;font-weight:700;margin-bottom:10px">${escapeHtml(r.name)} — ${data.length} سجل
+      <button class="btn btn-white btn-sm" style="float:left;font-size:10px" onclick="exportCustomReportExcel(${id})">📊 Excel</button>
+    </div>
+    ${tbl(fields,data.map(row=>tr(...fields.map(f=>escapeHtml(String(row[f]||'—').slice(0,30))))),'tbl_sr')}
+    </div>`;
+  }
+}
+
+function exportCustomReportExcel(id){
+  if(typeof XLSX==='undefined'){alert('مكتبة Excel تحمّل');return;}
+  const r=getById('savedReports',id); if(!r) return;
+  let data=getAll(r.source)||[];
+  if(r.filterField&&r.filterVal) data=data.filter(row=>String(row[r.filterField]||'').includes(r.filterVal));
+  data=data.sort((a,b)=>r.sortBy==='totalAmount'?Number(b.totalAmount||0)-Number(a.totalAmount||0):b.id-a.id).slice(0,500);
+  if(!data.length){alert('لا بيانات');return;}
+  const fields=Object.keys(data[0]).filter(k=>!['lines','dosageFormData'].includes(k));
+  const ws=XLSX.utils.aoa_to_sheet([[r.name,today(),'',''],[''],fields,...data.map(row=>fields.map(f=>row[f]??''))]);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,r.name.slice(0,30));
+  XLSX.writeFile(wb,'Report-'+today()+'.xlsx');
+}
+
+// ── تقارير القوالب الجاهزة ────────────────────────────────────────
+function _showReportResult(title, html){
+  const el=document.getElementById('custom-report-result');
+  if(el) el.innerHTML=`<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:10px">${title}</div>${html}</div>`;
+  else showModal(modal(title,`<div style="max-height:70vh;overflow-y:auto">${html}</div>`));
+}
+
+function runTopProductsReport(){
+  const invs=getAll('salesInvoices')||[];
+  const salesByProd={};
+  invs.forEach(inv=>(inv.lines||[]).forEach(l=>{if(l.productId)salesByProd[l.productId]=(salesByProd[l.productId]||0)+Number(l.lineTotal||0);}));
+  const prods=getAll('products')||[];
+  const top=prods.map(p=>({name:p.name,val:salesByProd[p.id]||0})).sort((a,b)=>b.val-a.val).slice(0,10);
+  _showReportResult('💊 أعلى 10 منتجات مبيعاً',tbl(['المنتج','الإيراد'],top.map(p=>tr(escapeHtml(p.name),fmtC(p.val))),'tbl_top'));
+}
+function runLowStockReport(){
+  const mats=getAll('materials')||[];
+  const low=mats.filter(m=>Number(m.currentStock||0)<Number(m.minimumStock||10));
+  _showReportResult('⚠️ مواد قليلة المخزون',tbl(['المادة','الرصيد','الحد الأدنى'],low.map(m=>tr(escapeHtml(m.name||'—'),fmtN(m.currentStock||0),fmtN(m.minimumStock||10))),'tbl_low'));
+}
+function runOverdueInvoicesReport(){
+  const invs=(getAll('salesInvoices')||[]).filter(i=>i.paymentStatus==='unpaid'&&i.dueDate&&new Date(i.dueDate)<new Date());
+  _showReportResult('💳 الفواتير المتأخرة',tbl(['الفاتورة','العميل','الإجمالي','تاريخ الاستحقاق'],invs.sort((a,b)=>a.dueDate>b.dueDate?1:-1).map(i=>tr(`INV-${i.id}`,escapeHtml(i.customerName||'—'),fmtC(i.totalAmount||0),i.dueDate)),'tbl_ov'));
+}
+function runExpiringReport(){
+  const inv=getAll('materialReceipts')||[];
+  const soon=inv.filter(r=>{const d=Math.floor((new Date(r.expiryDate||r.retestDate||'9999')-new Date())/86400000);return d>=0&&d<=180;}).sort((a,b)=>a.expiryDate>b.expiryDate?1:-1);
+  _showReportResult('📅 الأدوية قاربت الانتهاء',tbl(['المادة','رقم الدفعة','الانتهاء','المتبقي','الكمية'],soon.map(r=>{const d=Math.floor((new Date(r.expiryDate||r.retestDate)-new Date())/86400000);return tr(escapeHtml(r.materialName||r.materialId||'—'),escapeHtml(r.batchNumber||'—'),r.expiryDate||'—',`<span style="color:${d<30?'var(--red)':d<90?'var(--amber)':'inherit'}">${d} يوم</span>`,fmtN(r.remainingQuantity||0));}),'tbl_exp'));
+}
+function runMonthlyPLReport(){
+  const invs=getAll('salesInvoices')||[];
+  const monthly={};
+  invs.forEach(i=>{const m=(i.invoiceDate||'').slice(0,7);if(m)monthly[m]=(monthly[m]||0)+Number(i.totalAmount||0);});
+  const rows=Object.entries(monthly).sort((a,b)=>a[0]>b[0]?1:-1).map(([m,v])=>tr(m,fmtC(v)));
+  _showReportResult('📊 الإيرادات الشهرية',tbl(['الشهر','الإيراد'],rows,'tbl_mpl'));
+}
+function runGMPExpiryReport(){
+  const emps=(getAll('employees')||[]).filter(e=>e.status==='active');
+  const soon=emps.filter(e=>e.gmpTrainingExpiry&&Math.floor((new Date(e.gmpTrainingExpiry)-new Date())/86400000)<90);
+  _showReportResult('🏛️ تدريب GMP ينتهي قريباً',tbl(['الموظف','القسم','تاريخ الانتهاء'],soon.map(e=>{const d=Math.floor((new Date(e.gmpTrainingExpiry)-new Date())/86400000);return tr(escapeHtml(e.name),escapeHtml(e.department||'—'),`<span style="color:${d<0?'var(--red)':'var(--amber)'}">${e.gmpTrainingExpiry} (${d} يوم)</span>`);})));
+}
+function runDistributorBalReport(){
+  const dists=getAll('distributors')||[];
+  const invs=getAll('salesInvoices')||[];
+  const rows=dists.map(d=>{const bal=invs.filter(i=>i.distributorId===d.id&&i.paymentStatus==='unpaid').reduce((s,i)=>s+Number(i.totalAmount||0),0);return{name:d.name,bal};}).filter(d=>d.bal>0).sort((a,b)=>b.bal-a.bal);
+  _showReportResult('🤝 أرصدة الموزعين',tbl(['الموزع','الرصيد المستحق'],rows.map(d=>tr(escapeHtml(d.name),fmtC(d.bal))),'tbl_db'));
+}
+function runProdEfficiencyReport(){
+  const pos=(getAll('productionOrders')||[]).filter(o=>o.status==='completed');
+  const rows=pos.sort((a,b)=>b.id-a.id).slice(0,20).map(o=>tr(`PO-${o.id}`,escapeHtml(getById('products',o.productId)?.name||'—'),fmtN(o.quantity||0),fmtC(o.materialCost||0),fmtC(o.cmoAmount||0),fmtC((Number(o.materialCost||0)+Number(o.cmoAmount||0)))));
+  _showReportResult('🏭 كفاءة الإنتاج',tbl(['أمر','المنتج','الكمية','تكلفة مواد','CMO','إجمالي'],rows,'tbl_pe'));
+}
+
+// ── إضافة nav للصفحات التحليلية الناقصة ─────────────────────────
+// (تُضاف في navItems أسفل)
 
 // renderNav/go called by coEnter() after company is selected
 
