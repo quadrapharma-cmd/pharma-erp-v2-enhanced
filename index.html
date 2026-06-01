@@ -20454,6 +20454,7 @@ function runDistributorBalReport(){
   {id:'backup',icon:'💾',label:'النسخ الاحتياطي',sec:'الإعدادات'},
 
   {id:'companies',icon:'🏢',label:'الشركات المتعددة',sec:'الإعدادات'},
+  {id:'diagnostics',icon:'🔧',label:'فحص النظام وإصلاحه',sec:'الإعدادات'},
 ];
   const rows=dists.map(d=>{const bal=invs.filter(i=>i.distributorId===d.id&&i.paymentStatus==='unpaid').reduce((s,i)=>s+Number(i.totalAmount||0),0);return{name:d.name,bal};}).filter(d=>d.bal>0).sort((a,b)=>b.bal-a.bal);
   _showReportResult('🤝 أرصدة الموزعين',tbl(['الموزع','الرصيد المستحق'],rows.map(d=>tr(escapeHtml(d.name),fmtC(d.bal))),'tbl_db'));
@@ -21815,6 +21816,551 @@ function _validateReceiptExpiry(expiryDate, retestDate){
 }
 
 
+// ══════════════════════════════════════════════════════════════════
+// 🔧 MEDISNIYA SELF-HEALING SYSTEM — نظام الفحص والإصلاح الذاتي
+// يفحص النظام + يكتشف المشاكل + يُصلحها + يستدعي Claude AI
+// ══════════════════════════════════════════════════════════════════
+
+// ── اختبارات الفحص الذاتي ────────────────────────────────────────
+const SELF_TESTS = [
+  // ── قاعدة البيانات ─────────────────────────────────────────────
+  {
+    id: 'db_tables',
+    label: 'جداول DB موجودة',
+    category: 'قاعدة البيانات',
+    severity: 'critical',
+    run: () => {
+      const required = ['products','materials','employees','expenses',
+        'salesInvoices','productionOrders','journalEntries','accounts',
+        'taxSettings','appSettings','appUsers','auditLogs'];
+      const missing = required.filter(t => !Array.isArray(DB[t]));
+      return { ok: missing.length === 0,
+        detail: missing.length ? `جداول ناقصة: ${missing.join(', ')}` : 'كل الجداول موجودة',
+        fix: missing.length ? () => { missing.forEach(t => { if(!DB[t]) DB[t]=[]; }); saveDB(); } : null,
+        fixLabel: 'إضافة الجداول الناقصة' };
+    }
+  },
+  {
+    id: 'db_storage',
+    label: 'مساحة التخزين',
+    category: 'قاعدة البيانات',
+    severity: 'warning',
+    run: () => {
+      let used = 0;
+      try { used = new Blob([JSON.stringify(DB)]).size / 1024; } catch(e){}
+      const pct = Math.round(used / (5 * 1024) * 100);
+      const ok  = pct < 80;
+      return { ok, detail: `${used.toFixed(0)}KB مستخدم (${pct}% من 5MB)`,
+        fix: !ok ? () => {
+          if(DB.auditLogs?.length > 200) DB.auditLogs = DB.auditLogs.slice(-200);
+          saveDB();
+        } : null,
+        fixLabel: 'تقليم سجل التدقيق' };
+    }
+  },
+  {
+    id: 'db_seq',
+    label: 'تسلسل المعرّفات (ID)',
+    category: 'قاعدة البيانات',
+    severity: 'warning',
+    run: () => {
+      const issues = [];
+      Object.keys(DB).forEach(t => {
+        if(!Array.isArray(DB[t])) return;
+        const ids = DB[t].map(r => r.id).filter(Boolean);
+        const dups = ids.filter((id,i) => ids.indexOf(id) !== i);
+        if(dups.length) issues.push(`${t}: تكرار IDs`);
+      });
+      return { ok: issues.length === 0,
+        detail: issues.length ? issues.join(' | ') : 'لا تكرار في IDs',
+        fix: issues.length ? () => {
+          Object.keys(DB).forEach(t => {
+            if(!Array.isArray(DB[t])) return;
+            const seen = new Set();
+            DB[t] = DB[t].filter(r => {
+              if(!r.id || seen.has(r.id)) return false;
+              seen.add(r.id); return true;
+            });
+          });
+          saveDB();
+        } : null,
+        fixLabel: 'إزالة السجلات المكررة' };
+    }
+  },
+
+  // ── المالية والمحاسبة ──────────────────────────────────────────
+  {
+    id: 'journal_balance',
+    label: 'توازن قيود اليومية',
+    category: 'المالية',
+    severity: 'critical',
+    run: () => {
+      const entries = getAll('journalEntries')||[];
+      const unbalanced = entries.filter(e => {
+        const dr = Number(e.debit||0), cr = Number(e.credit||0);
+        return Math.abs(dr - cr) > 0.01 && (dr > 0 || cr > 0);
+      });
+      return { ok: unbalanced.length === 0,
+        detail: unbalanced.length
+          ? `${unbalanced.length} قيد غير متوازن (IDs: ${unbalanced.slice(0,5).map(e=>e.id).join(',')})`
+          : `${entries.length} قيد — كلها متوازنة`,
+        fix: unbalanced.length ? () => {
+          unbalanced.forEach(e => {
+            const dr = Number(e.debit||0), cr = Number(e.credit||0);
+            const diff = dr - cr;
+            if(diff > 0) update('journalEntries', e.id, { credit: dr });
+            else         update('journalEntries', e.id, { debit:  cr });
+          });
+        } : null,
+        fixLabel: 'تسوية القيود غير المتوازنة' };
+    }
+  },
+  {
+    id: 'tax_settings',
+    label: 'إعدادات الضرائب سليمة',
+    category: 'المالية',
+    severity: 'warning',
+    run: () => {
+      const ts = getTaxSettings();
+      const issues = [];
+      if(ts.vatRateDisplay < 0 || ts.vatRateDisplay > 50) issues.push('VAT خارج النطاق');
+      if(ts.corpTaxDisplay < 0 || ts.corpTaxDisplay > 50) issues.push('ضريبة شركات خارج النطاق');
+      if(ts.siEmployer < 0.1 || ts.siEmployer > 0.35)    issues.push('تأمينات صاحب عمل خارج النطاق');
+      if(ts.siEmployee < 0.05 || ts.siEmployee > 0.20)   issues.push('تأمينات موظف خارج النطاق');
+      return { ok: issues.length === 0,
+        detail: issues.length ? issues.join(' | ') : 'كل النسب في النطاق المعقول',
+        fix: issues.length ? () => {
+          const existing = (getAll('taxSettings')||[])[0];
+          if(existing) remove('taxSettings', existing.id);
+        } : null,
+        fixLabel: 'إعادة ضبط الضرائب للقيم الافتراضية' };
+    }
+  },
+
+  // ── المخزون والإنتاج ───────────────────────────────────────────
+  {
+    id: 'stock_negative',
+    label: 'لا مخزون سالب',
+    category: 'المخزون',
+    severity: 'warning',
+    run: () => {
+      const mats = (getAll('materials')||[]).filter(m => Number(m.currentStock||0) < 0);
+      const inv  = (getAll('inventory')||[]).filter(i => Number(i.quantity||0) < 0);
+      const total = mats.length + inv.length;
+      return { ok: total === 0,
+        detail: total ? `${mats.length} مادة + ${inv.length} منتج بمخزون سالب` : 'كل أرصدة المخزون موجبة',
+        fix: total ? () => {
+          mats.forEach(m => update('materials', m.id, { currentStock: '0' }));
+          inv.forEach(i  => update('inventory',  i.id, { quantity: 0 }));
+        } : null,
+        fixLabel: 'ضبط المخزون السالب على صفر' };
+    }
+  },
+  {
+    id: 'orphan_batchmaterials',
+    label: 'لا مواد معلّقة بأوامر محذوفة',
+    category: 'المخزون',
+    severity: 'warning',
+    run: () => {
+      const bm  = getAll('batchMaterials')||[];
+      const pos = new Set((getAll('productionOrders')||[]).map(o=>o.id));
+      const orphans = bm.filter(m => !pos.has(m.productionOrderId));
+      return { ok: orphans.length === 0,
+        detail: orphans.length ? `${orphans.length} سجل مرتبط بأوامر محذوفة` : 'كل مواد التشغيل مرتبطة بأوامر موجودة',
+        fix: orphans.length ? () => { orphans.forEach(m => remove('batchMaterials', m.id)); } : null,
+        fixLabel: 'حذف المواد اليتيمة' };
+    }
+  },
+  {
+    id: 'expiry_check',
+    label: 'فحص الصلاحيات المنتهية',
+    category: 'المخزون',
+    severity: 'info',
+    run: () => {
+      const now = new Date();
+      const expired = (getAll('materialReceipts')||[]).filter(r =>
+        r.expiryDate && new Date(r.expiryDate) < now && r.status === 'approved'
+      );
+      return { ok: expired.length === 0,
+        detail: expired.length
+          ? `${expired.length} دفعة مواد منتهية الصلاحية لا تزال بحالة "approved"`
+          : 'لا دفعات منتهية الصلاحية بحالة approved',
+        fix: expired.length ? () => {
+          expired.forEach(r => update('materialReceipts', r.id, { status: 'expired' }));
+        } : null,
+        fixLabel: 'تحديث حالة الدفعات المنتهية إلى expired' };
+    }
+  },
+
+  // ── الموارد البشرية ──────────────────────────────────────────
+  {
+    id: 'salary_minimum',
+    label: 'الرواتب فوق الحد الأدنى',
+    category: 'الموارد البشرية',
+    severity: 'warning',
+    run: () => {
+      const MINIMUM = 3500;
+      const below = (getAll('employees')||[])
+        .filter(e => e.status === 'active' && Number(e.basicSalary||e.salary||0) < MINIMUM);
+      return { ok: below.length === 0,
+        detail: below.length
+          ? `${below.length} موظف بأجر أقل من ${MINIMUM} ج.م (مخالفة قانون العمل م.34)`
+          : 'كل الرواتب فوق الحد الأدنى',
+        fix: null, fixLabel: null }; // لا نُصلح تلقائياً — يحتاج مراجعة HR
+    }
+  },
+  {
+    id: 'gmp_expiry_employees',
+    label: 'شهادات GMP للموظفين',
+    category: 'الموارد البشرية',
+    severity: 'info',
+    run: () => {
+      const now = new Date();
+      const expired = (getAll('employees')||[]).filter(e =>
+        e.status === 'active' && e.gmpTrainingExpiry && new Date(e.gmpTrainingExpiry) < now
+      );
+      return { ok: expired.length === 0,
+        detail: expired.length
+          ? `${expired.length} موظف: شهادة GMP منتهية (${expired.slice(0,3).map(e=>e.name).join('، ')}...)`
+          : 'كل شهادات GMP النشطة سارية',
+        fix: null, fixLabel: null };
+    }
+  },
+
+  // ── الأمان والمستخدمون ────────────────────────────────────────
+  {
+    id: 'admin_exists',
+    label: 'وجود مستخدم admin',
+    category: 'الأمان',
+    severity: 'critical',
+    run: () => {
+      const users  = getAll('appUsers')||[];
+      const admins = users.filter(u => u.role === 'admin' && u.active !== false);
+      return { ok: admins.length > 0,
+        detail: admins.length ? `${admins.length} مدير نشط` : 'لا يوجد مستخدم admin نشط!',
+        fix: admins.length === 0 ? () => {
+          insert('appUsers', {
+            username:'admin', name:'مدير النظام', role:'admin', active:true,
+            password:'h:1p9q7:8', // hash of admin123
+          });
+        } : null,
+        fixLabel: 'إعادة إنشاء حساب admin' };
+    }
+  },
+  {
+    id: 'audit_log_enabled',
+    label: 'سجل التدقيق مفعّل',
+    category: 'الأمان',
+    severity: 'info',
+    run: () => {
+      const s = getAppSettings();
+      return { ok: s.auditEnabled !== false,
+        detail: s.auditEnabled !== false ? 'سجل التدقيق مفعّل' : 'سجل التدقيق معطّل',
+        fix: !s.auditEnabled ? () => saveAppSettings({...getAppSettings(), auditEnabled:true}) : null,
+        fixLabel: 'تفعيل سجل التدقيق' };
+    }
+  },
+
+  // ── السلامة العامة ────────────────────────────────────────────
+  {
+    id: 'orphan_invoices',
+    label: 'فواتير مرتبطة بموزعين موجودين',
+    category: 'المبيعات',
+    severity: 'info',
+    run: () => {
+      const distIds = new Set((getAll('distributors')||[]).map(d => d.id));
+      const invs    = getAll('salesInvoices')||[];
+      const orphans = invs.filter(i => i.distributorId && !distIds.has(i.distributorId));
+      return { ok: orphans.length === 0,
+        detail: orphans.length
+          ? `${orphans.length} فاتورة مرتبطة بموزع محذوف`
+          : 'كل الفواتير مرتبطة بموزعين موجودين',
+        fix: null, fixLabel: null };
+    }
+  },
+  {
+    id: 'localStorage_sync',
+    label: 'DB محفوظ في localStorage',
+    category: 'قاعدة البيانات',
+    severity: 'critical',
+    run: () => {
+      try {
+        const stored = localStorage.getItem('pharmaERP_'+(_coActiveId||'default'));
+        if(!stored) return { ok: false, detail: 'لا توجد بيانات محفوظة في localStorage',
+          fix: () => saveDB(), fixLabel: 'حفظ البيانات الآن' };
+        const parsed = JSON.parse(stored);
+        const tables  = Object.keys(parsed).filter(k => Array.isArray(parsed[k])).length;
+        return { ok: true, detail: `${tables} جدول محفوظ | آخر تحديث: ${new Date().toLocaleTimeString('ar-EG')}` };
+      } catch(e) {
+        return { ok: false, detail: 'خطأ في localStorage: ' + e.message,
+          fix: () => saveDB(), fixLabel: 'إعادة حفظ البيانات' };
+      }
+    }
+  },
+];
+
+// ── تشغيل جميع الاختبارات ────────────────────────────────────────
+function runSelfTests(){
+  const results = [];
+  SELF_TESTS.forEach(test => {
+    try {
+      const r = test.run();
+      results.push({ ...test, ...r });
+    } catch(e) {
+      results.push({ ...test, ok: false,
+        detail: 'خطأ في الاختبار: ' + e.message, fix: null });
+    }
+  });
+  return results;
+}
+
+// ── تطبيق إصلاح واحد ─────────────────────────────────────────────
+function applySelfFix(testId){
+  const test = SELF_TESTS.find(t => t.id === testId);
+  if(!test) return;
+  const result = test.run();
+  if(!result.fix) { showNotif&&showNotif('لا يوجد إصلاح تلقائي لهذه المشكلة','warning'); return; }
+  try {
+    result.fix();
+    showNotif&&showNotif(`✅ تم تطبيق الإصلاح: ${test.label}`, 'success');
+    go('diagnostics');
+  } catch(e) {
+    showNotif&&showNotif('❌ فشل الإصلاح: ' + e.message, 'error');
+  }
+}
+
+// ── إصلاح كل المشاكل القابلة للإصلاح ────────────────────────────
+function fixAllProblems(){
+  const results = runSelfTests();
+  const fixable = results.filter(r => !r.ok && r.fix);
+  if(!fixable.length){
+    showNotif&&showNotif('✅ لا توجد مشاكل قابلة للإصلاح التلقائي', 'success');
+    return;
+  }
+  let fixed = 0;
+  fixable.forEach(r => {
+    try { r.fix(); fixed++; } catch(e) { console.error('Fix failed:', r.id, e); }
+  });
+  showNotif&&showNotif(`✅ تم إصلاح ${fixed} مشكلة تلقائياً`, 'success');
+  setTimeout(() => go('diagnostics'), 500);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// AI DIAGNOSTIC — Claude يحلّل ويصلح
+// ══════════════════════════════════════════════════════════════════
+async function runAIDiagnostic(){
+  const results   = runSelfTests();
+  const dbSummary = {
+    tables: Object.keys(DB).filter(k => Array.isArray(DB[k])).map(t => ({ table:t, count:DB[t].length })),
+    issues: results.filter(r => !r.ok).map(r => ({ id:r.id, label:r.label, detail:r.detail, severity:r.severity })),
+  };
+
+  const aiOutput = document.getElementById('ai-diag-output');
+  if(aiOutput){
+    aiOutput.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;padding:16px;color:var(--muted);font-size:13px">
+        <div style="width:20px;height:20px;border:2px solid var(--green);border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite"></div>
+        Claude يحلّل النظام...
+      </div>`;
+  }
+
+  const prompt = `أنت مهندس ERP متخصص في نظام ميديسنيا الدوائي المصري.
+فحصت النظام وهذه النتائج:
+
+ملخص قاعدة البيانات:
+${dbSummary.tables.map(t => `- ${t.table}: ${t.count} سجل`).join('\n')}
+
+المشاكل المكتشفة (${dbSummary.issues.length}):
+${dbSummary.issues.length
+  ? dbSummary.issues.map(i => `• [${i.severity}] ${i.label}: ${i.detail}`).join('\n')
+  : '• لا مشاكل مكتشفة 🎉'}
+
+حلّل هذه البيانات وأجب بالعربية:
+1. هل النظام في حالة جيدة؟
+2. ما أهم المخاطر إن وُجدت؟
+3. توصيات عملية لتحسين الأداء والاستقرار
+4. هل البيانات منطقية (مثلاً: عدد الموظفين vs عدد مسيرات الرواتب)؟
+
+أجب باختصار وتركيز، بدون عناوين زائدة.`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    if(!resp.ok) throw new Error(`API ${resp.status}`);
+    const data = await resp.json();
+    const text = (data.content||[]).map(b => b.text||'').join('');
+
+    if(aiOutput){
+      aiOutput.innerHTML = `
+        <div style="padding:16px;font-size:13px;line-height:1.8;border-top:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-weight:700;color:var(--green-light)">
+            <span style="font-size:18px">🤖</span> تحليل Claude AI
+          </div>
+          <div style="color:var(--text);white-space:pre-wrap">${escapeHtml(text)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:10px">
+            تم التحليل في ${new Date().toLocaleTimeString('ar-EG')}
+          </div>
+        </div>`;
+    }
+  } catch(e) {
+    if(aiOutput){
+      aiOutput.innerHTML = `
+        <div style="padding:16px;color:var(--amber);font-size:13px">
+          ⚠️ لا يمكن الاتصال بـ Claude API: ${escapeHtml(e.message)}<br>
+          <span style="font-size:11px;color:var(--muted)">تأكد من فتح النظام عبر Claude.ai أو وجود مفتاح API</span>
+        </div>`;
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// PAGES.diagnostics — صفحة الفحص والإصلاح الذاتي
+// ══════════════════════════════════════════════════════════════════
+PAGES.diagnostics = function(){
+  const results  = runSelfTests();
+  const critical = results.filter(r => !r.ok && r.severity === 'critical');
+  const warnings = results.filter(r => !r.ok && r.severity === 'warning');
+  const infos    = results.filter(r => !r.ok && r.severity === 'info');
+  const passing  = results.filter(r => r.ok);
+  const fixable  = results.filter(r => !r.ok && r.fix);
+
+  const sevColor = { critical:'var(--red)', warning:'var(--amber)', info:'var(--blue)' };
+  const sevIcon  = { critical:'🔴', warning:'🟡', info:'🔵' };
+  const sevLabel = { critical:'حرج', warning:'تحذير', info:'معلومة' };
+
+  setPage('🔧 فحص النظام وإصلاحه',
+    'System Diagnostics & Self-Healing — فحص شامل + إصلاح تلقائي',
+    `<div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-green" onclick="go('diagnostics')">🔄 إعادة الفحص</button>
+      ${fixable.length ? `<button class="btn btn-green" onclick="fixAllProblems()">🔧 إصلاح كل المشاكل (${fixable.length})</button>` : ''}
+      <button class="btn btn-white" onclick="runAIDiagnostic()">🤖 تحليل بـ Claude AI</button>
+      <button class="btn btn-white" onclick="exportDiagReport()">📊 تصدير تقرير</button>
+    </div>`,
+
+    `<!-- ملخص سريع -->
+    <div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card" style="border-right:3px solid var(--green)">
+        <div class="lbl">✅ اجتاز</div>
+        <div class="val text-green">${passing.length}</div>
+        <div style="font-size:10px;color:var(--muted)">من ${results.length} اختبار</div>
+      </div>
+      <div class="stat-card" style="border-right:3px solid var(--red)">
+        <div class="lbl">🔴 حرج</div>
+        <div class="val text-red">${critical.length}</div>
+        <div style="font-size:10px;color:var(--muted)">يحتاج تدخل فوري</div>
+      </div>
+      <div class="stat-card" style="border-right:3px solid var(--amber)">
+        <div class="lbl">🟡 تحذير</div>
+        <div class="val text-amber">${warnings.length}</div>
+        <div style="font-size:10px;color:var(--muted)">يُنصح بالمراجعة</div>
+      </div>
+      <div class="stat-card" style="border-right:3px solid var(--blue)">
+        <div class="lbl">🔧 قابل للإصلاح</div>
+        <div class="val text-blue">${fixable.length}</div>
+        <div style="font-size:10px;color:var(--muted)">إصلاح تلقائي متاح</div>
+      </div>
+    </div>
+
+    <!-- شريط الصحة العام -->
+    <div style="margin-bottom:16px;padding:14px;background:var(--card);border:1px solid var(--border);border-radius:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-weight:700;font-size:13px">صحة النظام</span>
+        <span style="font-weight:900;font-size:18px;color:${critical.length?'var(--red)':warnings.length?'var(--amber)':'var(--green-light)'}">${Math.round(passing.length/results.length*100)}%</span>
+      </div>
+      <div style="height:8px;background:var(--hover);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:${Math.round(passing.length/results.length*100)}%;background:${critical.length?'var(--red)':warnings.length?'var(--amber)':'var(--green)'};border-radius:4px;transition:.5s"></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px">
+        ${critical.length ? '⛔ يوجد مشاكل حرجة تحتاج إصلاح فوري' : warnings.length ? '⚠️ يوجد تحذيرات تحتاج مراجعة' : '✅ النظام في حالة ممتازة'}
+      </div>
+    </div>
+
+    <!-- نتائج الاختبارات مجمّعة بالفئة -->
+    ${['قاعدة البيانات','المالية','المخزون','الموارد البشرية','الأمان','المبيعات'].map(cat => {
+      const catResults = results.filter(r => r.category === cat);
+      if(!catResults.length) return '';
+      return `
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-weight:700;font-size:13px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border)">
+          ${cat}
+          <span style="font-size:11px;font-weight:400;color:var(--muted);margin-right:8px">
+            ${catResults.filter(r=>r.ok).length}/${catResults.length} اجتاز
+          </span>
+        </div>
+        ${catResults.map(r => `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+              <span style="font-size:15px">${r.ok ? '✅' : sevIcon[r.severity]||'⚠️'}</span>
+              <span style="font-size:12px;font-weight:600;color:${r.ok?'var(--text)':sevColor[r.severity]||'var(--amber)'}">${r.label}</span>
+              ${!r.ok?`<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:${sevColor[r.severity]}22;color:${sevColor[r.severity]}">${sevLabel[r.severity]}</span>`:''}
+            </div>
+            <div style="font-size:11px;color:var(--muted);padding-right:23px">${r.detail}</div>
+          </div>
+          ${r.fix && !r.ok ? `
+          <button class="btn btn-white btn-sm" style="font-size:10px;flex-shrink:0;margin-right:8px" onclick="applySelfFix('${r.id}')">
+            🔧 ${r.fixLabel||'إصلاح'}
+          </button>` : ''}
+        </div>`).join('')}
+      </div>`;
+    }).join('')}
+
+    <!-- Claude AI Analysis -->
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:10px">🤖 تحليل Claude AI</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
+        اضغط "تحليل بـ Claude AI" أعلاه لتحليل البيانات واقتراح تحسينات ذكية
+      </div>
+      <div id="ai-diag-output" style="min-height:40px"></div>
+    </div>
+
+    <!-- معلومات DB -->
+    <div class="card">
+      <div style="font-weight:700;font-size:13px;margin-bottom:10px">🗄️ إحصائيات قاعدة البيانات</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px;font-size:11px">
+        ${Object.keys(DB).filter(k=>Array.isArray(DB[k])).map(t=>`
+        <div style="padding:6px 10px;background:var(--hover);border-radius:6px;display:flex;justify-content:space-between">
+          <span style="color:var(--muted)">${t}</span>
+          <strong>${DB[t].length}</strong>
+        </div>`).join('')}
+      </div>
+    </div>`
+  );
+};
+
+// ── تصدير تقرير التشخيص ──────────────────────────────────────────
+function exportDiagReport(){
+  const results = runSelfTests();
+  const lines   = [
+    '🔧 تقرير فحص نظام ميديسنيا ERP',
+    `التاريخ: ${new Date().toLocaleString('ar-EG')}`,
+    `النظام: ${(getAll('companies')||[]).find(c=>c.id===_coActiveId)?.name||'—'}`,
+    '',
+    `النتيجة: ${results.filter(r=>r.ok).length}/${results.length} اختبار اجتاز`,
+    '',
+    '═══ تفاصيل الاختبارات ═══',
+    ...results.map(r => `${r.ok?'✅':'❌'} [${r.severity}] ${r.label}: ${r.detail}`),
+    '',
+    '═══ إحصائيات DB ═══',
+    ...Object.keys(DB).filter(k=>Array.isArray(DB[k])).map(t=>`${t}: ${DB[t].length} سجل`),
+  ];
+  const bom  = '\uFEFF';
+  const blob = new Blob([bom + lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a'); a.href=url;
+  a.download = `diag-report-${new Date().toISOString().slice(0,10)}.txt`;
+  a.click(); URL.revokeObjectURL(url);
+  showNotif&&showNotif('✅ تم تصدير تقرير التشخيص', 'success');
+}
+
 // renderNav/go called by coEnter() after company is selected
 
 PAGES.auditlog = function(){
@@ -22037,6 +22583,99 @@ function _validateReceiptExpiry(expiryDate, retestDate){
 }
 
 
+// ══════════════════════════════════════════════════════════════════
+// 🔧 MEDISNIYA SELF-HEALING SYSTEM — نظام الفحص والإصلاح الذاتي
+// يفحص النظام + يكتشف المشاكل + يُصلحها + يستدعي Claude AI
+// ══════════════════════════════════════════════════════════════════
+
+// ── اختبارات الفحص الذاتي ────────────────────────────────────────
+
+
+// ── تشغيل جميع الاختبارات ────────────────────────────────────────
+// ── تطبيق إصلاح واحد ─────────────────────────────────────────────
+// ── إصلاح كل المشاكل القابلة للإصلاح ────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+// AI DIAGNOSTIC — Claude يحلّل ويصلح
+// ══════════════════════════════════════════════════════════════════
+async function runAIDiagnostic(){
+  const results   = runSelfTests();
+  const dbSummary = {
+    tables: Object.keys(DB).filter(k => Array.isArray(DB[k])).map(t => ({ table:t, count:DB[t].length })),
+    issues: results.filter(r => !r.ok).map(r => ({ id:r.id, label:r.label, detail:r.detail, severity:r.severity })),
+  };
+
+  const aiOutput = document.getElementById('ai-diag-output');
+  if(aiOutput){
+    aiOutput.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;padding:16px;color:var(--muted);font-size:13px">
+        <div style="width:20px;height:20px;border:2px solid var(--green);border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite"></div>
+        Claude يحلّل النظام...
+      </div>`;
+  }
+
+  const prompt = `أنت مهندس ERP متخصص في نظام ميديسنيا الدوائي المصري.
+فحصت النظام وهذه النتائج:
+
+ملخص قاعدة البيانات:
+${dbSummary.tables.map(t => `- ${t.table}: ${t.count} سجل`).join('\n')}
+
+المشاكل المكتشفة (${dbSummary.issues.length}):
+${dbSummary.issues.length
+  ? dbSummary.issues.map(i => `• [${i.severity}] ${i.label}: ${i.detail}`).join('\n')
+  : '• لا مشاكل مكتشفة 🎉'}
+
+حلّل هذه البيانات وأجب بالعربية:
+1. هل النظام في حالة جيدة؟
+2. ما أهم المخاطر إن وُجدت؟
+3. توصيات عملية لتحسين الأداء والاستقرار
+4. هل البيانات منطقية (مثلاً: عدد الموظفين vs عدد مسيرات الرواتب)؟
+
+أجب باختصار وتركيز، بدون عناوين زائدة.`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    if(!resp.ok) throw new Error(`API ${resp.status}`);
+    const data = await resp.json();
+    const text = (data.content||[]).map(b => b.text||'').join('');
+
+    if(aiOutput){
+      aiOutput.innerHTML = `
+        <div style="padding:16px;font-size:13px;line-height:1.8;border-top:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-weight:700;color:var(--green-light)">
+            <span style="font-size:18px">🤖</span> تحليل Claude AI
+          </div>
+          <div style="color:var(--text);white-space:pre-wrap">${escapeHtml(text)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:10px">
+            تم التحليل في ${new Date().toLocaleTimeString('ar-EG')}
+          </div>
+        </div>`;
+    }
+  } catch(e) {
+    if(aiOutput){
+      aiOutput.innerHTML = `
+        <div style="padding:16px;color:var(--amber);font-size:13px">
+          ⚠️ لا يمكن الاتصال بـ Claude API: ${escapeHtml(e.message)}<br>
+          <span style="font-size:11px;color:var(--muted)">تأكد من فتح النظام عبر Claude.ai أو وجود مفتاح API</span>
+        </div>`;
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// PAGES.diagnostics — صفحة الفحص والإصلاح الذاتي
+// ══════════════════════════════════════════════════════════════════
+;
+
+// ── تصدير تقرير التشخيص ──────────────────────────────────────────
 // renderNav/go called by coEnter() after company is selected
 
 </script>
