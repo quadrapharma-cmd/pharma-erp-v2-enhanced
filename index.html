@@ -411,6 +411,7 @@ const defaultDB = {
   receivables:[], payrollRuns:[], purchaseOrders:[], qualityChecks:[],
   returns:[], contracts:[], assets:[], eInvoices:[], taxLines:[], batchMaterials:[], productIngredients:[], partnerAccounts:[], partnerEntries:[], journalEntries:[], chartOfAccounts:[], historicalBalances:[], appUsers:[], auditLogs:[], leaveRequests:[], appraisals:[], equipment:[],
   deviations:[], stabilityStudies:[], supplierRatings:[], warehouses:[], serialNumbers:[], savedReports:[], costCenters:[], capa:[], salesInvoices:[], salesOrders:[], drugRegistrations:[], cycleCountRecords:[], productionStages:[], dispensingRecords:[],
+  billOfMaterials:[], accounts:[],
   _seq:{}
 };
 
@@ -445,6 +446,8 @@ function getById(t,id){ return (DB[t]||[]).find(r=>r.id===id); }
 // HELPERS
 // ═══════════════════════════════════════════════
 const fmt=(n)=>{ let num=Number(n); if(isNaN(num))num=0; return num.toLocaleString('ar-EG',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+
+const fmtC=(n)=>{ let num=Number(n||0); if(isNaN(num))num=0; return num.toLocaleString('ar-EG',{minimumFractionDigits:2,maximumFractionDigits:2})+' ج.م'; };
 const fmtN=(n)=>Number(n||0).toLocaleString('ar-EG');
 const today=()=>new Date().toISOString().slice(0,10);
 
@@ -1318,19 +1321,7 @@ function saveCmo(id){
 // ═══════════════════════════════════════════════
 // MODALS — Production
 // ═══════════════════════════════════════════════
-function addProduction(){
-  const pOpts=[{v:0,l:'اختر منتج...'},...getAll('products').map(p=>({v:p.id,l:p.name}))];
-  const cOpts=[{v:0,l:'اختر مصنع...'},...getAll('cmos').map(c=>({v:c.id,l:c.name}))];
-  showModal(modal('أمر إنتاج جديد',`
-    <div class="form-row">${fg('المنتج *',sel('po-prod',pOpts))}${fg('المصنع *',sel('po-cmo',cOpts))}</div>
-    <div class="form-row">${fg('رقم الأمر',inp('po-num'))}${fg('تاريخ الأمر',inp('po-date','date',today()))}</div>
-    <div class="form-row">${fg('الكمية *',inp('po-qty','number'))}${fg('تكلفة الوحدة (ج.م)',inp('po-ucost','number'))}</div>
-    <div class="form-row">${fg('تكلفة CMO (ج.م)',inp('po-tcost','number','','تكلفة المصنع فقط بدون المواد'))}${fg('الموعد المتوقع',inp('po-exp','date'))}</div>
-    ${fg('الحالة',sel('po-status',[{v:'pending',l:'قيد الانتظار'},{v:'in_production',l:'في الإنتاج'},{v:'received',l:'مستلم'},{v:'cancelled',l:'ملغي'}],'pending'))}
-    <div class="form-actions"><button class="btn btn-green" onclick="saveProduction()">💾 حفظ</button><button class="btn btn-ghost" onclick="closeModal()">إلغاء</button></div>
-  `));
-}
-function editProduction(id){
+/* DEDUP_REMOVED */function editProduction(id){
   const o=getById('productionOrders',id); if(!o)return;
   showModal(modal('تعديل أمر الإنتاج',`
     <div class="form-row">${fg('الكمية',inp('po-qty','number',o.quantity))}${fg('تكلفة الوحدة',inp('po-ucost','number',o.unitCost))}</div>
@@ -1339,14 +1330,7 @@ function editProduction(id){
     <div class="form-actions"><button class="btn btn-green" onclick="saveProduction(${id})">💾 حفظ</button><button class="btn btn-ghost" onclick="closeModal()">إلغاء</button></div>
   `));
 }
-function saveProduction(id){
-  const qty=numVal('po-qty'); if(!qty) return alert('يرجى تحديد الكمية');
-  if(!id&&(!numVal('po-prod')||!numVal('po-cmo'))) return alert('يرجى اختيار المنتج والمصنع');
-  if(id) update('productionOrders',id,{quantity:qty,unitCost:val('po-ucost')||null,totalCost:val('po-tcost')||null,expectedDate:val('po-exp')||null,status:val('po-status')});
-  else insert('productionOrders',{productId:numVal('po-prod'),cmoId:numVal('po-cmo'),orderNumber:val('po-num')||null,quantity:qty,unitCost:val('po-ucost')||null,cmoBaseCost:val('po-tcost')||'0',totalCost:val('po-tcost')||null,orderDate:val('po-date')||null,expectedDate:val('po-exp')||null,status:val('po-status')});
-  closeModal(); go('production');
-}
-
+/* DEDUP_REMOVED */
 // ═══════════════════════════════════════════════
 // MODALS — Inventory
 // ═══════════════════════════════════════════════
@@ -1468,8 +1452,7 @@ function saveDelivery(){
 // MODALS — Expenses
 // ═══════════════════════════════════════════════
 function addExpense(){ showModal(modal('إضافة مصروف جديد',expenseForm())); }
-function editExpense(id){ const e=getById('expenses',id); if(!e)return; showModal(modal('تعديل مصروف',expenseForm(e))); }
-function expenseForm(e={}){
+/* DEDUP_REMOVED */function expenseForm(e={}){
   return `
     ${fg('الوصف *',inp('ex-desc','text',e.description))}
     <div class="form-row">${fg('المبلغ (ج.م) *',inp('ex-amt','number',e.amount))}${fg('نوع التكلفة *',sel('ex-type',[{v:'direct',l:'تكلفة مباشرة'},{v:'indirect',l:'تكلفة غير مباشرة'}],e.expenseType||'direct'))}</div>
@@ -1825,16 +1808,7 @@ function editPayrollEmp(id){
 }
 function savePayrollEmp(id){update('employees',id,{salary:val('ep-sal')||null,allowances:val('ep-allow')||'0',deductions:val('ep-deduct')||'0'});closeModal();go('payroll');}
 
-function addPurchaseOrder(){
-  const mOpts=[{v:0,l:'اختر مادة...'},...getAll('materials').map(m=>({v:m.id,l:m.name+' ('+m.unit+')'}))];
-  showModal(modal('طلب شراء جديد',`
-    ${fg('المادة *',sel('pur-mat',mOpts))}
-    <div class="form-row">${fg('المورد',inp('pur-sup'))}${fg('الكمية *',inp('pur-qty','number'))}</div>
-    <div class="form-row">${fg('سعر الوحدة (ج.م)',inp('pur-price','number'))}${fg('تاريخ الطلب',inp('pur-date','date',today()))}</div>
-    ${fg('الحالة',sel('pur-status',[{v:'معلق',l:'معلق'},{v:'مستلم',l:'مستلم'},{v:'ملغي',l:'ملغي'}],'معلق'))}
-    <div class="form-actions"><button class="btn btn-green" onclick="savePurchaseOrder()">💾 حفظ</button><button class="btn btn-ghost" onclick="closeModal()">إلغاء</button></div>`));
-}
-function editPurchaseOrder(id){
+/* DEDUP_REMOVED */function editPurchaseOrder(id){
   const o=getById('purchaseOrders',id);if(!o)return;
   showModal(modal('تعديل طلب شراء',`
     <div class="form-row">${fg('المورد',inp('pur-sup','text',o.supplier))}${fg('الكمية',inp('pur-qty','number',o.quantity))}</div>
@@ -1863,15 +1837,7 @@ function saveReturn(){
   closeModal();go('returns');
 }
 
-function addContract(){
-  showModal(modal('إضافة عقد جديد',`
-    ${fg('اسم الطرف الثاني *',inp('con-name'))}
-    ${fg('نوع العقد',sel('con-type',[{v:'موزع',l:'موزع'},{v:'مصنع',l:'مصنع CMO'},{v:'مورد',l:'مورد مواد'},{v:'أخرى',l:'أخرى'}],'موزع'))}
-    <div class="form-row">${fg('تاريخ البداية',inp('con-start','date',today()))}${fg('تاريخ الانتهاء',inp('con-end','date'))}</div>
-    ${fg('قيمة العقد (ج.م)',inp('con-val','number'))}
-    <div class="form-actions"><button class="btn btn-green" onclick="saveContract()">💾 حفظ</button><button class="btn btn-ghost" onclick="closeModal()">إلغاء</button></div>`));
-}
-function editContract(id){
+/* DEDUP_REMOVED */function editContract(id){
   const c=getById('contracts',id);if(!c)return;
   showModal(modal('تعديل عقد',`
     ${fg('اسم الطرف الثاني *',inp('con-name','text',c.partyName))}
@@ -2673,122 +2639,7 @@ function removeBatchOrder(id){
 }
 
 // ── إدارة مواد التشغيلة ─────────────────────────────────────
-function addBatchMaterials(productionOrderId){
-  const order = getById('productionOrders', productionOrderId);
-  if(!order) return;
-  const prod = getById('products', order.productId);
-  const existingMats = getAll('batchMaterials').filter(m => m.productionOrderId === productionOrderId);
-  const allMats = getAll('materials');
-  const raw = allMats.filter(m => m.materialType === 'raw_material');
-  const pkg = allMats.filter(m => m.materialType === 'packaging');
-
-  // لو فيه BOM للمنتج ده، اقترح الكميات
-  const bom = (getAll('productBOM')||[]).filter(b => b.productId === order.productId);
-
-  const existingRows = existingMats.map((m, i) => {
-    const mat = getById('materials', m.materialId);
-    return `<tr>
-      <td>${mat?.name||'-'}</td>
-      <td>${badge(mat?.materialType||'raw_material')}</td>
-      <td><span class="fw7">${fmtN(m.quantity)} ${mat?.unit||''}</span></td>
-      <td><span class="text-blue fw7">${fmt(m.unitCostAtTime)} ج.م</span></td>
-      <td><span class="text-red fw7">${fmt(Number(m.quantity)*Number(m.unitCostAtTime))} ج.م</span></td>
-      <td><span class="text-muted fz12">${m.receiptBatch||'—'}</span></td>
-      <td><button class="icon-btn del" onclick="removeBatchMaterial(${m.id}, ${productionOrderId})">${ic.del}</button></td>
-    </tr>`;
-  }).join('');
-
-  // مجموع التكلفة الحالية
-  const currentTotal = existingMats.reduce((s,m)=>s+Number(m.quantity||0)*Number(m.unitCostAtTime||0),0);
-
-  showModal(modal(
-    `🧪 مواد التشغيلة — ${prod?.name||''} (${order.orderNumber||'PO-'+order.id})`,
-    `<div style="margin-bottom:14px;padding:12px;background:var(--green-bg);border:1px solid rgba(46,160,67,.3);border-radius:8px;font-size:13px">
-      <div style="display:flex;justify-content:space-between">
-        <span>الكمية المنتجة: <strong>${fmtN(order.quantity)}</strong> وحدة</span>
-        <span>إجمالي تكلفة المواد: <strong class="text-red">${fmt(currentTotal)} ج.م</strong></span>
-        <span>تكلفة مواد/وحدة: <strong class="text-blue">${order.quantity?fmt(currentTotal/Number(order.quantity)):'-'} ج.م</strong></span>
-      </div>
-    </div>
-
-    ${existingMats.length ? `
-    <div style="margin-bottom:14px">
-      <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px;text-transform:uppercase">المواد المضافة</div>
-      <div class="tbl-wrap"><table style="font-size:12px">
-        <thead><tr><th>المادة</th><th>النوع</th><th>الكمية</th><th>سعر الوقت</th><th>الإجمالي</th><th>رقم دفعة المادة</th><th></th></tr></thead>
-        <tbody>${existingRows}</tbody>
-      </table></div>
-    </div>` : ''}
-
-    <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px;text-transform:uppercase">إضافة مادة جديدة</div>
-    <div class="fg"><label>المادة *</label>
-      <select id="bm-mat">
-        <option value="">اختر مادة...</option>
-        <optgroup label="🧪 مواد خام">${raw.map(m=>{
-          const bomEntry = bom.find(b=>b.materialId===m.id);
-          const suggestedQty = bomEntry ? (Number(bomEntry.quantityPerUnit||0)*Number(order.quantity||0)).toFixed(2) : '';
-          return `<option value="${m.id}" data-unit="${m.unit}" data-cost="${m.unitCost||0}" data-suggested="${suggestedQty}">${m.name} (${m.unit}) — سعر: ${fmt(m.unitCost||0)} ج.م — مخزون: ${fmtN(m.currentStock||0)}</option>`;
-        }).join('')}</optgroup>
-        <optgroup label="📦 مواد تغليف">${pkg.map(m=>{
-          const bomEntry = bom.find(b=>b.materialId===m.id);
-          const suggestedQty = bomEntry ? (Number(bomEntry.quantityPerUnit||0)*Number(order.quantity||0)).toFixed(2) : '';
-          return `<option value="${m.id}" data-unit="${m.unit}" data-cost="${m.unitCost||0}" data-suggested="${suggestedQty}">${m.name} (${m.unit}) — سعر: ${fmt(m.unitCost||0)} ج.م — مخزون: ${fmtN(m.currentStock||0)}</option>`;
-        }).join('')}</optgroup>
-      </select>
-    </div>
-
-    <div id="bm-selected-info" style="display:none;padding:10px;background:rgba(56,139,253,.08);border:1px solid rgba(56,139,253,.2);border-radius:8px;font-size:12px;margin-bottom:12px"></div>
-
-    <div class="form-row">
-      ${fg('الكمية المستخدمة *', inp('bm-qty', 'number', '', 'مثال: 50'))}
-      ${fg('سعر الوحدة وقت الاستخدام (ج.م) *', inp('bm-cost', 'number', '', 'السعر وقت الشراء'))}
-    </div>
-    <div class="form-row">
-      ${fg('رقم دفعة المادة الخام', inp('bm-batch', 'text', '', 'مثال: BT-2026-001'))}
-      ${fg('ملاحظات', inp('bm-notes', 'text', '', 'اختياري'))}
-    </div>
-    <div id="bm-line-total" style="font-size:14px;font-weight:700;color:var(--green-light);margin-bottom:12px"></div>
-
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="saveBatchMaterial(${productionOrderId})">➕ إضافة المادة</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إغلاق</button>
-      ${bom.length > 0 ? `<button class="btn btn-ghost" style="color:var(--blue);border-color:var(--blue)" onclick="autoFillFromBOM(${productionOrderId},${order.quantity})">⚡ ملء تلقائي من BOM</button>` : ''}
-    </div>`
-  ));
-
-  // Listen for material selection to auto-fill price and suggest qty
-  setTimeout(() => {
-    const matSel = document.getElementById('bm-mat');
-    const qtySel = document.getElementById('bm-qty');
-    const costInp = document.getElementById('bm-cost');
-    const totalDiv = document.getElementById('bm-line-total');
-    const infoDiv = document.getElementById('bm-selected-info');
-
-    const updateTotal = () => {
-      const q = Number(qtySel?.value||0), c = Number(costInp?.value||0);
-      if(totalDiv) totalDiv.textContent = q && c ? `إجمالي هذه المادة: ${fmt(q*c)} ج.م` : '';
-    };
-
-    if(matSel) {
-      matSel.addEventListener('change', function(){
-        const opt = this.options[this.selectedIndex];
-        const cost = opt.dataset.cost || '';
-        const unit = opt.dataset.unit || '';
-        const suggested = opt.dataset.suggested || '';
-        if(costInp) costInp.value = cost;
-        if(qtySel && suggested) qtySel.value = suggested;
-        if(infoDiv && cost) {
-          infoDiv.style.display = 'block';
-          infoDiv.innerHTML = `💡 السعر الحالي في المخزون: <strong>${fmt(cost)} ج.م/${unit}</strong>${suggested?` | الكمية المقترحة من BOM: <strong>${suggested} ${unit}</strong>`:''}`;
-        }
-        updateTotal();
-      });
-    }
-    if(qtySel) qtySel.addEventListener('input', updateTotal);
-    if(costInp) costInp.addEventListener('input', updateTotal);
-  }, 100);
-}
-
+/* DEDUP_REMOVED */
 function saveBatchMaterial(productionOrderId){
   const matId = numVal('bm-mat');
   const qty   = numVal('bm-qty');
@@ -3704,7 +3555,7 @@ function rejectReceipt(id){
 }
 
 // ── FULL Material Form (GMP-compliant) ───────────────────────
-function materialForm(m={}){
+/* DEDUP_REMOVED */{
   const isRaw = !m.materialType || m.materialType==='raw_material';
   return `
     <div class="tabs">
@@ -3766,91 +3617,9 @@ function materialForm(m={}){
     </div>`;
 }
 
-function saveMaterial(id){
-  const name=val('m-name'); if(!name) return alert('يرجى كتابة اسم المادة');
-  const mtype = val('m-type');
-  const d={
-    name, materialType:mtype, unit:val('m-unit'),
-    subType: mtype==='raw_material'?val('m-subtype'):val('m-pkgtype'),
-    currentStock:val('m-stock')||'0',
-    reorderLevel:val('m-reorder')||null, unitCost:val('m-cost')||null,
-    status:val('m-status'),
-    casNumber:val('m-cas')||null, qualityGrade:val('m-grade')||null,
-    pharmacopoeialRef:val('m-pharma')||null,
-    specifications:document.getElementById('m-specs')?.value||null,
-    packagingSpec:val('m-pkgspec')||null,
-    storageCondition:val('m-storage')||null,
-    approvedSupplier:val('m-supplier')||null, supplier:val('m-supplier')||null,
-    alternateSupplier:val('m-supplier2')||null,
-    shelfLifeMonths:val('m-shelflife')||null,
-    leadTimeDays:val('m-leadtime')||null,
-    qualityNotes:document.getElementById('m-qnotes')?.value||null
-  };
-  if(id) update('materials',id,d);
-  else insert('materials',d);
-  closeModal(); go('materials');
-}
-
+/* DEDUP_REMOVED */
 // ── FULL Material Receipt Form (COA + GMP fields) ────────────
-function addMaterialReceipt(){
-  const mats=getAll('materials');
-  const raw=mats.filter(m=>m.materialType==='raw_material');
-  const pkg=mats.filter(m=>m.materialType==='packaging');
-  showModal(modal('📥 استلام دفعة مواد — GMP',`
-    <div class="fg"><label>المادة *</label>
-      <select id="mr-mat" onchange="loadMatDetails(this.value)">
-        <option value="">اختر مادة...</option>
-        <optgroup label="🧪 مواد خام">${raw.map(m=>`<option value="${m.id}">${m.name} (${m.unit}) — مخزون: ${fmtN(m.currentStock||0)}</option>`).join('')}</optgroup>
-        <optgroup label="📦 مواد تغليف">${pkg.map(m=>`<option value="${m.id}">${m.name} (${m.unit})</option>`).join('')}</optgroup>
-      </select>
-    </div>
-    <div id="mr-mat-info" style="display:none;padding:10px;background:rgba(56,139,253,.08);border:1px solid rgba(56,139,253,.2);border-radius:8px;font-size:12px;margin-bottom:12px;color:var(--muted)"></div>
-
-    <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 8px">بيانات الدفعة (Batch/Lot)</div>
-    <div class="form-row">
-      ${fg('رقم الدفعة (Lot/Batch Number) *',inp('mr-batch','text','','مثال: LOT-2026-0123'))}
-      ${fg('رقم فاتورة المورد *',inp('mr-inv','text','','رقم الفاتورة'))}
-    </div>
-    <div class="form-row">
-      ${fg('الكمية المستلمة *',inp('mr-qty','number','','الكمية'))}
-      ${fg('سعر الوحدة (ج.م) *',inp('mr-cost','number','','السعر من الفاتورة'))}
-    </div>
-
-    <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 8px">التواريخ الحرجة</div>
-    <div class="form-row">
-      ${fg('تاريخ الاستلام *',inp('mr-date','date',today()))}
-      ${fg('تاريخ التصنيع (Mfg Date)',inp('mr-mfgdate','date',''))}
-    </div>
-    <div class="form-row">
-      ${fg('تاريخ انتهاء الصلاحية (Expiry Date) *',inp('mr-exp','date',''))}
-      ${fg('تاريخ إعادة الاختبار (Retest Date)',inp('mr-retest','date',''))}
-    </div>
-
-    <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 8px">شهادة التحليل (COA)</div>
-    <div class="form-row">
-      ${fg('رقم شهادة التحليل (COA Number)',inp('mr-coa','text','','رقم شهادة المورد'))}
-      ${fg('المورد',inp('mr-sup','text',''))}
-    </div>
-    <div class="form-row">
-      ${fg('نسبة النقاء / الفاعلية (Assay %)',inp('mr-assay','number','','مثال: 99.2'))}
-      ${fg('نسبة الرطوبة (Moisture %)',inp('mr-moisture','number','','مثال: 0.5'))}
-    </div>
-    <div class="form-row">
-      ${fg('حالة الدفعة عند الاستلام',sel('mr-status',[
-        {v:'quarantine',l:'⏳ محجوز — في انتظار QC'},
-        {v:'approved',l:'✅ معتمد — تم فحصه'},
-        {v:'rejected',l:'❌ مرفوض'}
-      ],'quarantine'))}
-      ${fg('الدفعة المقابلة عند المورد',inp('mr-supbatch','text','','Supplier Batch Ref'))}
-    </div>
-    ${fg('ملاحظات / انحرافات (Deviations)',`<textarea id="mr-notes" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:12px;color:var(--text);font-family:'Cairo',sans-serif"></textarea>`)}
-
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="saveMaterialReceipt()">📥 تسجيل الاستلام</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>`));
-}
-
+/* DEDUP_REMOVED */
 function loadMatDetails(matId){
   const mat = getById('materials', Number(matId));
   const info = document.getElementById('mr-mat-info');
@@ -3867,41 +3636,7 @@ function loadMatDetails(matId){
     </div>`;
 }
 
-function saveMaterialReceipt(){
-  const matId=numVal('mr-mat'), qty=val('mr-qty');
-  if(!matId||!qty) return alert('يرجى اختيار المادة وتحديد الكمية');
-  if(!val('mr-exp')) return alert('تاريخ انتهاء الصلاحية إلزامي');
-  if(!val('mr-batch')) return alert('رقم الدفعة (Lot Number) إلزامي');
-  insert('materialReceipts',{
-    materialId:matId,
-    quantityReceived:qty,
-    batchNumber:val('mr-batch'),
-    lotNumber:val('mr-batch'),
-    invoiceNumber:val('mr-inv')||null,
-    receiptDate:val('mr-date')||null,
-    manufacturingDate:val('mr-mfgdate')||null,
-    expiryDate:val('mr-exp')||null,
-    retestDate:val('mr-retest')||null,
-    unitCost:val('mr-cost')||null,
-    supplier:val('mr-sup')||null,
-    supplierBatchRef:val('mr-supbatch')||null,
-    coaNumber:val('mr-coa')||null,
-    assayPercent:val('mr-assay')||null,
-    moisturePercent:val('mr-moisture')||null,
-    status:val('mr-status')||'quarantine',
-    notes:document.getElementById('mr-notes')?.value||null
-  });
-  const mat=getById('materials',matId);
-  if(mat && val('mr-status')!=='rejected'){
-    update('materials',matId,{
-      currentStock:String(Number(mat.currentStock||0)+Number(qty)),
-      unitCost:val('mr-cost')||mat.unitCost,
-      supplier:val('mr-sup')||mat.supplier
-    });
-  }
-  closeModal(); go('materials');
-}
-
+/* DEDUP_REMOVED */
 // ════════════════════════════════════════════════════════════════
 // FULL PRODUCT PAGE — صفحة المنتج الكاملة
 // ════════════════════════════════════════════════════════════════
@@ -4580,699 +4315,44 @@ function rejectBatch(orderId){
 
 
 // ── مساعد عرض السطر ──────────────────────────────────────────
-function plRow(label, value, cls='', indent=0, bold=false, borderTop=false){
-  const pad = indent ? `padding-right:${indent*16}px` : '';
-  const bt  = borderTop ? 'border-top:2px solid var(--border);margin-top:4px;padding-top:8px' : '';
-  const color = typeof value==='number' && value<0 ? 'color:var(--red)' : '';
-  return `<div style="display:flex;justify-content:space-between;padding:7px 0;${bt};${pad}">
-    <span style="color:var(--${bold?'text':'muted'});font-weight:${bold?700:400};font-size:${bold?'14px':'13px'}">${label}</span>
-    <span class="${cls}" style="${color};font-weight:${bold?700:400};font-size:${bold?'15px':'13px'};min-width:150px;text-align:left">
-      ${typeof value==='number' ? fmt(Math.abs(value))+(value<0?' ج.م (خسارة)':' ج.م') : value}
-    </span>
-  </div>`;
-}
-
-function kpiCard(label, value, sub='', color='text-blue', icon=''){
-  return `<div class="stat-card">
-    <div class="lbl">${icon} ${label}</div>
-    <div class="val ${color}" style="font-size:20px">${typeof value==='number'?fmt(value)+' ج.م':value}</div>
-    ${sub?`<div class="sub">${sub}</div>`:''}
-  </div>`;
-}
-
+/* DEDUP_REMOVED */
+/* DEDUP_REMOVED */
 // ════════════════════════════════════════════════════════════════
 // INCOME STATEMENT — قائمة الدخل
 // ════════════════════════════════════════════════════════════════
-function reportPL(F){
-  const prods = getAll('products').length;
-  const dists  = getAll('distributors').filter(d=>d.status==='active').length;
-  return `
-  <div class="stats-grid g4" style="margin-bottom:20px">
-    ${kpiCard('صافي الإيرادات',F.netRevenue,'بعد خصم المرتجعات','text-green','💰')}
-    ${kpiCard('مجمل الربح',F.grossProfit,'قبل المصروفات التشغيلية',F.grossProfit>=0?'text-green':'text-red','📊')}
-    ${kpiCard('صافي الربح / الخسارة',F.netProfit,'',F.netProfit>=0?'text-green':'text-red','📈')}
-    <div class="stat-card">
-      <div class="lbl">🎯 هامش الربح الصافي</div>
-      <div class="val ${F.netMargin>=0?'text-green':'text-red'}" style="font-size:20px">${(F.netMargin*100).toFixed(1)}%</div>
-      <div class="sub">هامش مجمل: ${(F.grossMargin*100).toFixed(1)}%</div>
-    </div>
-  </div>
-
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-    <div class="card" style="padding:24px">
-      <h2 style="font-size:16px;font-weight:700;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border)">
-        📄 قائمة الدخل — Income Statement
-      </h2>
-
-      ${plRow('إيرادات المبيعات', F.totalRevenue, '', 0, false)}
-      ${plRow('(مردودات ومرتجعات)', -F.returnedVal, '', 1)}
-      ${plRow('صافي إيرادات النشاط', F.netRevenue, 'text-green fw7', 0, true, true)}
-
-      <div style="height:8px"></div>
-      ${plRow('تكلفة المواد الخام المستخدمة', -F.prodMatCost, '', 1)}
-      ${plRow('تكلفة التصنيع (CMO)', -F.cmoCost, '', 1)}
-      ${plRow('إجمالي تكلفة المبيعات', -F.cogs, 'text-red', 0, true)}
-      ${plRow('مجمل الربح', F.grossProfit, F.grossProfit>=0?'text-green fw7':'text-red fw7', 0, true, true)}
-
-      <div style="height:8px"></div>
-      ${plRow('مصروفات مباشرة', -F.directExp, '', 1)}
-      ${plRow('مصروفات غير مباشرة', -F.indirectExp, '', 1)}
-      ${plRow('إجمالي المصروفات التشغيلية', -F.totalExp, 'text-red', 0, true)}
-
-      <div style="height:12px;border-top:2px solid ${F.netProfit>=0?'var(--green)':'var(--red)'};margin-top:8px"></div>
-      ${plRow(F.netProfit>=0?'✅ صافي الربح':'❌ صافي الخسارة', F.netProfit,
-        F.netProfit>=0?'text-green fw7':'text-red fw7', 0, true)}
-      ${plRow('هامش الربح الصافي', (F.netMargin*100).toFixed(2)+'%', '', 0)}
-      ${plRow('هامش مجمل الربح', (F.grossMargin*100).toFixed(2)+'%', '', 0)}
-    </div>
-
-    <div>
-      <div class="card" style="padding:24px;margin-bottom:16px">
-        <h2 style="font-size:15px;font-weight:700;margin-bottom:14px">📊 توزيع التكاليف</h2>
-        ${[
-          ['تكلفة المواد',F.prodMatCost,F.totalCosts],
-          ['تكلفة CMO',F.cmoCost,F.totalCosts],
-          ['مصروفات مباشرة',F.directExp,F.totalCosts],
-          ['مصروفات غير مباشرة',F.indirectExp,F.totalCosts],
-        ].map(([label,val,total])=>{
-          const pct = total>0?val/total:0;
-          const w = Math.min(pct*100,100);
-          const color = label.includes('مواد')?'var(--blue)':label.includes('CMO')?'var(--amber)':label.includes('مباشرة')&&!label.includes('غير')?'var(--green)':'var(--purple)';
-          return `<div style="margin-bottom:12px">
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:12px">
-              <span>${label}</span>
-              <span class="fw7">${fmt(val)} ج.م (${(pct*100).toFixed(1)}%)</span>
-            </div>
-            <div style="height:8px;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden">
-              <div style="height:100%;width:${w}%;background:${color};border-radius:4px"></div>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>
-
-      <div class="card" style="padding:20px">
-        <h2 style="font-size:15px;font-weight:700;margin-bottom:12px">🔑 مؤشرات سريعة</h2>
-        ${[
-          ['إجمالي الإيرادات',F.totalRevenue,'text-green'],
-          ['إجمالي التكاليف',F.totalCosts,'text-red'],
-          ['إجمالي المصروفات',F.totalExp,'text-amber'],
-          ['الرواتب الشهرية',F.monthSalary,'text-purple'],
-          ['قيمة المخزون',F.totalInvVal,'text-blue'],
-        ].map(([l,v,c])=>`
-          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
-            <span style="color:var(--muted)">${l}</span>
-            <span class="${c} fw7">${fmt(v)} ج.م</span>
-          </div>`).join('')}
-      </div>
-    </div>
-  </div>`;
-}
-
+/* DEDUP_REMOVED */
 // ════════════════════════════════════════════════════════════════
 // BALANCE SHEET — المركز المالي
 // ════════════════════════════════════════════════════════════════
-function reportBS(F){
-  return `
-  <div class="stats-grid g4" style="margin-bottom:20px">
-    ${kpiCard('إجمالي الأصول',F.totalAssets,'','text-blue','🏦')}
-    ${kpiCard('إجمالي الالتزامات',F.totalLiab,'','text-red','⚠️')}
-    ${kpiCard('صافي حقوق الملكية',F.equity,'',F.equity>=0?'text-green':'text-red','💼')}
-    <div class="stat-card">
-      <div class="lbl">📊 نسبة الديون للأصول</div>
-      <div class="val ${F.totalAssets>0&&F.totalLiab/F.totalAssets<0.5?'text-green':'text-red'}" style="font-size:20px">
-        ${F.totalAssets>0?(F.totalLiab/F.totalAssets*100).toFixed(1)+'%':'—'}
-      </div>
-      <div class="sub">${F.totalAssets>0&&F.totalLiab/F.totalAssets<0.5?'✅ آمن':'⚠️ مرتفع'}</div>
-    </div>
-  </div>
-
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-    <!-- الأصول -->
-    <div class="card" style="padding:24px">
-      <h2 style="color:var(--blue);font-size:16px;font-weight:700;margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid rgba(56,139,253,.3)">
-        📈 الأصول — Assets
-      </h2>
-      <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px;text-transform:uppercase">أصول متداولة</div>
-      ${plRow('قيمة المخزون (منتجات نهائية)', F.finishedVal,'',1)}
-      ${plRow('قيمة المواد الخام والتغليف', F.rawMatValue,'',1)}
-      ${plRow('ذمم مدينة (مبيعات معلقة)', F.receivables,'',1)}
-      ${plRow('إجمالي الأصول المتداولة', F.currentAssets,'text-blue fw7',0,true,true)}
-      <div style="height:8px"></div>
-      <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px;text-transform:uppercase">أصول غير متداولة</div>
-      ${plRow('صافي الأصول الثابتة', F.fixedAssets,'',1)}
-      ${plRow('إجمالي الأصول غير المتداولة', F.fixedAssets,'text-blue fw7',0,true,true)}
-      <div style="height:12px;border-top:2px solid var(--blue);margin-top:8px"></div>
-      ${plRow('إجمالي الأصول', F.totalAssets,'text-blue fw7',0,true)}
-    </div>
-
-    <!-- الالتزامات وحقوق الملكية -->
-    <div class="card" style="padding:24px">
-      <h2 style="color:var(--red);font-size:16px;font-weight:700;margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid rgba(248,81,73,.3)">
-        📉 الالتزامات وحقوق الملكية
-      </h2>
-      <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px;text-transform:uppercase">التزامات متداولة</div>
-      ${plRow('ذمم دائنة (موردون معلقون)', F.supplierDebt,'',1)}
-      ${plRow('التزامات ضريبية معلقة', F.taxLiab,'',1)}
-      ${plRow('إجمالي الالتزامات المتداولة', F.totalLiab,'text-red fw7',0,true,true)}
-      <div style="height:8px"></div>
-      <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px;text-transform:uppercase">حقوق الملكية</div>
-      ${plRow('إجمالي الإيرادات المتراكمة', getAll('deliveryOrders').filter(d=>d.status==='delivered').reduce((s,d)=>s+Number(d.totalAmount||0),0),'',1)}
-      ${plRow('إجمالي التكاليف المتراكمة', -(getAll('expenses').reduce((s,e)=>s+Number(e.amount||0),0)),'',1)}
-      ${plRow('صافي حقوق الملكية', F.equity, F.equity>=0?'text-green fw7':'text-red fw7',0,true,true)}
-      <div style="height:12px;border-top:2px solid var(--red);margin-top:8px"></div>
-      ${plRow('إجمالي الالتزامات وحقوق الملكية', F.totalLiab+F.equity,'text-red fw7',0,true)}
-    </div>
-  </div>`;
-}
-
+/* DEDUP_REMOVED */
 // ════════════════════════════════════════════════════════════════
 // COGS ANALYSIS — تكلفة الإنتاج
 // ════════════════════════════════════════════════════════════════
-function reportCOGS(F){
-  const pos = getAll('productionOrders');
-  const batchM = getAll('batchMaterials');
-  const prods = getAll('products');
-
-  // تكلفة كل منتج
-  const prodCosts = prods.map(p=>{
-    const pOrders = pos.filter(o=>o.productId===p.id);
-    const matCost = pOrders.reduce((s,o)=>{
-      return s + batchM.filter(m=>m.productionOrderId===o.id)
-        .reduce((x,m)=>x+Number(m.quantity||0)*Number(m.unitCostAtTime||0),0);
-    },0);
-    const cmoCost = pOrders.reduce((s,o)=>s+Number(o.cmoBaseCost||0),0);
-    const totalQty = pOrders.reduce((s,o)=>s+Number(o.quantity||0),0);
-    const totalCost = matCost + cmoCost;
-    const unitCost = totalQty > 0 ? totalCost/totalQty : 0;
-    const sellPrice = Number(p.sellingPrice||0);
-    const margin = sellPrice > 0 ? (sellPrice-unitCost)/sellPrice : 0;
-    return {name:p.name, matCost, cmoCost, totalCost, totalQty, unitCost, sellPrice, margin, batches:pOrders.length};
-  }).filter(p=>p.totalCost>0||p.batches>0);
-
-  return `
-  <div class="stats-grid g4" style="margin-bottom:20px">
-    ${kpiCard('تكلفة المواد الخام',F.prodMatCost,'من الفواتير الفعلية','text-blue','🧪')}
-    ${kpiCard('تكلفة CMO',F.cmoCost,'رسوم التصنيع','text-amber','🏭')}
-    ${kpiCard('إجمالي تكلفة الإنتاج',F.cogs,'','text-red','💰')}
-    ${kpiCard('وحدات مُنتَجة',getAll('productionOrders').reduce((s,o)=>s+Number(o.quantity||0),0)+' وحدة','','text-green','📦')}
-  </div>
-
-  <div class="card">
-    <div class="card-head"><h2>📊 تكلفة كل منتج من البيانات الفعلية</h2></div>
-    ${tbl(['المنتج','عدد التشغيلات','الكمية المنتجة','تكلفة المواد','تكلفة CMO',
-           'إجمالي التكلفة','تكلفة الوحدة','سعر البيع','هامش الربح %'],
-      prodCosts.length ? prodCosts.map(p=>tr(
-        `<strong>${escapeHtml(p.name)}</strong>`,
-        p.batches,
-        fmtN(p.totalQty)+' وحدة',
-        p.matCost?`<span class="text-blue fw7">${fmt(p.matCost)} ج.م</span>`:'—',
-        p.cmoCost?`<span class="text-amber fw7">${fmt(p.cmoCost)} ج.م</span>`:'—',
-        `<span class="text-red fw7">${fmt(p.totalCost)} ج.م</span>`,
-        p.unitCost?`<span class="fw7">${fmt(p.unitCost)} ج.م</span>`:'—',
-        p.sellPrice?`<span class="text-green fw7">${fmt(p.sellPrice)} ج.م</span>`:'—',
-        p.sellPrice&&p.unitCost?`<span class="${p.margin>=0.2?'text-green':p.margin>=0.05?'text-amber':'text-red'} fw7">${(p.margin*100).toFixed(1)}%</span>`:'—'
-      )) : [tr('<span class="text-muted">أضف أوامر إنتاج ومواد لتظهر التكاليف هنا</span>')]
-    ,'tbl_batchrecords')}
-  </div>
-
-  <div class="card" style="margin-top:16px">
-    <div class="card-head"><h2>🧪 تفاصيل المواد المستخدمة في الإنتاج (من الفواتير)</h2></div>
-    ${(()=>{
-      const mats = getAll('materials');
-      const batchM2 = getAll('batchMaterials');
-      const matSummary = {};
-      batchM2.forEach(b=>{
-        const mat = getById('materials',b.materialId);
-        if(!mat) return;
-        if(!matSummary[mat.name]) matSummary[mat.name]={name:mat.name,type:mat.materialType,totalQty:0,totalCost:0,receipts:new Set()};
-        matSummary[mat.name].totalQty += Number(b.quantity||0);
-        matSummary[mat.name].totalCost += Number(b.quantity||0)*Number(b.unitCostAtTime||0);
-        if(b.invoiceNumber) matSummary[mat.name].receipts.add(b.invoiceNumber);
-      });
-      const rows = Object.values(matSummary);
-      if(!rows.length) return '<div class="empty">لا توجد مواد مرتبطة بتشغيلات بعد</div>';
-      return tbl(['المادة','النوع','الكمية المستخدمة','التكلفة الإجمالية','متوسط سعر الوحدة','عدد الفواتير المستخدمة'],
-        rows.sort((a,b)=>b.totalCost-a.totalCost).map(m=>tr(
-          `<strong>${escapeHtml(m.name)}</strong>`,
-          badge(m.type),
-          fmtN(m.totalQty),
-          `<span class="text-red fw7">${fmt(m.totalCost)} ج.م</span>`,
-          m.totalQty?fmt(m.totalCost/m.totalQty)+' ج.م':'—',
-          m.receipts.size
-        ))
-      ,'tbl_batchrecords');
-    })()}
-  </div>`;
-}
-
+/* DEDUP_REMOVED */
 // ════════════════════════════════════════════════════════════════
 // EXPENSES ANALYSIS — تحليل المصروفات
 // ════════════════════════════════════════════════════════════════
-function reportExpenses(F){
-  const exps = getAll('expenses');
-  const byDept = {};
-  const byMonth = {};
-  exps.forEach(e=>{
-    const dept = e.department||'غير محدد';
-    byDept[dept] = (byDept[dept]||0) + Number(e.amount||0);
-    const m = e.expenseDate?e.expenseDate.slice(0,7):'غير محدد';
-    byMonth[m] = (byMonth[m]||0) + Number(e.amount||0);
-  });
-
-  return `
-  <div class="stats-grid g3" style="margin-bottom:20px">
-    ${kpiCard('إجمالي المصروفات',F.totalExp,'','text-red','🧾')}
-    ${kpiCard('مصروفات مباشرة',F.directExp,`${exps.filter(e=>e.expenseType==='direct').length} بند`,'text-blue','📋')}
-    ${kpiCard('مصروفات غير مباشرة',F.indirectExp,`${exps.filter(e=>e.expenseType==='indirect').length} بند`,'text-purple','📋')}
-  </div>
-
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-    <div class="card" style="padding:20px">
-      <h2 style="font-size:15px;font-weight:700;margin-bottom:14px">📊 المصروفات حسب الفئة</h2>
-      ${Object.entries(F.expByCat).sort((a,b)=>b[1]-a[1]).map(([cat,amt])=>{
-        const pct = F.totalExp>0?amt/F.totalExp:0;
-        return `<div style="margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
-            <span>${cat}</span><span class="fw7">${fmt(amt)} ج.م (${(pct*100).toFixed(1)}%)</span>
-          </div>
-          <div style="height:6px;background:rgba(255,255,255,.08);border-radius:3px">
-            <div style="height:100%;width:${Math.min(pct*100,100)}%;background:var(--blue);border-radius:3px"></div>
-          </div>
-        </div>`;
-      }).join('')}
-    </div>
-
-    <div class="card" style="padding:20px">
-      <h2 style="font-size:15px;font-weight:700;margin-bottom:14px">🏢 المصروفات حسب القسم</h2>
-      ${Object.entries(byDept).sort((a,b)=>b[1]-a[1]).map(([dept,amt])=>{
-        const pct = F.totalExp>0?amt/F.totalExp:0;
-        return `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px">
-          <span>${dept}</span>
-          <div style="text-align:left">
-            <span class="text-red fw7">${fmt(amt)} ج.م</span>
-            <span style="color:var(--muted);font-size:11px;margin-right:6px">${(pct*100).toFixed(1)}%</span>
-          </div>
-        </div>`;
-      }).join('')}
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-head"><h2>📅 المصروفات الشهرية</h2></div>
-    ${tbl(['الشهر','إجمالي المصروفات','مصروفات مباشرة','مصروفات غير مباشرة'],
-      Object.entries(byMonth).sort().map(([month,total])=>{
-        const d = exps.filter(e=>e.expenseDate?.startsWith(month)&&e.expenseType==='direct').reduce((s,e)=>s+Number(e.amount||0),0);
-        const i = exps.filter(e=>e.expenseDate?.startsWith(month)&&e.expenseType==='indirect').reduce((s,e)=>s+Number(e.amount||0),0);
-        return tr(month, `<span class="text-red fw7">${fmt(total)} ج.م</span>`,
-          d?`<span class="text-blue">${fmt(d)} ج.م</span>`:'—',
-          i?`<span class="text-purple">${fmt(i)} ج.م</span>`:'—');
-      })
-    ,'tbl_batchrecords')}
-  </div>`;
-}
-
+/* DEDUP_REMOVED */
 // ════════════════════════════════════════════════════════════════
 // BUDGET vs ACTUAL
 // ════════════════════════════════════════════════════════════════
-function reportBudget(F){
-  const budgets = getAll('budgetLines');
-  const totalBudget = budgets.reduce((s,b)=>s+Number(b.budgetedAmount||0),0);
-  const totalActual = getAll('expenses').reduce((s,e)=>s+Number(e.amount||0),0);
-  const variance = totalBudget - totalActual;
-
-  return `
-  <div class="stats-grid g4" style="margin-bottom:20px">
-    ${kpiCard('إجمالي الميزانية',totalBudget,'المخطط','text-blue','📋')}
-    ${kpiCard('الإنفاق الفعلي',totalActual,'من سجلات المصروفات','text-red','💸')}
-    ${kpiCard('الفرق',variance,variance>=0?'✅ في الحدود':'⚠️ تجاوز',variance>=0?'text-green':'text-red','📊')}
-    <div class="stat-card">
-      <div class="lbl">📈 نسبة الاستهلاك</div>
-      <div class="val ${totalBudget>0&&totalActual/totalBudget<1?'text-green':'text-red'}" style="font-size:20px">
-        ${totalBudget>0?(totalActual/totalBudget*100).toFixed(1)+'%':'—'}
-      </div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-head"><h2>📊 مقارنة الميزانية بالفعلي — بند بند</h2></div>
-    ${tbl(['الفئة','القسم','السنة','المخطط (ج.م)','الفعلي (ج.م)','الفرق (ج.م)','نسبة الاستهلاك','الحالة'],
-      budgets.map(b=>{
-        const actual = getAll('expenses').filter(e=>e.category===b.category).reduce((s,e)=>s+Number(e.amount||0),0);
-        const budget = Number(b.budgetedAmount||0);
-        const diff   = budget - actual;
-        const pct    = budget>0?actual/budget:0;
-        const over   = pct > 1;
-        const warn   = pct > 0.8;
-        return tr(
-          `<strong>${b.category}</strong>`,
-          b.department||'عام', b.year,
-          `<span class="text-blue fw7">${fmt(budget)} ج.م</span>`,
-          `<span class="text-red fw7">${fmt(actual)} ج.م</span>`,
-          `<span class="${diff>=0?'text-green':'text-red'} fw7">${diff>=0?'':'-'}${fmt(Math.abs(diff))} ج.م</span>`,
-          `<div style="display:flex;align-items:center;gap:8px">
-            <div style="flex:1;height:6px;background:rgba(255,255,255,.08);border-radius:3px">
-              <div style="height:100%;width:${Math.min(pct*100,100)}%;background:${over?'var(--red)':warn?'var(--amber)':'var(--green-light)'};border-radius:3px"></div>
-            </div>
-            <span class="${over?'text-red':warn?'text-amber':'text-green'} fw7" style="font-size:12px;min-width:40px">${(pct*100).toFixed(0)}%</span>
-          </div>`,
-          over?'<span class="badge b-red">تجاوز</span>':warn?'<span class="badge b-amber">تنبيه</span>':'<span class="badge b-green">جيد</span>'
-        );
-      })
-    ,'tbl_batchrecords')}
-  </div>`;
-}
-
+/* DEDUP_REMOVED */
 // ════════════════════════════════════════════════════════════════
 // INVENTORY REPORT
 // ════════════════════════════════════════════════════════════════
-function reportInventory(F){
-  const inv  = getAll('inventory');
-  const mats = getAll('materials');
-  const now  = new Date();
-
-  return `
-  <div class="stats-grid g4" style="margin-bottom:20px">
-    ${kpiCard('قيمة المنتجات النهائية',F.finishedVal,inv.length+' صنف','text-blue','📦')}
-    ${kpiCard('قيمة المواد الخام',F.rawMatValue,mats.length+' مادة','text-purple','🧪')}
-    ${kpiCard('إجمالي قيمة المخزون',F.totalInvVal,'مواد + منتجات','text-green','💰')}
-    <div class="stat-card">
-      <div class="lbl">⚠️ منتجات تنتهي قريباً</div>
-      <div class="val text-amber" style="font-size:20px">
-        ${inv.filter(i=>i.expiryDate&&(new Date(i.expiryDate)-now)/86400000<90&&new Date(i.expiryDate)>now).length}
-      </div>
-      <div class="sub">خلال 90 يوم</div>
-    </div>
-  </div>
-
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-    <div class="card">
-      <div class="card-head"><h2>📦 المنتجات النهائية</h2></div>
-      ${tbl(['المنتج','الكمية','تكلفة الوحدة','القيمة الإجمالية','الصلاحية','حالة'],
-        inv.map(i=>{
-          const p=getById('products',i.productId);
-          const days=i.expiryDate?Math.floor((new Date(i.expiryDate)-now)/86400000):null;
-          const cls=days===null?'':days<0?'text-red fw7':days<90?'text-amber fw7':'text-green';
-          return tr(
-            `<strong>${p?.name||'—'}</strong>`,
-            fmtN(i.quantity),
-            i.unitCost?fmt(i.unitCost)+' ج.م':'—',
-            `<span class="text-blue fw7">${fmt(Number(i.quantity||0)*Number(i.unitCost||0))} ج.م</span>`,
-            `<span class="${cls}">${i.expiryDate||'—'}</span>`,
-            days!==null?(days<0?'<span class="badge b-red">منتهي</span>':days<90?'<span class="badge b-amber">تنبيه</span>':'<span class="badge b-green">جيد</span>'):'—'
-          );
-        })
-      ,'tbl_batchrecords')}
-    </div>
-
-    <div class="card">
-      <div class="card-head"><h2>🧪 المواد الخام والتغليف</h2></div>
-      ${tbl(['المادة','النوع','المخزون','القيمة','حد الطلب','حالة'],
-        mats.map(m=>{
-          const low=m.reorderLevel&&Number(m.currentStock||0)<=Number(m.reorderLevel);
-          return tr(
-            `<strong>${escapeHtml(m.name)}</strong>`,
-            badge(m.materialType),
-            `<span class="${low?'text-red fw7':''}">${fmtN(m.currentStock||0)} ${m.unit}</span>`,
-            m.unitCost?`<span class="text-blue fw7">${fmt(Number(m.currentStock||0)*Number(m.unitCost||0))} ج.م</span>`:'—',
-            m.reorderLevel?fmtN(m.reorderLevel)+' '+m.unit:'—',
-            low?'<span class="badge b-red">تحت الحد</span>':'<span class="badge b-green">كافي</span>'
-          );
-        })
-      ,'tbl_batchrecords')}
-    </div>
-  </div>`;
-}
-
+/* DEDUP_REMOVED */
 // ════════════════════════════════════════════════════════════════
 // SALES ANALYSIS
 // ════════════════════════════════════════════════════════════════
-function reportSales(F){
-  const dels = getAll('deliveryOrders').filter(d=>d.status==='delivered');
-  const byMonth = {};
-  dels.forEach(d=>{
-    const m=d.orderDate?d.orderDate.slice(0,7):'غير محدد';
-    byMonth[m]=(byMonth[m]||0)+Number(d.totalAmount||0);
-  });
-
-  return `
-  <div class="stats-grid g4" style="margin-bottom:20px">
-    ${kpiCard('إجمالي المبيعات',F.totalRevenue,'مسلّمة فعلياً','text-green','💰')}
-    ${kpiCard('مبيعات معلقة',F.pendingRevenue,'قيد التسليم','text-amber','⏳')}
-    ${kpiCard('مرتجعات',F.returnedVal,'','text-red','🔄')}
-    ${kpiCard('موزعون نشطون',F.distCount+' موزع','','text-blue','🏢')}
-  </div>
-
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-    <div class="card" style="padding:20px">
-      <h2 style="font-size:15px;font-weight:700;margin-bottom:14px">🏆 أكبر الموزعين مبيعاً</h2>
-      ${F.topDist.length?F.topDist.map(([name,amt],i)=>`
-        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
-          <span style="display:flex;align-items:center;gap:8px">
-            <span style="background:var(--green-bg);color:var(--green-light);border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">${i+1}</span>
-            ${name}
-          </span>
-          <span class="text-green fw7">${fmt(amt)} ج.م</span>
-        </div>`).join(''):'<div class="empty">لا توجد مبيعات مسلّمة</div>'}
-    </div>
-
-    <div class="card" style="padding:20px">
-      <h2 style="font-size:15px;font-weight:700;margin-bottom:14px">📅 المبيعات الشهرية</h2>
-      ${Object.entries(byMonth).sort().map(([m,v])=>{
-        const max=Math.max(...Object.values(byMonth));
-        const w=max>0?v/max*100:0;
-        return `<div style="margin-bottom:8px">
-          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
-            <span>${m}</span><span class="text-green fw7">${fmt(v)} ج.م</span>
-          </div>
-          <div style="height:6px;background:rgba(255,255,255,.08);border-radius:3px">
-            <div style="height:100%;width:${w}%;background:var(--green);border-radius:3px"></div>
-          </div>
-        </div>`;
-      }).join('')||'<div class="empty">لا توجد بيانات</div>'}
-    </div>
-  </div>`;
-}
-
+/* DEDUP_REMOVED */
 // ════════════════════════════════════════════════════════════════
 // TAX REPORT
 // ════════════════════════════════════════════════════════════════
-function reportTax(F){
-  return `
-  <div class="stats-grid g4" style="margin-bottom:20px">
-    ${kpiCard('ضريبة المبيعات (مخرجات)',F.vatOut,'VAT على المبيعات','text-red','🧾')}
-    ${kpiCard('ضريبة المشتريات (مدخلات)',F.vatIn,'VAT على المشتريات','text-green','🧾')}
-    ${kpiCard('صافي VAT المستحق',F.netVat,F.netVat>=0?'مستحق للسداد':'رصيد دائن',F.netVat>=0?'text-red':'text-green','💰')}
-    ${kpiCard('التزامات ضريبية معلقة',F.taxLiab,'ضرائب عامة غير مسددة','text-amber','⚠️')}
-  </div>
-
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-    <div class="card" style="padding:24px">
-      <h2 style="font-size:15px;font-weight:700;margin-bottom:16px">📋 ملخص إقرار VAT</h2>
-      ${plRow('ضريبة المبيعات (مخرجات)',F.vatOut,'text-red')}
-      ${plRow('ضريبة المشتريات (مدخلات)',-F.vatIn,'text-green')}
-      <div style="border-top:2px solid ${F.netVat>=0?'var(--red)':'var(--green)'};margin-top:8px;padding-top:8px">
-        ${plRow(F.netVat>=0?'الضريبة المستحقة للسداد':'رصيد ضريبي دائن',F.netVat,
-          F.netVat>=0?'text-red fw7':'text-green fw7',0,true)}
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-head"><h2>🏦 الالتزامات الضريبية العامة</h2></div>
-      ${tbl(['نوع الضريبة','الوصف','المبلغ','الفترة','تاريخ الاستحقاق','الحالة'],
-        F.taxL.map(t=>tr(
-          badge(t.taxType==='income'?'direct':t.taxType==='vat'?'in_production':'pending'),
-          `<strong>${t.description}</strong>`,
-          `<span class="text-red fw7">${fmt(t.amount)} ج.م</span>`,
-          t.period||'—',t.dueDate||'—',
-          badge(t.status==='مدفوع'?'received':t.status==='معلق'?'pending':'cancelled')
-        ))
-      ,'tbl_batchrecords')}
-    </div>
-  </div>`;
-}
-
+/* DEDUP_REMOVED */
 // ════════════════════════════════════════════════════════════════
 // EXCEL EXPORT — تصدير Excel كامل من البيانات
 // ════════════════════════════════════════════════════════════════
-function exportFinancialExcel(){
-  if(typeof XLSX==='undefined'){alert('مكتبة Excel تحمّل، حاول مرة أخرى');return;}
-
-  const F = calcFinancials();
-  const wb = XLSX.utils.book_new();
-  const co = (document.getElementById('logo-name')?.textContent||document.getElementById('co-active-label')?.textContent||'الشركة');
-  const dt = new Date().toLocaleDateString('ar-EG');
-
-  // ── Sheet 1: قائمة الدخل ──────────────────────────────────
-  const plData = [
-    [co+' — قائمة الدخل'],
-    ['تاريخ التقرير: '+dt],
-    [],
-    ['البيان','المبلغ (ج.م)'],
-    ['إيرادات المبيعات', F.totalRevenue],
-    ['(مردودات ومرتجعات)', -F.returnedVal],
-    ['صافي إيرادات النشاط', F.netRevenue],
-    [],
-    ['تكلفة المواد الخام', -F.prodMatCost],
-    ['تكلفة التصنيع CMO', -F.cmoCost],
-    ['إجمالي تكلفة المبيعات', -F.cogs],
-    ['مجمل الربح', F.grossProfit],
-    ['هامش مجمل الربح %', (F.grossMargin*100).toFixed(2)+'%'],
-    [],
-    ['مصروفات مباشرة', -F.directExp],
-    ['مصروفات غير مباشرة', -F.indirectExp],
-    ['إجمالي المصروفات', -F.totalExp],
-    [],
-    ['صافي الربح / الخسارة', F.netProfit],
-    ['هامش الربح الصافي %', (F.netMargin*100).toFixed(2)+'%'],
-  ];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(plData), 'قائمة الدخل');
-
-  // ── Sheet 2: المركز المالي ────────────────────────────────
-  const bsData = [
-    [co+' — قائمة المركز المالي'],
-    ['تاريخ التقرير: '+dt],
-    [],
-    ['الأصول',''],
-    ['قيمة المخزون (منتجات نهائية)', F.finishedVal],
-    ['قيمة المواد الخام', F.rawMatValue],
-    ['ذمم مدينة', F.receivables],
-    ['إجمالي الأصول المتداولة', F.currentAssets],
-    ['صافي الأصول الثابتة', F.fixedAssets],
-    ['إجمالي الأصول', F.totalAssets],
-    [],
-    ['الالتزامات وحقوق الملكية',''],
-    ['ذمم دائنة', F.supplierDebt],
-    ['التزامات ضريبية', F.taxLiab],
-    ['إجمالي الالتزامات', F.totalLiab],
-    ['صافي حقوق الملكية', F.equity],
-    ['إجمالي الالتزامات وحقوق الملكية', F.totalLiab+F.equity],
-  ];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(bsData), 'المركز المالي');
-
-  // ── Sheet 3: تحليل المصروفات ──────────────────────────────
-  const expRows = [
-    [co+' — تحليل المصروفات'],
-    ['تاريخ التقرير: '+dt],
-    [],
-    ['الوصف','النوع','الفئة','القسم','المبلغ (ج.م)','التاريخ'],
-    ...getAll('expenses').map(e=>[
-      e.description,
-      e.expenseType==='direct'?'مباشرة':'غير مباشرة',
-      e.category, e.department||'—',
-      Number(e.amount||0), e.expenseDate||'—'
-    ])
-  ];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(expRows), 'المصروفات');
-
-  // ── Sheet 4: تكلفة الإنتاج ────────────────────────────────
-  const cogsRows = [
-    [co+' — تكلفة الإنتاج من الفواتير الفعلية'],
-    ['تاريخ التقرير: '+dt],
-    [],
-    ['أمر الإنتاج','المنتج','المصنع CMO','الكمية','تكلفة المواد','تكلفة CMO',
-     'الإجمالي','تكلفة الوحدة','سعر البيع','هامش الربح %','الحالة'],
-    ...getAll('productionOrders').map(o=>{
-      const p=getById('products',o.productId);
-      const c=getById('cmos',o.cmoId);
-      const bm=getAll('batchMaterials').filter(m=>m.productionOrderId===o.id);
-      const mc=bm.reduce((s,m)=>s+Number(m.quantity||0)*Number(m.unitCostAtTime||0),0);
-      const cc=Number(o.cmoBaseCost||0);
-      const tot=mc+cc;
-      const qty=Number(o.quantity||0);
-      const uc=qty?tot/qty:0;
-      const sp=Number(p?.sellingPrice||0);
-      const mg=sp?((sp-uc)/sp*100).toFixed(1)+'%':'—';
-      return [o.orderNumber||'PO-'+o.id,p?.name||'—',c?.name||'—',qty,mc,cc,tot,uc,sp,mg,o.status];
-    })
-  ];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cogsRows), 'تكلفة الإنتاج');
-
-  // ── Sheet 5: المبيعات ─────────────────────────────────────
-  const salesRows = [
-    [co+' — تقرير المبيعات'],
-    ['تاريخ التقرير: '+dt],
-    [],
-    ['رقم الأمر','الموزع','التاريخ','المبلغ (ج.م)','ضريبة VAT','الإجمالي شامل VAT','الحالة'],
-    ...getAll('deliveryOrders').map(o=>{
-      const d=getById('distributors',o.distributorId);
-      const vat=Number(o.vatAmount||0);
-      return [o.orderNumber||'DO-'+o.id,d?.name||'—',o.orderDate||'—',
-              Number(o.totalAmount||0),vat,Number(o.totalAmount||0)+vat,o.status];
-    })
-  ];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(salesRows), 'المبيعات');
-
-  // ── Sheet 6: الميزانية مقابل الفعلي ─────────────────────
-  const budRows = [
-    [co+' — الميزانية مقابل الفعلي'],
-    ['تاريخ التقرير: '+dt],
-    [],
-    ['الفئة','القسم','السنة','المخطط (ج.م)','الفعلي (ج.م)','الفرق','نسبة الاستهلاك %'],
-    ...getAll('budgetLines').map(b=>{
-      const act=getAll('expenses').filter(e=>e.category===b.category).reduce((s,e)=>s+Number(e.amount||0),0);
-      const bgt=Number(b.budgetedAmount||0);
-      return [b.category,b.department||'—',b.year,bgt,act,bgt-act,
-              bgt>0?((act/bgt)*100).toFixed(1)+'%':'—'];
-    })
-  ];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(budRows), 'الميزانية');
-
-  // ── Sheet 7: المخزون ──────────────────────────────────────
-  const invRows = [
-    [co+' — تقرير المخزون الكامل'],
-    ['تاريخ التقرير: '+dt],
-    [],
-    ['النوع','الصنف','الكمية','الوحدة','تكلفة الوحدة','إجمالي القيمة','تاريخ الانتهاء'],
-    ...getAll('inventory').map(i=>{const p=getById('products',i.productId);return ['منتج نهائي',p?.name||'—',Number(i.quantity||0),p?.unit||'—',Number(i.unitCost||0),Number(i.quantity||0)*Number(i.unitCost||0),i.expiryDate||'—'];}),
-    ...getAll('materials').filter(m=>Number(m.currentStock||0)>0).map(m=>['مادة خام/تغليف',m.name,Number(m.currentStock||0),m.unit,Number(m.unitCost||0),Number(m.currentStock||0)*Number(m.unitCost||0),'—']),
-  ];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(invRows), 'المخزون');
-
-  // ── Sheet 8: VAT والضرائب ────────────────────────────────
-  const taxRows = [
-    [co+' — تقرير VAT والضرائب'],
-    ['تاريخ التقرير: '+dt],
-    [],
-    ['ضريبة المبيعات (مخرجات)',F.vatOut],
-    ['ضريبة المشتريات (مدخلات)',F.vatIn],
-    ['صافي VAT المستحق',F.netVat],
-    [],
-    ['الالتزامات الضريبية',''],
-    ['نوع الضريبة','الوصف','المبلغ','الفترة','الحالة'],
-    ...getAll('taxLines').map(t=>[t.taxType,t.description,Number(t.amount||0),t.period||'—',t.status])
-  ];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(taxRows), 'VAT والضرائب');
-
-  // ── Sheet 9: ملخص تنفيذي ─────────────────────────────────
-  const summaryRows = [
-    [co+' — الملخص التنفيذي'],
-    ['تاريخ التقرير: '+dt],
-    [],
-    ['المؤشر المالي','القيمة'],
-    ['إجمالي الإيرادات',F.totalRevenue],
-    ['صافي الإيرادات',F.netRevenue],
-    ['مجمل الربح',F.grossProfit],
-    ['هامش مجمل الربح %',(F.grossMargin*100).toFixed(2)+'%'],
-    ['إجمالي المصروفات',F.totalExp],
-    ['صافي الربح / الخسارة',F.netProfit],
-    ['هامش الربح الصافي %',(F.netMargin*100).toFixed(2)+'%'],
-    [],
-    ['إجمالي الأصول',F.totalAssets],
-    ['إجمالي الالتزامات',F.totalLiab],
-    ['صافي حقوق الملكية',F.equity],
-    [],
-    ['قيمة المخزون الكلية',F.totalInvVal],
-    ['تكلفة الإنتاج',F.cogs],
-    ['عدد الموظفين النشطين',F.empCount],
-    ['الرواتب الشهرية',F.monthSalary],
-    ['VAT المستحق',F.netVat],
-    ['التزامات ضريبية معلقة',F.taxLiab],
-  ];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), 'الملخص التنفيذي');
-
-  XLSX.writeFile(wb, `${co}-Financial-Report-${new Date().toISOString().slice(0,10)}.xlsx`);
-}
-
+/* DEDUP_REMOVED */
 // ════════════════════════════════════════════════════════════════
 // FINANCIAL REPORTS v2 — النسخة الكاملة
 // كل البنود المحاسبية طبقاً للمعايير المصرية والدولية
@@ -5346,7 +4426,10 @@ function calcFinancials(){
   const qcCost       = exps.filter(e=>e.category==='جودة ورقابة').reduce((s,e)=>s+Number(e.amount||0),0);
   const directLabor  = exps.filter(e=>e.category==='رواتب وأجور'&&e.expenseType==='direct').reduce((s,e)=>s+Number(e.amount||0),0);
   const transportCost= exps.filter(e=>e.category==='نقل المنتج').reduce((s,e)=>s+Number(e.amount||0),0);
-  const cogs         = prodMatCost + cmoCost + packagingExp + qcCost + directLabor + transportCost;
+  // COGS: Direct manufacturing costs only (raw materials + CMO)
+  const cogs         = prodMatCost + cmoCost;
+  // Manufacturing overhead (moved from COGS to OpEx to avoid double-counting)
+  const mfgOverhead  = packagingExp + qcCost + directLabor + transportCost;
   const grossProfit  = netRevenue - cogs;
   const grossMargin  = netRevenue > 0 ? grossProfit/netRevenue : 0;
 
@@ -5356,7 +4439,7 @@ function calcFinancials(){
   const sellExp      = exps.filter(e=>['دعاية وإعلان','نقل المنتج'].includes(e.category)).reduce((s,e)=>s+Number(e.amount||0),0);
   const adminExp     = exps.filter(e=>['رواتب وأجور','إيجار','خدمات','مصاريف إدارية','صيانة','تأمين','قانونية ومحاسبة'].includes(e.category)).reduce((s,e)=>s+Number(e.amount||0),0);
   const regExp       = exps.filter(e=>e.category==='تسجيل دوائي').reduce((s,e)=>s+Number(e.amount||0),0);
-  const totalOpExp   = directExp + indirectExp;
+  const totalOpExp   = directExp + indirectExp + mfgOverhead;
 
   // إهلاك الأصول الثابتة
   const annualDepreciation = assets.reduce((s,a)=>{
@@ -6864,22 +5947,7 @@ function showPartnerLedger(partnerId){
 
 
 
-function editPartner(id){
-  const p=getById('partnerAccounts',id); if(!p) return;
-  showModal(modal('تعديل بيانات الشريك',`
-    ${fg('اسم الشريك *',inp('pt-name','text',p.name))}
-    <div class="form-row">
-      ${fg('الدور',sel('pt-role',[{v:'partner',l:'شريك'},{v:'investor',l:'مستثمر'},{v:'manager',l:'شريك مدير'},{v:'silent',l:'شريك موصٍ'}],p.role||'partner'))}
-      ${fg('نوع الحساب',sel('pt-type',[{v:'current',l:'جاري'},{v:'capital',l:'رأسمالي'},{v:'loan',l:'قرض'}],p.type||'current'))}
-    </div>
-    ${fg('نسبة الملكية %',inp('pt-pct','number',p.ownershipPct))}
-    ${fg('ملاحظات',inp('pt-notes','text',p.notes))}
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="savePartner(${id})">💾 حفظ</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>`));
-}
-
+/* DEDUP_REMOVED */
 function addPartnerEntry(partnerId){
   const partners=getAll('partnerAccounts');
   const pOpts=[{v:0,l:'اختر شريك...'},...partners.map(p=>({v:p.id,l:p.name}))];
@@ -6959,89 +6027,8 @@ function buildJournalTable(entries){
   ,'tbl_partners');
 }
 
-function addJournalEntry(prefill){
-  const accounts = getChartOfAccounts();
-  const acOpts   = [{v:'',l:'اختر حساب...'},...accounts.map(a=>({v:a.name,l:`${a.code} - ${a.name}`}))];
-  const nextNum  = 'JE-'+String((getAll('journalEntries').length+1)).padStart(4,'0');
-
-  showModal(modal('📝 قيد يومية جديد',`
-    <div class="form-row">
-      ${fg('رقم القيد',inp('je-num','text',nextNum))}
-      ${fg('التاريخ *',inp('je-date','date',today()))}
-      ${fg('السنة',inp('je-year','number',new Date().getFullYear()))}
-    </div>
-    <div style="background:rgba(56,139,253,.06);border:1px solid rgba(56,139,253,.2);border-radius:8px;padding:14px;margin-bottom:14px">
-      <div style="font-size:11px;font-weight:700;color:var(--blue);margin-bottom:10px;text-transform:uppercase">الطرف المدين (Debit) 🔵</div>
-      <div class="form-row">
-        ${fg('الحساب المدين *',`<select id="je-debit-acc">${acOpts.map(o=>`<option value="${o.v}">${o.l}</option>`).join('')}</select>`)}
-        ${fg('المبلغ المدين (ج.م) *',inp('je-debit','number','','0.00'))}
-      </div>
-    </div>
-    <div style="background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.2);border-radius:8px;padding:14px;margin-bottom:14px">
-      <div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:10px;text-transform:uppercase">الطرف الدائن (Credit) 🔴</div>
-      <div class="form-row">
-        ${fg('الحساب الدائن *',`<select id="je-credit-acc">${acOpts.map(o=>`<option value="${o.v}">${o.l}</option>`).join('')}</select>`)}
-        ${fg('المبلغ الدائن (ج.م) *',inp('je-credit','number','','0.00'))}
-      </div>
-    </div>
-    ${fg('البيان / الوصف *',inp('je-desc','text','','شرح القيد'))}
-    <div class="form-row">
-      ${fg('رقم المستند / الفاتورة',inp('je-ref','text','','مثال: INV-001'))}
-      ${fg('نوع القيد',sel('je-type',[
-        {v:'payment',l:'دفع / سداد'},{v:'receipt',l:'استلام / قبض'},
-        {v:'purchase',l:'مشتريات'},{v:'sale',l:'مبيعات'},
-        {v:'adjustment',l:'تسوية'},{v:'depreciation',l:'إهلاك'},
-        {v:'salary',l:'رواتب'},{v:'partner',l:'جاري شركاء'},
-        {v:'other',l:'أخرى'}
-      ],'other'))}
-    </div>
-    <div id="je-balance-check" style="padding:8px 12px;border-radius:6px;font-size:12px;margin-bottom:12px"></div>
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="saveJournalEntry()">💾 حفظ القيد</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>`));
-
-  // Live balance check
-  setTimeout(()=>{
-    const dInp=document.getElementById('je-debit');
-    const cInp=document.getElementById('je-credit');
-    const check=document.getElementById('je-balance-check');
-    const update=()=>{
-      const d=Number(dInp?.value||0), c=Number(cInp?.value||0);
-      if(!check) return;
-      if(d===c&&d>0){
-        check.style.background='rgba(46,160,67,.1)';check.style.border='1px solid rgba(46,160,67,.3)';
-        check.innerHTML='✅ القيد متوازن — مدين = دائن = '+fmt(d)+' ج.م';
-      } else if(d||c){
-        check.style.background='rgba(248,81,73,.1)';check.style.border='1px solid rgba(248,81,73,.3)';
-        check.innerHTML=`⚠️ فارق: ${fmt(Math.abs(d-c))} ج.م — يجب أن يتساوى المدين والدائن`;
-      } else check.innerHTML='';
-    };
-    dInp?.addEventListener('input',update);cInp?.addEventListener('input',update);
-  },100);
-}
-
-function saveJournalEntry(){
-  const debitAcc=document.getElementById('je-debit-acc')?.value;
-  const creditAcc=document.getElementById('je-credit-acc')?.value;
-  const debit=numVal('je-debit'), credit=numVal('je-credit');
-  const desc=val('je-desc');
-  if(!debitAcc||!creditAcc||!desc) return alert('يرجى تعبئة الحسابات والبيان');
-  if(!debit&&!credit) return alert('يرجى إدخال المبلغ');
-  if(Math.abs(debit-credit)>0.01) return alert('⚠️ القيد غير متوازن — المدين لا يساوي الدائن');
-  insert('journalEntries',{
-    entryNumber:val('je-num')||null,
-    entryDate:val('je-date')||today(),
-    year:val('je-year')||new Date().getFullYear(),
-    debitAccount:debitAcc, creditAccount:creditAcc,
-    debit, credit, description:desc,
-    reference:val('je-ref')||null,
-    entryType:val('je-type'),
-    createdAt:new Date().toISOString()
-  });
-  closeModal(); go('journal');
-}
-
+/* DEDUP_REMOVED */
+/* DEDUP_REMOVED */
 function editJournalEntry(id){
   const e=getById('journalEntries',id); if(!e) return;
   const accounts=getChartOfAccounts();
@@ -7644,24 +6631,7 @@ function saveDeliveryEdit(id){
 }
 
 // ── 3. BUDGET — إضافة تعديل ──────────────────────────────────
-function editBudget(id){
-  const b=getById('budgetLines',id); if(!b) return;
-  showModal(modal('تعديل بند الميزانية',`
-    <div class="form-row">
-      ${fg('الفئة *',inp('bl-cat','text',b.category))}
-      ${fg('القسم',inp('bl-dept','text',b.department))}
-    </div>
-    <div class="form-row">
-      ${fg('السنة',inp('bl-year','number',b.year||new Date().getFullYear()))}
-      ${fg('المبلغ المخطط (ج.م) *',inp('bl-amt','number',b.budgetedAmount))}
-    </div>
-    ${fg('ملاحظات',inp('bl-notes','text',b.notes))}
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="saveBudgetEdit(${id})">💾 حفظ</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>`));
-}
-function saveBudgetEdit(id){
+/* DEDUP_REMOVED */function saveBudgetEdit(id){
   if(!val('bl-cat')||!val('bl-amt')) return alert('يرجى تعبئة الفئة والمبلغ');
   update('budgetLines',id,{category:val('bl-cat'),department:val('bl-dept')||null,year:val('bl-year')||new Date().getFullYear(),budgetedAmount:val('bl-amt'),notes:val('bl-notes')||null});
   closeModal(); go('budget');
@@ -8806,21 +7776,11 @@ function accountForm(a={}){
     </div>`;
 }
 
-function addAccount(){ showModal(modal('إضافة حساب جديد',accountForm())); }
-function editAccount(id){
+/* DEDUP_REMOVED */function editAccount(id){
   const a=getById('chartOfAccounts',id); if(!a) return;
   showModal(modal('تعديل الحساب',accountForm(a)));
 }
-function saveAccount(id){
-  const code=val('ac-code'), name=val('ac-name'), cat=val('ac-cat');
-  if(!code||!name||!cat) return alert('يرجى تعبئة الرمز والاسم والفئة');
-  const existing = getAll('chartOfAccounts').find(a=>a.code===code&&(!id||a.id!==id));
-  if(existing) return alert('رمز الحساب مستخدم بالفعل');
-  const d={code,name,type:val('ac-type'),category:cat,nature:val('ac-nature'),notes:val('ac-notes')||null};
-  id?update('chartOfAccounts',id,d):insert('chartOfAccounts',d);
-  closeModal(); go('chartofaccounts');
-}
-
+/* DEDUP_REMOVED */
 // ════════════════════════════════════════════════════════════════
 // ميزان المراجعة — Trial Balance (كامل من اليومية + DB)
 // ════════════════════════════════════════════════════════════════
@@ -9273,51 +8233,7 @@ function _canAccess(page){
 }
 
 // ── Show login screen ─────────────────────────────────────────
-function _showLoginScreen(){
-  const users = getAll('appUsers');
-  const isFirst = users.length === 0;
-
-  let el = document.getElementById('_auth_login');
-  if(!el){
-    el = document.createElement('div');
-    el.id = '_auth_login';
-    el.style.cssText = 'position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0d1117,#161b22);display:flex;align-items:center;justify-content:center;font-family:Cairo,sans-serif;direction:rtl';
-    document.body.appendChild(el);
-  }
-  el.style.display = 'flex';
-  el.innerHTML = `
-    <div style="width:100%;max-width:380px;padding:16px">
-      <div style="text-align:center;margin-bottom:28px">
-        <div style="width:64px;height:64px;background:linear-gradient(135deg,#2ea043,#1a7f37);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 12px">💊</div>
-        <h1 style="color:#fff;font-size:20px;font-weight:700;margin:0">نظام ERP الدوائي</h1>
-        <p style="color:#8b949e;font-size:12px;margin:6px 0 0">سجّل الدخول للمتابعة</p>
-      </div>
-      <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:22px">
-        <div style="margin-bottom:14px">
-          <label style="color:#8b949e;font-size:11px;display:block;margin-bottom:5px">اسم المستخدم</label>
-          <input id="_au" type="text" placeholder="أدخل اسم المستخدم" autocomplete="username"
-            style="width:100%;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px 12px;font-size:13px;color:#fff;font-family:Cairo,sans-serif;box-sizing:border-box;outline:none"
-            onkeydown="if(event.key==='Enter')document.getElementById('_ap').focus()">
-        </div>
-        <div style="margin-bottom:18px">
-          <label style="color:#8b949e;font-size:11px;display:block;margin-bottom:5px">كلمة المرور</label>
-          <input id="_ap" type="password" placeholder="كلمة المرور" autocomplete="current-password"
-            style="width:100%;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px 12px;font-size:13px;color:#fff;font-family:Cairo,sans-serif;box-sizing:border-box;outline:none"
-            onkeydown="if(event.key==='Enter')_doLogin()">
-        </div>
-        <div id="_aerr" style="display:none;color:#f85149;font-size:11px;margin-bottom:12px;padding:8px;background:rgba(248,81,73,.1);border-radius:6px;text-align:center"></div>
-        <button onclick="_doLogin()"
-          style="width:100%;background:linear-gradient(135deg,#2ea043,#1a7f37);color:#fff;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:Cairo,sans-serif">
-          تسجيل الدخول
-        </button>
-      </div>
-      ${isFirst?`<div style="margin-top:12px;padding:10px;background:rgba(46,160,67,.08);border:1px solid rgba(46,160,67,.2);border-radius:8px;font-size:11px;color:#8b949e;text-align:center">
-        🔑 أول دخول — اسم المستخدم: <strong style="color:#fff">admin</strong> &nbsp;|&nbsp; كلمة المرور: <strong style="color:#fff">admin123</strong>
-      </div>`:''}
-    </div>`;
-  setTimeout(()=>document.getElementById('_au')?.focus(), 150);
-}
-
+/* DEDUP_REMOVED */
 function _doLogin(){
   const u = (document.getElementById('_au')?.value||'').trim();
   const p = document.getElementById('_ap')?.value||'';
@@ -9602,74 +8518,8 @@ function escapeHtml(str){
 // PRODUCT INGREDIENTS — مكونات وتركيبة المنتج
 // ════════════════════════════════════════════════════════════════
 
-function renderIngredientList(productId){
-  const container = document.getElementById('pf-ing-list');
-  if(!container) return;
-
-  let ingredients = [];
-  if(productId){
-    ingredients = getAll('productIngredients').filter(function(i){ return i.productId===productId; });
-  } else {
-    ingredients = window._pendingIngredients || [];
-  }
-
-  if(!ingredients.length){
-    container.innerHTML = '<div class="empty" style="padding:12px;font-size:12px">لا توجد مكونات مضافة — أضف المادة الفعالة والسواغات</div>';
-    return;
-  }
-
-  const typeLabels = { active:'مادة فعالة', excipient:'سواغ', coating:'طلاء', preservative:'حافظ', other:'أخرى' };
-  const typeColors = { active:'b-green', excipient:'b-gray', coating:'b-blue', preservative:'b-amber', other:'b-gray' };
-
-  container.innerHTML = ingredients.map(function(ing, i){
-    var tid = productId ? ing.id : (ing._tmpId || i);
-    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;background:rgba(255,255,255,.02);padding:8px 12px;border-radius:8px;border:1px solid var(--border)">'
-      + '<div style="flex:1">'
-      + '<span style="font-weight:600;font-size:13px">' + (ing.name||'—') + '</span>'
-      + ' <span style="font-size:11px;color:var(--muted)">(' + (ing.concentration||'') + ' ' + (ing.unit||'') + ')</span>'
-      + '</div>'
-      + '<span class="badge ' + (typeColors[ing.type]||'b-gray') + '">' + (typeLabels[ing.type]||ing.type||'—') + '</span>'
-      + '<button onclick="removeIngredientFromList(' + tid + ',' + (productId||0) + ')" '
-      + 'style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 4px" title="حذف">×</button>'
-      + '</div>';
-  }).join('');
-}
-
-function addIngredientToList(productId){
-  var name = (document.getElementById('ing-name')?.value||'').trim();
-  var type = document.getElementById('ing-type')?.value || 'active';
-  var conc = (document.getElementById('ing-conc')?.value||'').trim();
-  var unit = document.getElementById('ing-unit')?.value || 'mg';
-  var pharma = (document.getElementById('ing-pharma')?.value||'').trim();
-
-  if(!name || !conc){
-    alert('يرجى إدخال اسم المكون والتركيز على الأقل');
-    return;
-  }
-
-  var newIng = { name:name, type:type, concentration:conc, unit:unit, pharmacopoeialRef:pharma };
-
-  if(productId){
-    // Product already saved — insert directly
-    newIng.productId = productId;
-    insert('productIngredients', newIng);
-  } else {
-    // New product — store in pending array
-    if(!window._pendingIngredients) window._pendingIngredients = [];
-    newIng._tmpId = Date.now();
-    window._pendingIngredients.push(newIng);
-  }
-
-  renderIngredientList(productId||0);
-
-  // Clear inputs
-  var nameEl = document.getElementById('ing-name');
-  var concEl = document.getElementById('ing-conc');
-  if(nameEl) nameEl.value = '';
-  if(concEl) concEl.value = '';
-  if(nameEl) nameEl.focus();
-}
-
+/* DEDUP_REMOVED */
+/* DEDUP_REMOVED */
 // removeIngredientFromList is already defined above — keep one version
 // (defined earlier, this comment serves as documentation)
 
@@ -9997,19 +8847,7 @@ function expiryBadge(expiryDateStr){
   return `<span class="badge b-green">✅ ${days} يوم</span>`;
 }
 
-function expiryBar(expiryDateStr, totalDays=365){
-  if(!expiryDateStr) return '—';
-  const days = Math.floor((new Date(expiryDateStr) - new Date()) / 86400000);
-  const pct  = Math.max(0, Math.min(100, (days/totalDays)*100));
-  const color = days < 0 ? 'var(--red)' : days<=90 ? 'var(--red)' : days<=180 ? 'var(--amber)' : 'var(--green)';
-  return `<div style="display:flex;align-items:center;gap:8px">
-    <div style="flex:1;height:6px;background:rgba(255,255,255,.08);border-radius:4px;min-width:60px">
-      <div style="height:100%;width:${pct}%;background:${color};border-radius:4px;transition:.3s"></div>
-    </div>
-    <span style="font-size:11px;color:${color};white-space:nowrap;font-weight:600">${days<0?'منتهي':days+' يوم'}</span>
-  </div>`;
-}
-
+/* DEDUP_REMOVED */
 // ── 9. Sound Alert for Critical Notifications ─────────────────
 function playCriticalAlert(){
   if(localStorage.getItem('sound_alerts') === '0') return;
@@ -14402,7 +13240,7 @@ function checkMRPThenSave(){
 
 function saveProduction(id){
   const qty = numVal('po-qty');
-  if(!qty) return alert('يرجى تحديد حجم الدفعة');
+  if(!qty || qty <= 0) return alert('يرجى تحديد حجم دفعة صحيح (أكبر من صفر)');
   if(!id && (!numVal('po-prod')||!numVal('po-cmo'))) return alert('يرجى اختيار المنتج والمصنع');
 
   const batchNo = val('po-batch') || `BATCH-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
@@ -15695,6 +14533,16 @@ function showFefoSelector(materialId, requiredQty, onSelect){
 window._fefoCallbacks = {};
 function confirmFefoSelection(materialId, requiredQty){
   const result = getFefoLots(materialId, requiredQty);
+  // Update usedQuantity and remainingQuantity for each selected lot
+  result.selected.forEach(lot=>{
+    const current = getById('materialReceipts', lot.id);
+    if(current){
+      update('materialReceipts', lot.id, {
+        remainingQuantity: Math.max(0, Number(current.remainingQuantity||0) - lot.takeQty),
+        usedQuantity: Number(current.usedQuantity||0) + lot.takeQty,
+      });
+    }
+  });
   closeModal();
   if(window._fefoCallbacks[materialId]) window._fefoCallbacks[materialId](result);
 }
@@ -15931,13 +14779,14 @@ function enterCycleCount(receiptId){
 
 function saveCycleCount(receiptId){
   const actual = numVal('cc-qty');
-  if(actual===null||actual===undefined) return alert('أدخل الكمية الفعلية');
+  if(actual===null||actual===undefined||actual<0) return alert('أدخل الكمية الفعلية (صفر أو أكثر)');
   const rec = getById('materialReceipts', receiptId);
-  const diff = actual - Number(rec?.remainingQuantity||0);
-  insert('cycleCountRecords',{
+  const bookQty = Number(rec?.remainingQuantity||0);
+  const diff = actual - bookQty;
+  const ccRec = insert('cycleCountRecords',{
     receiptId, materialId:rec?.materialId,
     batchNumber: rec?.batchNumber,
-    bookQty: rec?.remainingQuantity,
+    bookQty: bookQty,
     actualQty: actual,
     difference: diff,
     countDate: today(),
@@ -15945,8 +14794,26 @@ function saveCycleCount(receiptId){
     notes: document.getElementById('cc-notes')?.value||null,
     approved: Math.abs(diff) <= 0.01,
   });
+  // GMP: Adjust stock to physical count if discrepancy confirmed
   if(Math.abs(diff) > 0.01){
-    showNotif&&showNotif(`⚠️ فرق جرد: ${diff>0?'+':''}${fmtN(diff)} — يجب التحقيق قبل الترحيل`, 'warn');
+    // Update remainingQuantity to match physical count
+    update('materialReceipts', receiptId, {
+      remainingQuantity: actual,
+      lastCycleCountId: ccRec.id,
+      lastCycleCountDate: today(),
+      stockAdjustedBy: _authUser?.name||'—',
+    });
+    // Also adjust material currentStock
+    if(rec?.materialId){
+      const mat = getById('materials', rec.materialId);
+      if(mat){
+        const oldStock = Number(mat.currentStock||0);
+        update('materials', rec.materialId, { currentStock: String(Math.max(0, oldStock + diff)) });
+      }
+    }
+    showNotif&&showNotif(`⚠️ تم تعديل المخزون: ${diff>0?'+':''}${fmtN(diff)} بناءً على الجرد الفعلي`, 'warn');
+  } else {
+    showNotif&&showNotif(`✅ الجرد مطابق — لا يوجد فرق`, 'success');
   }
   closeModal(); go('cyclecounting');
 }
@@ -16270,10 +15137,11 @@ function saveQCTest(id){
   if(!batchN) return alert('يرجى كتابة رقم الدفعة');
   const isProd  = String(itemVal).startsWith('p');
   const itemId  = Number(String(itemVal).slice(1));
+  if(!itemId) return alert('يرجى اختيار منتج أو مادة خام صحيحة');
   const resVal  = document.getElementById('qc-result')?.value;
   const d = {
-    productId:   isProd ? itemId : null,
-    materialId:  isProd ? null   : itemId,
+    productId:   isProd ? itemId : null,  // mutually exclusive
+    materialId:  isProd ? null   : itemId,  // only one can be non-null
     sampleName:  (isProd ? getById('products',itemId) : getById('materials',itemId))?.name||'',
     batchNumber: batchN,
     testType:    document.getElementById('qc-type')?.value||'assay',
@@ -16865,6 +15733,7 @@ function createDeliveryFromSO(soId){
 function saveDeliveryOrder(){
   const soId = numVal('do-so')||null;
   const so   = soId ? getById('salesOrders',soId) : null;
+  if(!so) return alert('يرجى اختيار أمر بيع صحيح');
   insert('deliveryOrders',{
     salesOrderId:soId, customerName:so?.customerName||'—',
     shippingDate:document.getElementById('do-date')?.value||today(),
