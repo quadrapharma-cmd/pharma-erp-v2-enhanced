@@ -415,7 +415,7 @@ const defaultDB = {
   expenses:[], employees:[], budgetLines:[], campaigns:[], salesTargets:[],
   receivables:[], payrollRuns:[], purchaseOrders:[], qualityChecks:[],
   returns:[], contracts:[], assets:[], eInvoices:[], taxLines:[], batchMaterials:[], productIngredients:[], partnerAccounts:[], partnerEntries:[], journalEntries:[], chartOfAccounts:[], historicalBalances:[], appUsers:[], auditLogs:[], leaveRequests:[], appraisals:[], equipment:[],
-  deviations:[], stabilityStudies:[], supplierRatings:[], warehouses:[], serialNumbers:[], savedReports:[], shareholders:[], forecastData:[], abcRecords:[], supplierScores:[], positions:[], departments:[], salaryStructures:[], taxSettings:[], costCenters:[], capa:[], salesInvoices:[], salesOrders:[], drugRegistrations:[], cycleCountRecords:[], productionStages:[], dispensingRecords:[],
+  deviations:[], stabilityStudies:[], supplierRatings:[], warehouses:[], serialNumbers:[], savedReports:[], shareholders:[], forecastData:[], abcRecords:[], supplierScores:[], positions:[], departments:[], salaryStructures:[], taxSettings:[], appSettings:[], costCenters:[], capa:[], salesInvoices:[], salesOrders:[], drugRegistrations:[], cycleCountRecords:[], productionStages:[], dispensingRecords:[],
   billOfMaterials:[], accounts:[],
   _seq:{}
 };
@@ -8003,35 +8003,7 @@ function cloneRecord(table, id){
 })();
 
 // ── 7. Audit Log Page ─────────────────────────────────────────
-PAGES.auditlog = function(){
-  const logs = (DB.auditLogs || []).slice().reverse(); // newest first
-  const actionColors = { 'إضافة':'b-green', 'تعديل':'b-blue', 'حذف':'b-red' };
-  const tableLabels = {
-    products:'منتجات', materials:'مواد خام', expenses:'مصروفات',
-    employees:'موظفون', deliveryOrders:'أوامر توريد', productionOrders:'إنتاج',
-    inventory:'مخزون', contracts:'عقود', assets:'أصول', purchaseOrders:'مشتريات',
-    journalEntries:'يومية', appUsers:'مستخدمون', budgetLines:'ميزانية',
-    distributors:'موزعون', receivables:'ذمم', taxLines:'ضرائب',
-  };
-
-  setPage('سجل التدقيق — Audit Log',
-    `${logs.length} إجراء مسجل`,
-    `<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="if(confirm('مسح كل سجل التدقيق؟')){DB.auditLogs=[];saveDB();go('auditlog')}">🗑 مسح السجل</button>`,
-    `${!logs.length
-      ? '<div class="card"><div class="empty">لا توجد إجراءات مسجلة بعد — ستظهر هنا بعد إضافة أو تعديل أي بيانات</div></div>'
-      : `<div class="card">${tbl(
-          ['الوقت','المستخدم','الإجراء','الجدول','التفاصيل'],
-          logs.slice(0,200).map(l=>tr(
-            `<span style="font-size:11px;color:var(--muted)">${new Date(l.timestamp).toLocaleString('ar-EG')}</span>`,
-            `<span class="fw7">${l.user||'—'}</span>`,
-            `<span class="badge ${actionColors[l.action]||'b-gray'}">${l.action}</span>`,
-            `<span style="font-size:12px">${tableLabels[l.table]||l.table}</span>`,
-            l.details ? `<span style="font-size:11px;color:var(--muted)">${escapeHtml(String(l.details))}</span>` : '—'
-          ))
-        ,'tbl_auditlog')}</div>`
-    }`
-  );
-};
+;
 
 // ── 8. Visual Expiry Progress Bar ────────────────────────────
 function expiryBadge(expiryDateStr){
@@ -8109,13 +8081,6 @@ PAGES.users = function(){
   content.appendChild(panel);
 };
 
-function saveAppSettings(){
-  const sound = document.getElementById('sound-toggle')?.checked;
-  const sidebarAuto = document.getElementById('sidebar-auto')?.checked;
-  localStorage.setItem('sound_alerts', sound ? '1' : '0');
-  localStorage.setItem('sidebar_collapsed', sidebarAuto ? '1' : '0');
-  showNotif && showNotif('✅ تم حفظ الإعدادات', 'success');
-}
 
 // ── 12. Dynamic Table Refresh (avoid full page reload) ───────
 // Instead of go(page) after CRUD, refresh just the table content
@@ -20694,7 +20659,13 @@ function runGMPExpiryReport(){
 }
 function runDistributorBalReport(){
   const dists=getAll('distributors')||[];
-  const invs=getAll('salesInvoices')||[];
+  const invs=getAll('salesInvoices')||[
+  {id:'settings',icon:'⚙️',label:'الإعدادات',sec:'الإعدادات'},
+
+  {id:'backup',icon:'💾',label:'النسخ الاحتياطي',sec:'الإعدادات'},
+
+  {id:'companies',icon:'🏢',label:'الشركات المتعددة',sec:'الإعدادات'},
+];
   const rows=dists.map(d=>{const bal=invs.filter(i=>i.distributorId===d.id&&i.paymentStatus==='unpaid').reduce((s,i)=>s+Number(i.totalAmount||0),0);return{name:d.name,bal};}).filter(d=>d.bal>0).sort((a,b)=>b.bal-a.bal);
   _showReportResult('🤝 أرصدة الموزعين',tbl(['الموزع','الرصيد المستحق'],rows.map(d=>tr(escapeHtml(d.name),fmtC(d.bal))),'tbl_db'));
 }
@@ -20706,6 +20677,541 @@ function runProdEfficiencyReport(){
 
 // ── إضافة nav للصفحات التحليلية الناقصة ─────────────────────────
 // (تُضاف في navItems أسفل)
+
+// ══════════════════════════════════════════════════════════════════
+// ⚙️ الإعدادات والأمان — Settings & Security
+// ══════════════════════════════════════════════════════════════════
+
+// ── قراءة إعدادات التطبيق ────────────────────────────────────────
+function getAppSettings(){
+  const s = (getAll('appSettings')||[])[0] || {};
+  return {
+    // الوضع
+    theme:           s.theme           || 'dark',   // dark / light / auto
+    // المخزون
+    costingMethod:   s.costingMethod   || 'fefo',   // fifo / avg / fefo
+    lowStockThreshold: Number(s.lowStockThreshold ?? 10),
+    expiryAlertDays: Number(s.expiryAlertDays   ?? 90),
+    // الشركة
+    companyName:     s.companyName     || '',
+    companyAddress:  s.companyAddress  || '',
+    companyPhone:    s.companyPhone    || '',
+    companyTRN:      s.companyTRN      || '',
+    companyEdaNo:    s.companyEdaNo    || '',
+    companyLogo:     s.companyLogo     || '',
+    // التدقيق
+    auditEnabled:    s.auditEnabled    ?? true,
+    // التنبيهات
+    notifyLowStock:  s.notifyLowStock  ?? true,
+    notifyExpiry:    s.notifyExpiry    ?? true,
+    notifyOverCredit:s.notifyOverCredit?? true,
+    notifyOverdue:   s.notifyOverdue   ?? true,
+    // الإقرارات
+    vatPeriod:       s.vatPeriod       || 'monthly', // monthly / quarterly
+    fiscalYearStart: s.fiscalYearStart || '01-01',
+  };
+}
+
+function saveAppSettings(d){
+  const existing = (getAll('appSettings')||[])[0];
+  existing ? update('appSettings',existing.id,{...d,updatedAt:new Date().toISOString(),updatedBy:_authUser?.name||'—'})
+           : insert('appSettings',{...d,createdAt:new Date().toISOString()});
+}
+
+function applyTheme(theme){
+  const root = document.documentElement;
+  if(theme==='light'){
+    root.style.setProperty('--bg','#ffffff');
+    root.style.setProperty('--bg-sec','#f8f9fa');
+    root.style.setProperty('--hover','#f0f0f0');
+    root.style.setProperty('--text','#1a1a2e');
+    root.style.setProperty('--muted','#666');
+    root.style.setProperty('--border','#e0e0e0');
+    root.style.setProperty('--card','#ffffff');
+    root.classList.remove('dark'); root.classList.add('light');
+  } else {
+    root.style.setProperty('--bg','#0d1117');
+    root.style.setProperty('--bg-sec','#161b22');
+    root.style.setProperty('--hover','#21262d');
+    root.style.setProperty('--text','#e6edf3');
+    root.style.setProperty('--muted','#7d8590');
+    root.style.setProperty('--border','#30363d');
+    root.style.setProperty('--card','#161b22');
+    root.classList.remove('light'); root.classList.add('dark');
+  }
+  try{ localStorage.setItem('_erp_theme', theme); } catch(e){}
+}
+
+// تطبيق الثيم عند التحميل
+(function(){
+  try{
+    const t = localStorage.getItem('_erp_theme') ||
+              ((getAll('appSettings')||[])[0]?.theme) || 'dark';
+    if(t==='light') applyTheme('light');
+  }catch(e){}
+})();
+
+// ══════════════════════════════════════════════════════════════════
+// A. صفحة الإعدادات الشاملة
+// ══════════════════════════════════════════════════════════════════
+PAGES.settings = function(){
+  const s = getAppSettings();
+
+  setPage('⚙️ إعدادات النظام','Application Settings',
+    `<button class="btn btn-green" onclick="saveSettingsPage()">💾 حفظ الإعدادات</button>`,
+    `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+    <!-- المظهر والعرض -->
+    <div class="card">
+      <div style="font-weight:700;font-size:13px;margin-bottom:14px">🎨 المظهر والعرض</div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:12px;display:block;margin-bottom:8px;color:var(--muted)">وضع الإضاءة</label>
+        <div style="display:flex;gap:8px">
+          ${['dark','light'].map(t=>`
+          <button id="theme-btn-${t}" onclick="applyTheme('${t}');document.getElementById('st-theme').value='${t}';updateThemeBtns('${t}')"
+            class="btn ${s.theme===t?'btn-green':'btn-white'}" style="flex:1">
+            ${t==='dark'?'🌙 وضع ليلي':'☀️ وضع نهاري'}
+          </button>`).join('')}
+        </div>
+        <input type="hidden" id="st-theme" value="${s.theme}">
+      </div>
+      <div style="font-size:11px;color:var(--muted);padding:8px;background:var(--hover);border-radius:6px">
+        💡 يُحفظ الثيم في المتصفح ويُطبَّق فوراً دون إعادة تحميل
+      </div>
+    </div>
+
+    <!-- بيانات الشركة -->
+    <div class="card">
+      <div style="font-weight:700;font-size:13px;margin-bottom:14px">🏢 بيانات الشركة</div>
+      ${fg('الاسم التجاري', inp('st-cname',   'text', s.companyName||'',''))}
+      ${fg('العنوان',       inp('st-caddr',   'text', s.companyAddress||'',''))}
+      ${fg('رقم الهاتف',   inp('st-cphone',  'tel',  s.companyPhone||'',''))}
+      <div class="form-row">
+        ${fg('رقم الضريبة TRN', inp('st-ctrn','text',s.companyTRN||'',''))}
+        ${fg('رقم ترخيص EDA',   inp('st-ceda','text',s.companyEdaNo||'',''))}
+      </div>
+    </div>
+
+    <!-- المخزون والتسعير -->
+    <div class="card">
+      <div style="font-weight:700;font-size:13px;margin-bottom:14px">📦 المخزون والتسعير</div>
+      ${fg('طريقة التسعير', `<select id="st-costing" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        <option value="fefo" ${s.costingMethod==='fefo'?'selected':''}>FEFO — أول انتهاءً أول خروجاً (الموصى به للأدوية 💊)</option>
+        <option value="fifo" ${s.costingMethod==='fifo'?'selected':''}>FIFO — أول داخل أول خارج</option>
+        <option value="avg"  ${s.costingMethod==='avg' ?'selected':''}>AVG — متوسط التكلفة المرجح</option>
+      </select>`)}
+      <div class="form-row" style="margin-top:10px">
+        ${fg('حد المخزون المنخفض (وحدة)', inp('st-lowstock','number',s.lowStockThreshold,''))}
+        ${fg('تنبيه الصلاحية (يوم)', inp('st-expiry','number',s.expiryAlertDays,''))}
+      </div>
+      <div style="font-size:11px;color:var(--muted);padding:8px;background:var(--hover);border-radius:6px;margin-top:8px">
+        📋 FEFO مطلوب لقطاع الأدوية — قانون 151/2019 م.31
+      </div>
+    </div>
+
+    <!-- التنبيهات -->
+    <div class="card">
+      <div style="font-weight:700;font-size:13px;margin-bottom:14px">🔔 التنبيهات التلقائية</div>
+      ${[
+        {id:'st-notif-stock',  val:s.notifyLowStock,   label:'تنبيه المخزون المنخفض'},
+        {id:'st-notif-expiry', val:s.notifyExpiry,     label:'تنبيه قرب انتهاء الصلاحية'},
+        {id:'st-notif-credit', val:s.notifyOverCredit, label:'تنبيه تجاوز الحد الائتماني'},
+        {id:'st-notif-due',    val:s.notifyOverdue,    label:'تنبيه الفواتير المتأخرة'},
+      ].map(n=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px">${n.label}</span>
+        <label style="position:relative;width:42px;height:22px;cursor:pointer">
+          <input type="checkbox" id="${n.id}" ${n.val?'checked':''} style="opacity:0;width:0;height:0">
+          <span onclick="document.getElementById('${n.id}').click()"
+            style="position:absolute;inset:0;background:${n.val?'var(--green)':'var(--border)'};border-radius:11px;transition:.2s"></span>
+        </label>
+      </div>`).join('')}
+    </div>
+
+    <!-- المحاسبة والضرائب -->
+    <div class="card">
+      <div style="font-weight:700;font-size:13px;margin-bottom:14px">💰 المحاسبة والضرائب</div>
+      ${fg('فترة إقرار VAT', `<select id="st-vatperiod" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        <option value="monthly"   ${s.vatPeriod==='monthly'?  'selected':''}>شهري (الأكثر شيوعاً)</option>
+        <option value="quarterly" ${s.vatPeriod==='quarterly'?'selected':''}>ربع سنوي</option>
+      </select>`)}
+      ${fg('بداية السنة المالية', `<select id="st-fiscal" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        <option value="01-01" ${s.fiscalYearStart==='01-01'?'selected':''}>يناير (01-01)</option>
+        <option value="07-01" ${s.fiscalYearStart==='07-01'?'selected':''}>يوليو (01-07)</option>
+        <option value="04-01" ${s.fiscalYearStart==='04-01'?'selected':''}>أبريل (01-04)</option>
+      </select>`)}
+      <div style="margin-top:10px">
+        <label style="font-size:12px">تفعيل سجل التدقيق</label>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:4px">
+          <input type="checkbox" id="st-audit" ${s.auditEnabled?'checked':''}>
+          <span style="font-size:12px;color:var(--muted)">توثيق كل إضافة/تعديل/حذف</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- النسخ الاحتياطي -->
+    <div class="card">
+      <div style="font-weight:700;font-size:13px;margin-bottom:14px">💾 النسخ الاحتياطي</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn btn-green" onclick="exportBackup()">
+          📤 تصدير نسخة احتياطية (JSON)
+        </button>
+        <button class="btn btn-white" onclick="document.getElementById('backup-file').click()">
+          📥 استيراد نسخة احتياطية
+        </button>
+        <input type="file" id="backup-file" accept=".json" style="display:none"
+          onchange="importBackup(this)">
+        <div style="font-size:11px;color:var(--muted);padding:8px;background:var(--hover);border-radius:6px">
+          ⚠️ الاستيراد سيستبدل بيانات الشركة الحالية. احتفظ بنسخة احتياطية أولاً.
+        </div>
+        <button class="btn btn-white" onclick="go('auditlog')">
+          📋 عرض سجل التدقيق
+        </button>
+        <button class="btn btn-white" onclick="clearAuditLog()">
+          🗑️ مسح سجل التدقيق
+        </button>
+      </div>
+    </div>
+
+    </div>`
+  );
+};
+
+function updateThemeBtns(theme){
+  ['dark','light'].forEach(t=>{
+    const btn=document.getElementById('theme-btn-'+t);
+    if(btn) btn.className='btn '+(t===theme?'btn-green':'btn-white');
+  });
+}
+
+function saveSettingsPage(){
+  const d = {
+    theme:       document.getElementById('st-theme')?.value||'dark',
+    companyName: val('st-cname')||'',
+    companyAddress:val('st-caddr')||'',
+    companyPhone:val('st-cphone')||'',
+    companyTRN:  val('st-ctrn')||'',
+    companyEdaNo:val('st-ceda')||'',
+    costingMethod:  document.getElementById('st-costing')?.value||'fefo',
+    lowStockThreshold: Number(val('st-lowstock')||10),
+    expiryAlertDays:   Number(val('st-expiry')||90),
+    notifyLowStock:  document.getElementById('st-notif-stock')?.checked ?? true,
+    notifyExpiry:    document.getElementById('st-notif-expiry')?.checked?? true,
+    notifyOverCredit:document.getElementById('st-notif-credit')?.checked?? true,
+    notifyOverdue:   document.getElementById('st-notif-due')?.checked   ?? true,
+    vatPeriod:       document.getElementById('st-vatperiod')?.value||'monthly',
+    fiscalYearStart: document.getElementById('st-fiscal')?.value||'01-01',
+    auditEnabled:    document.getElementById('st-audit')?.checked ?? true,
+  };
+  saveAppSettings(d);
+  applyTheme(d.theme);
+  // Update sidebar company name if changed
+  if(d.companyName){
+    const t1=document.querySelector('.logo-text .t1');
+    if(t1) t1.textContent=d.companyName;
+  }
+  showNotif&&showNotif('✅ تم حفظ الإعدادات','success');
+  go('settings');
+}
+
+function clearAuditLog(){
+  if(!confirm('مسح كل سجل التدقيق؟ لا يمكن التراجع.')) return;
+  if(DB.auditLogs) DB.auditLogs=[];
+  saveDB();
+  showNotif&&showNotif('✅ تم مسح سجل التدقيق','success');
+  go('settings');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// B. النسخ الاحتياطي — Backup / Restore
+// ══════════════════════════════════════════════════════════════════
+function exportBackup(){
+  const co   = _coActiveId ? _coGetAll().find(c=>c.id===_coActiveId) : null;
+  const name = co?.name || 'الشركة';
+  const data = {
+    _meta: {
+      version:  '2.0',
+      exported: new Date().toISOString(),
+      company:  name,
+      companyId:_coActiveId||null,
+      tables:   Object.keys(DB).filter(k=>k!=='_seq'),
+    },
+    data: DB,
+  };
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], {type:'application/json;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `backup-${name.replace(/\s+/g,'-')}-${today()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  // Log
+  if(DB.auditLogs) DB.auditLogs.push({action:'BACKUP_EXPORT',description:'تصدير نسخة احتياطية',by:_authUser?.name||'—',at:new Date().toISOString()});
+  saveDB();
+  showNotif&&showNotif('✅ تم تصدير النسخة الاحتياطية','success');
+}
+
+function importBackup(input){
+  const file = input.files?.[0]; if(!file) return;
+  if(!confirm('⚠️ سيتم استبدال بيانات الشركة الحالية بالكامل.\nهل أنت متأكد؟')) {
+    input.value=''; return;
+  }
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      const parsed = JSON.parse(e.target.result);
+      // Validate
+      if(!parsed._meta || !parsed.data){
+        alert('❌ الملف غير صالح — يجب أن يكون ملف نسخ احتياطي من نظام ERP الدوائي');
+        return;
+      }
+      if(parsed._meta.version !== '2.0'){
+        if(!confirm(`⚠️ إصدار النسخة الاحتياطية: ${parsed._meta.version}\nالإصدار الحالي: 2.0\nهل تريد المتابعة؟`)) return;
+      }
+      // Restore
+      const oldDB = {...DB};
+      Object.assign(DB, parsed.data);
+      if(!DB._seq) DB._seq={};
+      saveDB();
+      // Log restore
+      if(DB.auditLogs) DB.auditLogs.push({
+        action:'BACKUP_IMPORT',
+        description:`استيراد نسخة احتياطية من ${parsed._meta.exported?.slice(0,10)||'—'} | شركة: ${parsed._meta.company||'—'}`,
+        by:_authUser?.name||'—', at:new Date().toISOString()
+      });
+      saveDB();
+      showNotif&&showNotif(`✅ تم استيراد النسخة الاحتياطية — ${parsed._meta.company||'—'} (${parsed._meta.exported?.slice(0,10)||'—'})`, 'success');
+      setTimeout(()=>go('dashboard'), 800);
+    } catch(err){
+      alert('❌ خطأ في قراءة الملف:\n'+err.message);
+    }
+    input.value='';
+  };
+  reader.readAsText(file,'UTF-8');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// C. إدارة الشركات المتعددة — Companies
+// ══════════════════════════════════════════════════════════════════
+PAGES.companies = function(){
+  const cos = _coGetAll()||[];
+  setPage('🏢 الشركات المتعددة','Multi-Company — كل شركة ببيانات مستقلة',
+    `<button class="btn btn-green" onclick="addNewCompany()">+ شركة جديدة</button>`,
+    `<div class="stats-grid g3" style="margin-bottom:14px">
+      <div class="stat-card"><div class="lbl">إجمالي الشركات</div><div class="val">${cos.length}</div></div>
+      <div class="stat-card"><div class="lbl text-green">الشركة النشطة</div><div class="val text-green" style="font-size:13px">${escapeHtml(cos.find(c=>c.id===_coActiveId)?.name||'—')}</div></div>
+      <div class="stat-card"><div class="lbl">معرّف الشركة الحالية</div><div class="val" style="font-size:11px"><code>${_coActiveId||'—'}</code></div></div>
+    </div>
+    <div class="card">${tbl(
+      ['الشركة','النوع','اللون','المعرّف','الحالة','إجراء'],
+      cos.map(c=>tr(
+        `<div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="width:28px;height:28px;border-radius:6px;background:linear-gradient(135deg,#${c.color||'2ea043'},#0d4a1e);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px">${(c.name||'?')[0]}</div>
+            <strong>${escapeHtml(c.name||'—')}</strong>
+          </div>
+        </div>`,
+        escapeHtml(c.type||'شركة دوائية'),
+        `<div style="width:24px;height:24px;border-radius:50%;background:#${c.color||'2ea043'}"></div>`,
+        `<code style="font-size:10px">${c.id}</code>`,
+        c.id===_coActiveId
+          ? '<span class="badge b-green">✅ نشطة الآن</span>'
+          : '<span class="badge b-gray">—</span>',
+        `<div class="action-bar" style="gap:4px">
+          ${c.id!==_coActiveId?`<button class="btn btn-white btn-sm" style="font-size:10px" onclick="switchToCompany('${c.id}')">تبديل</button>`:''}
+          <button class="btn btn-white btn-sm" style="font-size:10px" onclick="exportCompanyBackup('${c.id}')">📤 نسخة</button>
+          <button class="icon-btn edit" onclick="editCompany('${c.id}')">${ic.edit}</button>
+          ${c.id!==_coActiveId?`<button class="icon-btn del" onclick="deleteCompany('${c.id}')">${ic.del}</button>`:''}
+        </div>`
+      ))
+    ,'tbl_cos')}</div>`
+  );
+};
+
+function addNewCompany(){
+  const name = prompt('اسم الشركة الجديدة:');
+  if(!name?.trim()) return;
+  const type = prompt('نوع الشركة:', 'شركة دوائية')||'شركة دوائية';
+  const colors = ['2ea043','3498db','e74c3c','9b59b6','f39c12','1abc9c','e67e22'];
+  const color = colors[Math.floor(Math.random()*colors.length)];
+  const newId = 'co_' + Date.now().toString(36);
+  const cos = _coGetAll();
+  cos.push({id:newId, name:name.trim(), type, color});
+  _coSetAll(cos);
+  showNotif&&showNotif(`✅ تم إنشاء شركة "${name.trim()}" — انقر "تبديل" للدخول إليها`,'success');
+  go('companies');
+}
+
+function editCompany(id){
+  const cos = _coGetAll();
+  const co  = cos.find(c=>c.id===id); if(!co) return;
+  const name = prompt('اسم الشركة:', co.name);
+  if(name===null) return;
+  const type = prompt('النوع:', co.type||'شركة دوائية');
+  if(type===null) return;
+  co.name = name.trim()||co.name;
+  co.type = type.trim()||co.type;
+  _coSetAll(cos);
+  // Update sidebar
+  if(id===_coActiveId){
+    const t1=document.querySelector('.logo-text .t1');
+    if(t1) t1.textContent=co.name;
+    const lbl=document.getElementById('co-active-label');
+    if(lbl) lbl.textContent=co.name;
+  }
+  go('companies');
+}
+
+function deleteCompany(id){
+  if(id===_coActiveId){alert('لا يمكن حذف الشركة النشطة الحالية');return;}
+  const cos=_coGetAll();
+  const co=cos.find(c=>c.id===id);
+  if(!confirm(`حذف شركة "${co?.name}"؟ سيتم حذف جميع بياناتها نهائياً.`)) return;
+  // Delete data
+  try{ localStorage.removeItem('pharmaERP_'+id); } catch(e){}
+  _coSetAll(cos.filter(c=>c.id!==id));
+  showNotif&&showNotif('✅ تم حذف الشركة','success');
+  go('companies');
+}
+
+function switchToCompany(id){
+  if(!confirm('تبديل إلى هذه الشركة؟ سيتم حفظ البيانات الحالية.')) return;
+  saveDB();
+  const cos=_coGetAll();
+  const co=cos.find(c=>c.id===id);
+  coEnter(co);
+  go('dashboard');
+}
+
+function exportCompanyBackup(id){
+  const cos=_coGetAll();
+  const co=cos.find(c=>c.id===id); if(!co) return;
+  try{
+    const raw=localStorage.getItem('pharmaERP_'+id)||localStorage.getItem('pharmaERP_data_'+id);
+    if(!raw){alert('لا بيانات لهذه الشركة');return;}
+    const data={_meta:{version:'2.0',exported:new Date().toISOString(),company:co.name,companyId:id},data:JSON.parse(raw)};
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url;
+    a.download=`backup-${co.name.replace(/\s+/g,'-')}-${today()}.json`;
+    a.click(); URL.revokeObjectURL(url);
+    showNotif&&showNotif(`✅ تم تصدير نسخة "${co.name}"`, 'success');
+  }catch(e){alert('خطأ: '+e.message);}
+}
+
+// ══════════════════════════════════════════════════════════════════
+// D. سجل التدقيق المحسَّن
+// ══════════════════════════════════════════════════════════════════
+
+// Patch insert/update/remove to log automatically
+(function patchCRUD(){
+  if(window._crudPatched) return;
+  window._crudPatched = true;
+
+  const _origInsert = insert;
+  const _origUpdate = update;
+  const _origRemove = remove;
+
+  window.insert = function(table, obj){
+    const result = _origInsert(table, obj);
+    if(table !== 'auditLogs' && getAppSettings().auditEnabled){
+      const label = result?.name || result?.description || result?.id || '';
+      try{
+        if(!DB.auditLogs) DB.auditLogs=[];
+        DB.auditLogs.push({
+          id: Date.now(), action:'إضافة', table, recordId:result?.id,
+          description:`أضاف "${escapeHtml(String(label).slice(0,40))}" في جدول ${table}`,
+          by:_authUser?.name||'النظام', at:new Date().toISOString(),
+          autoSaved:true,
+        });
+      }catch(e){}
+    }
+    return result;
+  };
+
+  window.update = function(table, id, patch){
+    const result = _origUpdate(table, id, patch);
+    if(table !== 'auditLogs' && getAppSettings().auditEnabled){
+      try{
+        if(!DB.auditLogs) DB.auditLogs=[];
+        DB.auditLogs.push({
+          id:Date.now(), action:'تعديل', table, recordId:id,
+          description:`عدّل سجل #${id} في ${table}`,
+          by:_authUser?.name||'النظام', at:new Date().toISOString(),
+          autoSaved:true,
+        });
+      }catch(e){}
+    }
+    return result;
+  };
+
+  window.remove = function(table, id){
+    if(table !== 'auditLogs' && getAppSettings().auditEnabled){
+      try{
+        const record = getById(table,id);
+        const label = record?.name||record?.description||id;
+        if(!DB.auditLogs) DB.auditLogs=[];
+        DB.auditLogs.push({
+          id:Date.now(), action:'حذف', table, recordId:id,
+          description:`حذف "${escapeHtml(String(label).slice(0,40))}" من ${table}`,
+          by:_authUser?.name||'النظام', at:new Date().toISOString(),
+          autoSaved:true,
+        });
+      }catch(e){}
+    }
+    return _origRemove(table, id);
+  };
+})();
+
+PAGES.auditlog = function(){
+  const logs = ((DB.auditLogs||[]).slice()).reverse();
+  const filterAction = window._auditFilter||'all';
+  const filtered = filterAction==='all' ? logs : logs.filter(l=>l.action===filterAction);
+  const actionCls  = {'إضافة':'b-green','تعديل':'b-blue','حذف':'b-red','BACKUP_EXPORT':'b-purple','BACKUP_IMPORT':'b-amber'};
+
+  setPage('📋 سجل التدقيق — Audit Log',
+    `${logs.length} سجل | قانون المحاسبة 127/1981`,
+    `<div style="display:flex;gap:8px">
+      <button class="btn btn-white" onclick="go('settings')">← الإعدادات</button>
+      <button class="btn btn-white" onclick="exportAuditCSV()">📊 تصدير CSV</button>
+    </div>`,
+    `<div style="display:flex;gap:6px;margin-bottom:12px">
+      ${['all','إضافة','تعديل','حذف'].map(f=>`
+      <button class="btn btn-sm ${filterAction===f?'btn-green':'btn-white'}" onclick="window._auditFilter='${f}';go('auditlog')">
+        ${f==='all'?'الكل ('+logs.length+')':f+' ('+logs.filter(l=>l.action===f).length+')'}
+      </button>`).join('')}
+    </div>
+    <div class="card">${tbl(
+      ['التاريخ والوقت','الإجراء','الجدول','رقم السجل','التفاصيل','المستخدم'],
+      filtered.slice(0,200).map(l=>tr(
+        `<span style="font-size:10px;direction:ltr">${l.at?.slice(0,19)?.replace('T',' ')||'—'}</span>`,
+        `<span class="badge ${actionCls[l.action]||'b-gray'}" style="font-size:10px">${l.action||'—'}</span>`,
+        `<code style="font-size:10px">${escapeHtml(l.table||'—')}</code>`,
+        l.recordId ? `<code style="font-size:10px">#${l.recordId}</code>` : '—',
+        `<span style="font-size:11px">${escapeHtml((l.description||'—').slice(0,60))}</span>`,
+        escapeHtml(l.by||'—')
+      ))
+    ,'tbl_audit')}</div>`
+  );
+};
+
+function exportAuditCSV(){
+  const logs = ((DB.auditLogs||[]).slice()).reverse();
+  const header = ['التاريخ','الوقت','الإجراء','الجدول','رقم السجل','التفاصيل','المستخدم'];
+  const rows = logs.map(l=>[
+    l.at?.slice(0,10)||'', l.at?.slice(11,19)||'',
+    l.action||'', l.table||'', l.recordId||'',
+    (l.description||'').replace(/,/g,' '), l.by||''
+  ]);
+  const bom='\uFEFF';
+  const csv=[header.join(','),...rows.map(r=>r.join(','))].join('\n');
+  const blob=new Blob([bom+csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url;
+  a.download='audit-log-'+today()+'.csv';
+  a.click(); URL.revokeObjectURL(url);
+}
 
 // renderNav/go called by coEnter() after company is selected
 
