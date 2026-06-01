@@ -415,7 +415,7 @@ const defaultDB = {
   expenses:[], employees:[], budgetLines:[], campaigns:[], salesTargets:[],
   receivables:[], payrollRuns:[], purchaseOrders:[], qualityChecks:[],
   returns:[], contracts:[], assets:[], eInvoices:[], taxLines:[], batchMaterials:[], productIngredients:[], partnerAccounts:[], partnerEntries:[], journalEntries:[], chartOfAccounts:[], historicalBalances:[], appUsers:[], auditLogs:[], leaveRequests:[], appraisals:[], equipment:[],
-  deviations:[], stabilityStudies:[], supplierRatings:[], warehouses:[], serialNumbers:[], savedReports:[], taxSettings:[], costCenters:[], capa:[], salesInvoices:[], salesOrders:[], drugRegistrations:[], cycleCountRecords:[], productionStages:[], dispensingRecords:[],
+  deviations:[], stabilityStudies:[], supplierRatings:[], warehouses:[], serialNumbers:[], savedReports:[], positions:[], departments:[], salaryStructures:[], taxSettings:[], costCenters:[], capa:[], salesInvoices:[], salesOrders:[], drugRegistrations:[], cycleCountRecords:[], productionStages:[], dispensingRecords:[],
   billOfMaterials:[], accounts:[],
   _seq:{}
 };
@@ -1176,37 +1176,7 @@ function renderExpTbl(type){
 // MODALS — Products
 // ═══════════════════════════════════════════════
 
-PAGES.payroll=function(){
-  const emps=getAll('employees').filter(e=>e.status==='active');
-  const runs=getAll('payrollRuns');
-  const totalMonthly=emps.reduce((s,e)=>s+Number(e.salary||0)+Number(e.allowances||0)-Number(e.deductions||0),0);
-  setPage('مسير الرواتب','حساب وصرف رواتب الموظفين',
-    `<button class="btn btn-green" onclick="generatePayroll()">💸 صرف رواتب الشهر</button>`,
-    `<div class="stats-grid g3">
-      <div class="stat-card"><div class="lbl">الموظفون النشطون</div><div class="val">${emps.length}</div></div>
-      <div class="stat-card"><div class="lbl">إجمالي الرواتب الشهرية</div><div class="val text-red">${fmt(totalMonthly)} ج.م</div></div>
-      <div class="stat-card"><div class="lbl">الرواتب السنوية</div><div class="val text-purple">${fmt(totalMonthly*12)} ج.م</div></div>
-    </div>
-    <div class="tabs">
-      <button class="tab active" data-group="pay" data-tab="pay-emp">كشف الرواتب</button>
-      <button class="tab" data-group="pay" data-tab="pay-hist">سجل الصرف</button>
-    </div>
-    <div id="pay-emp" class="tab-pane" data-group="pay"><div class="card">${tbl(['الاسم','القسم','الراتب الأساسي','البدلات','الخصومات','صافي الراتب',''],
-      emps.map(e=>{const net=Number(e.salary||0)+Number(e.allowances||0)-Number(e.deductions||0);
-        return tr(`<strong>${escapeHtml(e.name)}</strong>`,e.department,fmt(e.salary||0)+' ج.م',
-          Number(e.allowances||0)?fmt(e.allowances)+' ج.م':'—',
-          Number(e.deductions||0)?`<span class="text-red">${fmt(e.deductions)} ج.م</span>`:'—',
-          `<span class="text-green fw7">${fmt(net)} ج.م</span>`,
-          `<button class="icon-btn edit" onclick="editPayrollEmp(${e.id})">${ic.edit}</button>`);
-      })
-    ,'tbl_payroll')}</div></div>
-    <div id="pay-hist" class="tab-pane" data-group="pay" style="display:none"><div class="card">${tbl(['الشهر','السنة','عدد الموظفين','إجمالي الصرف','تاريخ الصرف',''],
-      runs.map(r=>tr(MONTHS[r.month-1]||r.month,r.year,fmtN(r.employeeCount),
-        `<span class="text-green fw7">${fmt(r.totalAmount)} ج.م</span>`,r.payDate||'-',
-        `<button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('payrollRuns',${r.id});go('payroll')}">${ic.del}</button>`))
-    ,'tbl_payroll')}</div></div>`);
-  initTabs();
-};
+;
 
 PAGES.purchasing=function(){
   const rows=getAll('purchaseOrders');
@@ -1345,20 +1315,6 @@ function saveReceivable(id){
   id?update('receivables',id,d):insert('receivables',d);closeModal();go('receivables');
 }
 
-function generatePayroll(){
-  const emps=getAll('employees').filter(e=>e.status==='active');
-  const total=emps.reduce((s,e)=>s+Number(e.salary||0)+Number(e.allowances||0)-Number(e.deductions||0),0);
-  const m=new Date().getMonth()+1,y=new Date().getFullYear();
-  showModal(modal('صرف رواتب الشهر',`
-    <div style="background:var(--green-bg);border:1px solid rgba(46,160,67,.3);border-radius:10px;padding:14px;margin-bottom:16px">
-      <div class="fw7" style="color:var(--green-light);margin-bottom:4px">ملخص الصرف</div>
-      <div class="text-muted fz12">${emps.length} موظف · إجمالي: ${fmt(total)} ج.م</div>
-    </div>
-    ${fg('الشهر',sel('pay-month',MONTHS.map((m,i)=>({v:i+1,l:m})),m))}
-    ${fg('السنة',inp('pay-year','number',y))}
-    ${fg('تاريخ الصرف',inp('pay-date','date',today()))}
-    <div class="form-actions"><button class="btn btn-green" onclick="confirmPayroll()">✅ تأكيد الصرف</button><button class="btn btn-ghost" onclick="closeModal()">إلغاء</button></div>`));
-}
 function confirmPayroll(){
   const emps=getAll('employees').filter(e=>e.status==='active');
   const total=emps.reduce((s,e)=>s+Number(e.salary||0)+Number(e.allowances||0)-Number(e.deductions||0),0);
@@ -8600,132 +8556,11 @@ function showInvoiceWithQR(invoiceId){
 // ══════════════════════════════════════════
 
 // 24. إدارة الإجازات والحضور
-PAGES.attendance = function(){
-  const employees = getAll('employees').filter(e=>e.status==='active');
-  const leaves    = getAll('leaveRequests');
-  const today_str = today();
-
-  setPage('الحضور والإجازات','إدارة حضور الموظفين وطلبات الإجازة',
-    `<div style="display:flex;gap:8px">
-      <button class="btn btn-green" onclick="addLeaveRequest()">${ic.plus} طلب إجازة</button>
-      <button class="btn btn-white" onclick="go('employees')">👥 الموظفون</button>
-    </div>`,
-    `<div class="stats-grid g4" style="margin-bottom:16px">
-      <div class="stat-card"><div class="lbl">الموظفون النشطون</div><div class="val text-green">${employees.length}</div></div>
-      <div class="stat-card"><div class="lbl">طلبات إجازة معلقة</div><div class="val text-amber">${leaves.filter(l=>l.status==='pending').length}</div></div>
-      <div class="stat-card"><div class="lbl">في إجازة اليوم</div><div class="val text-blue">${leaves.filter(l=>l.status==='approved'&&today_str>=l.startDate&&today_str<=l.endDate).length}</div></div>
-      <div class="stat-card"><div class="lbl">طلبات مرفوضة</div><div class="val text-red">${leaves.filter(l=>l.status==='rejected').length}</div></div>
-    </div>
-    <div class="card">${tbl(
-      ['الموظف','القسم','نوع الإجازة','من','إلى','الأيام','الحالة',''],
-      leaves.sort((a,b)=>(b.createdAt||'')>(a.createdAt||'')?1:-1).map(l=>{
-        const emp = getById('employees',l.employeeId);
-        const days = l.startDate&&l.endDate ? Math.ceil((new Date(l.endDate)-new Date(l.startDate))/86400000)+1 : '—';
-        return tr(
-          emp?.name||'—', emp?.department||'—',
-          l.leaveType||'سنوية',
-          l.startDate||'—', l.endDate||'—',
-          days,
-          l.status==='approved'?'<span class="badge b-green">موافق</span>':l.status==='rejected'?'<span class="badge b-red">مرفوض</span>':'<span class="badge b-amber">معلق</span>',
-          _authUser?.role==='admin'||_authUser?.role==='finance'?
-          `<div class="action-bar">
-            ${l.status==='pending'?`<button class="btn btn-green btn-sm" onclick="approveLeave(${l.id})">✅ موافقة</button>
-            <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="rejectLeave(${l.id})">❌ رفض</button>`:''}
-            <button class="icon-btn del" onclick="if(confirm('حذف الطلب؟')){remove('leaveRequests',${l.id});go('attendance')}">${ic.del}</button>
-          </div>`:'—'
-        );
-      })
-    ,'tbl_attendance')}</div>`
-  );
-};
-
-function addLeaveRequest(){
-  const emps = getAll('employees').filter(e=>e.status==='active');
-  showModal(modal('➕ طلب إجازة جديد',`
-    ${fg('الموظف *',sel('lr-emp',[{v:0,l:'اختر موظف...'},...emps.map(e=>({v:e.id,l:e.name}))],0))}
-    ${fg('نوع الإجازة',sel('lr-type',[{v:'سنوية',l:'إجازة سنوية'},{v:'مرضية',l:'إجازة مرضية'},{v:'عارضة',l:'إجازة عارضة'},{v:'بدون راتب',l:'إجازة بدون راتب'},{v:'أمومة',l:'إجازة أمومة'}],'سنوية'))}
-    <div class="form-row">
-      ${fg('من تاريخ *',inp('lr-start','date',today()))}
-      ${fg('إلى تاريخ *',inp('lr-end','date',today()))}
-    </div>
-    ${fg('ملاحظات',inp('lr-notes','text',''))}
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="saveLeaveRequest()">💾 حفظ</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>`));
-}
-function saveLeaveRequest(){
-  const empId=numVal('lr-emp'),start=val('lr-start'),end=val('lr-end');
-  if(!empId||!start||!end){alert('يرجى تعبئة الموظف والتاريخ');return;}
-  insert('leaveRequests',{employeeId:empId,leaveType:val('lr-type'),startDate:start,endDate:end,notes:val('lr-notes')||null,status:'pending'});
-  closeModal();go('attendance');
-}
-function approveLeave(id){update('leaveRequests',id,{status:'approved',approvedBy:_authUser?.name});go('attendance');}
-function rejectLeave(id){update('leaveRequests',id,{status:'rejected',rejectedBy:_authUser?.name});go('attendance');}
+;
 
 
 // 25. تقييم الأداء
-PAGES.appraisals = function(){
-  const appraisals = getAll('appraisals');
-  const emps = getAll('employees').filter(e=>e.status==='active');
-  setPage('تقييم الأداء','التقييم السنوي والنصف سنوي للموظفين',
-    `<button class="btn btn-green" onclick="addAppraisal()">${ic.plus} تقييم جديد</button>`,
-    `<div class="card">${tbl(
-      ['الموظف','القسم','فترة التقييم','الدرجة الإجمالية','التوصية','تاريخ التقييم',''],
-      appraisals.map(a=>{
-        const emp = getById('employees',a.employeeId);
-        const score = Number(a.overallScore||0);
-        const scoreColor = score>=90?'text-green':score>=75?'text-blue':score>=60?'text-amber':'text-red';
-        return tr(
-          emp?.name||'—',emp?.department||'—',a.period||'—',
-          `<span class="${scoreColor} fw7">${score}%</span>`,
-          a.recommendation||'—',a.appraisalDate||'—',
-          `<div class="action-bar">
-            <button class="icon-btn" onclick="showAppraisalDetail(${a.id})" style="color:var(--blue)">📋</button>
-            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('appraisals',${a.id});go('appraisals')}">${ic.del}</button>
-          </div>`
-        );
-      })
-    ,'tbl_appraisals')}</div>`
-  );
-};
-
-function addAppraisal(){
-  const emps = getAll('employees').filter(e=>e.status==='active');
-  showModal(modal('➕ تقييم أداء جديد',`
-    ${fg('الموظف *',sel('ap-emp',[{v:0,l:'اختر موظف...'},...emps.map(e=>({v:e.id,l:e.name+' ('+e.department+')'}))],'0'))}
-    <div class="form-row">
-      ${fg('فترة التقييم',sel('ap-period',[{v:'سنوي 2024',l:'سنوي 2024'},{v:'نصف سنوي H1 2024',l:'نصف سنوي H1'},{v:'نصف سنوي H2 2024',l:'نصف سنوي H2'},{v:'ربع سنوي Q1',l:'ربع سنوي Q1'}],'سنوي 2024'))}
-      ${fg('تاريخ التقييم',inp('ap-date','date',today()))}
-    </div>
-    <div style="margin:12px 0;font-weight:600;font-size:13px">معايير التقييم (من 100):</div>
-    <div class="form-row">
-      ${fg('جودة العمل',inp('ap-quality','number','','0-100'))}
-      ${fg('الالتزام بالمواعيد',inp('ap-punctuality','number','','0-100'))}
-    </div>
-    <div class="form-row">
-      ${fg('العمل الجماعي',inp('ap-teamwork','number','','0-100'))}
-      ${fg('الإنتاجية',inp('ap-productivity','number','','0-100'))}
-    </div>
-    ${fg('التوصية',sel('ap-rec',[{v:'ترقية',l:'ترقية'},{v:'زيادة راتب',l:'زيادة راتب'},{v:'مكافأة',l:'مكافأة'},{v:'تدريب',l:'يحتاج تدريب'},{v:'تحذير',l:'تحذير'}],'مكافأة'))}
-    ${fg('ملاحظات المقيّم',`<textarea id="ap-notes" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif"></textarea>`)}
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="saveAppraisal()">💾 حفظ التقييم</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>`));
-}
-function saveAppraisal(){
-  const empId=numVal('ap-emp');
-  if(!empId){alert('اختر الموظف');return;}
-  const q=Number(val('ap-quality')||0),p2=Number(val('ap-punctuality')||0),t=Number(val('ap-teamwork')||0),pr=Number(val('ap-productivity')||0);
-  const overall=((q+p2+t+pr)/4).toFixed(1);
-  insert('appraisals',{employeeId:empId,period:val('ap-period'),appraisalDate:val('ap-date'),
-    qualityScore:q,punctualityScore:p2,teamworkScore:t,productivityScore:pr,
-    overallScore:overall,recommendation:val('ap-rec'),
-    notes:document.getElementById('ap-notes')?.value||null,
-    appraiser:_authUser?.name||'المدير'});
-  closeModal();go('appraisals');
-}
+;
 
 
 // 26. هيكل رواتب متعدد العناصر
@@ -14764,31 +14599,7 @@ function saveCAPA(id){
 
 // ── صفحة الموارد البشرية الرئيسية ────────────────────
 
-PAGES.hr = function(){
-  const emps    = getAll('employees')||[];
-  const active  = emps.filter(e=>e.status==='active');
-  const leaves  = (getAll('leaveRequests')||[]).filter(l=>l.status==='pending');
-  const payroll = getAll('payrollRuns')||[];
-  setPage('👥 الموارد البشرية','إدارة الكوادر الدوائية',
-    `<div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-green" onclick="go('employees')">👤 الموظفون</button>
-      <button class="btn btn-white" onclick="go('payroll')">💵 مسير الرواتب</button>
-      <button class="btn btn-white" onclick="go('attendance')">📅 الحضور والإجازات</button>
-    </div>`,
-    `<div class="stats-grid g4" style="margin-bottom:16px">
-      <div class="stat-card"><div class="lbl">إجمالي الموظفين</div><div class="val">${emps.length}</div></div>
-      <div class="stat-card"><div class="lbl text-green">نشط ✅</div><div class="val text-green">${active.length}</div></div>
-      <div class="stat-card"><div class="lbl text-amber">طلبات إجازة معلقة</div><div class="val text-amber">${leaves.length}</div></div>
-      <div class="stat-card"><div class="lbl">إجمالي الرواتب الشهرية</div><div class="val">${fmtC(active.reduce((s,e)=>s+Number(e.salary||0),0))}</div></div>
-    </div>
-    <div class="card">
-      <h3 style="margin:0 0 12px;font-size:14px">👥 ملخص الأقسام</h3>
-      ${['QC','QA','الإنتاج','المخازن','الشؤون المالية','الموارد البشرية','التسجيل والشؤون التنظيمية'].map(dep=>{
-        const n=active.filter(e=>e.department===dep||e.dept===dep).length;
-        return n>0?`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span>${dep}</span><strong>${n} موظف</strong></div>`:''}).join('')}
-    </div>`
-  );
-};
+;
 
 
 // ── تحديث بيانات DB لإضافة الجداول الجديدة ───────────
@@ -19319,6 +19130,1030 @@ function showTaxPreview(){
     <div style="margin-top:12px;font-size:10px;color:var(--muted)">* مثال لمبلغ ${fmtC(exSales)} مبيعات وراتب ${fmtC(exGross)}</div>
     <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">إغلاق</button></div>`));
 }
+
+// ══════════════════════════════════════════════════════════════════
+// 👥 الموارد البشرية — HR Management
+// قانون العمل 12/2003 | هيئة الدواء 151/2019 | GMP EU Annex 1
+// تأمينات 148/2019 | ضريبة المرتبات 91/2005
+// ══════════════════════════════════════════════════════════════════
+
+// ── ثوابت قطاع الدواء ────────────────────────────────────────────
+const PHARMA_DEPARTMENTS = [
+  {v:'production',    l:'🏭 الإنتاج (Production)'},
+  {v:'qc',           l:'🔬 ضبط الجودة (QC)'},
+  {v:'qa',           l:'✅ ضمان الجودة (QA)'},
+  {v:'packaging',    l:'📦 التغليف (Packaging)'},
+  {v:'warehouse',    l:'🏪 المستودعات والمخازن'},
+  {v:'procurement',  l:'🛒 الشراء والتوريد'},
+  {v:'sales',        l:'🚚 المبيعات والتوزيع'},
+  {v:'regulatory',   l:'📋 الشؤون التنظيمية (RA)'},
+  {v:'rd',           l:'🧪 البحث والتطوير (R&D)'},
+  {v:'hr',           l:'👥 الموارد البشرية'},
+  {v:'finance',      l:'💰 المالية والحسابات'},
+  {v:'it',           l:'💻 تقنية المعلومات'},
+  {v:'maintenance',  l:'🔧 الصيانة والهندسة'},
+  {v:'management',   l:'🎯 الإدارة العليا'},
+];
+
+const PHARMA_POSITIONS = {
+  production: ['مدير إنتاج','مشرف إنتاج','مشغّل إنتاج أول','مشغّل إنتاج','فني إنتاج'],
+  qc:         ['مدير QC','صيدلاني QC','كيميائي QC','فني مختبر أول','فني مختبر'],
+  qa:         ['مدير QA / QP مسؤول','مشرف QA','متخصص QA','مراجع وثائق'],
+  packaging:  ['مشرف تغليف','مشغّل تغليف','مفتش تغليف'],
+  warehouse:  ['مدير مستودعات','أمين مستودع','فني مخازن'],
+  sales:      ['مدير مبيعات','مندوب مبيعات','مشرف توزيع','سائق توزيع'],
+  regulatory: ['مدير شؤون تنظيمية','متخصص تسجيل أدوية','منسق EDA'],
+  hr:         ['مدير موارد بشرية','أخصائي موارد بشرية','مسؤول رواتب'],
+  finance:    ['مدير مالي','محاسب أول','محاسب','أمين خزينة'],
+  management: ['مدير عام','نائب مدير عام','مدير تنفيذي'],
+};
+
+const LEAVE_TYPES = [
+  {v:'annual',     l:'🌴 سنوية',        days:21, paid:true},
+  {v:'sick',       l:'🏥 مرضية',        days:90, paid:true},
+  {v:'casual',     l:'⚡ عارضة',        days:6,  paid:true},
+  {v:'maternity',  l:'👶 أمومة',        days:90, paid:true},
+  {v:'hajj',       l:'🕋 حج',          days:21, paid:true,  once:true},
+  {v:'unpaid',     l:'⏸️ بدون راتب',   days:0,  paid:false},
+  {v:'childcare',  l:'🍼 رعاية طفل',   days:730,paid:false},
+];
+
+const ALLOWANCE_TYPES = [
+  {k:'allowChemical',  l:'بدل طبيعة عمل كيميائية (GMP)'},
+  {k:'allowHazard',    l:'بدل مخاطر'},
+  {k:'allowProduction',l:'بدل إنتاجية'},
+  {k:'allowQuality',   l:'بدل جودة'},
+  {k:'allowTransport', l:'بدل انتقال'},
+  {k:'allowHousing',   l:'بدل سكن / إقامة'},
+  {k:'allowPhone',     l:'بدل هاتف'},
+  {k:'allowFood',      l:'بدل طعام'},
+  {k:'allowSeniority', l:'علاوة أقدمية'},
+  {k:'allowSales',     l:'عمولة مبيعات'},
+];
+
+const DEDUCTION_TYPES = [
+  {k:'dedAbsence',     l:'خصم غياب'},
+  {k:'dedLate',        l:'خصم تأخير'},
+  {k:'dedAdvance',     l:'استقطاع سلفة'},
+  {k:'dedPenalty',     l:'جزاء إداري'},
+  {k:'dedHousing',     l:'إيجار سكن'},
+  {k:'dedUniform',     l:'استقطاع ملابس عمل'},
+  {k:'dedOther',       l:'خصومات أخرى'},
+];
+
+const APPRAISAL_CRITERIA = [
+  {k:'gmpCompliance',  l:'الامتثال لمعايير GMP',      weight:20},
+  {k:'productivity',   l:'الإنتاجية (Output vs Target)',weight:20},
+  {k:'quality',        l:'جودة العمل (نسبة الرفض)',    weight:15},
+  {k:'safety',         l:'السلامة (Safety Record)',     weight:15},
+  {k:'training',       l:'إتمام التدريب',               weight:10},
+  {k:'attendance',     l:'الحضور والانتظام',            weight:10},
+  {k:'teamwork',       l:'روح الفريق والتعاون',          weight:5},
+  {k:'initiative',     l:'المبادرة والابتكار',           weight:5},
+];
+
+// حساب الراتب الإجمالي لموظف
+function calcEmployeeGross(emp){
+  const basic = Number(emp.basicSalary||emp.salary||0);
+  let   allow = 0;
+  ALLOWANCE_TYPES.forEach(a=>{ allow += Number(emp[a.k]||0); });
+  return basic + allow;
+}
+
+// حساب صافي راتب موظف كامل
+function calcEmployeeNet(emp){
+  const ts    = getTaxSettings();
+  const gross = calcEmployeeGross(emp);
+  const basic = Number(emp.basicSalary||emp.salary||0);
+  const varPay= gross - basic;
+  const si    = calcSocialInsurance(basic, varPay, ts);
+  const tax   = calcSalaryTax(gross * 12, ts);
+  const stamp = gross * ts.stampPayrollEmployee;
+  let   deds  = si.employee + tax.monthlyTax + stamp;
+  DEDUCTION_TYPES.forEach(d=>{ deds += Number(emp[d.k]||0); });
+  return {
+    basic, gross, allowances: gross - basic,
+    siEmployee: si.employee, siEmployer: si.employer,
+    incomeTax: tax.monthlyTax, stamp,
+    totalDeductions: deds,
+    netSalary: Math.max(0, gross - deds),
+    taxable: tax.taxable,
+  };
+}
+
+// ══════════════════════════════════════════════════════════════════
+// A. صفحة الموظفين
+// ══════════════════════════════════════════════════════════════════
+PAGES.employees = function(){
+  const emps  = getAll('employees')||[];
+  const active= emps.filter(e=>e.status==='active');
+  const deptFilter = window._empDeptFilter||'all';
+
+  const deptCounts = {};
+  emps.forEach(e=>{deptCounts[e.department]=(deptCounts[e.department]||0)+1;});
+
+  const filtered = deptFilter==='all' ? emps : emps.filter(e=>e.department===deptFilter);
+
+  setPage('👤 سجل الموظفين','Employee Master — قانون العمل 12/2003 + هيئة الدواء 151/2019',
+    `<div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-green" onclick="addEmployee()">+ موظف جديد</button>
+      <button class="btn btn-white" onclick="go('payroll')">💸 مسير الرواتب</button>
+      <button class="btn btn-white" onclick="go('hr')">← لوحة HR</button>
+    </div>`,
+    `<div class="stats-grid g4" style="margin-bottom:14px">
+      <div class="stat-card"><div class="lbl">إجمالي الموظفين</div><div class="val">${emps.length}</div></div>
+      <div class="stat-card"><div class="lbl text-green">نشطون</div><div class="val text-green">${active.length}</div></div>
+      <div class="stat-card"><div class="lbl">إجمالي الرواتب</div><div class="val" style="font-size:13px">${fmtC(active.reduce((s,e)=>s+calcEmployeeGross(e),0))}</div></div>
+      <div class="stat-card"><div class="lbl">المؤهلون للتسجيل المهني</div><div class="val">${emps.filter(e=>e.licenseNo).length}</div></div>
+    </div>
+
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+      <button class="btn btn-sm ${deptFilter==='all'?'btn-green':'btn-white'}" onclick="window._empDeptFilter='all';go('employees')">الكل (${emps.length})</button>
+      ${Object.entries(deptCounts).map(([d,n])=>{
+        const dInfo = PHARMA_DEPARTMENTS.find(x=>x.v===d)||{l:d};
+        return `<button class="btn btn-sm ${deptFilter===d?'btn-green':'btn-white'}" onclick="window._empDeptFilter='${d}';go('employees')">${dInfo.l.split(' (')[0]} (${n})</button>`;
+      }).join('')}
+    </div>
+
+    <div class="card">${tbl(
+      ['الموظف','القسم / المسمى','بيانات قانونية','الراتب الإجمالي','الصافي','الحالة','إجراء'],
+      filtered.map(e=>{
+        const calc = calcEmployeeNet(e);
+        const dept = PHARMA_DEPARTMENTS.find(d=>d.v===e.department)||{l:e.department||'—'};
+        const yearsExp = e.hireDate ? Math.floor((new Date()-new Date(e.hireDate))/31557600000) : 0;
+        return tr(
+          `<div>
+            <strong>${escapeHtml(e.name||'—')}</strong>
+            <div style="font-size:11px;color:var(--muted)">${escapeHtml(e.nationalId||'—')} | ${yearsExp} سنة خدمة</div>
+            ${e.licenseNo?`<div style="font-size:10px;color:var(--blue)">🎓 ${escapeHtml(e.licenseNo)}</div>`:''}
+          </div>`,
+          `<div>
+            <span style="font-size:12px">${escapeHtml(dept.l.split(' (')[0]||'—')}</span>
+            <div style="font-size:11px;color:var(--muted)">${escapeHtml(e.position||'—')}</div>
+          </div>`,
+          `<div style="font-size:10px;color:var(--muted)">
+            <div>${e.contractType||'غير محدد'}</div>
+            ${e.medicalExpiry?`<div style="${new Date(e.medicalExpiry)<new Date()?'color:var(--red)':''}">كشف: ${e.medicalExpiry}</div>`:''}
+            ${e.gmpTrainingExpiry?`<div style="${new Date(e.gmpTrainingExpiry)<new Date()?'color:var(--red)':''}">GMP: ${e.gmpTrainingExpiry}</div>`:''}
+          </div>`,
+          `<div><strong>${fmtC(calc.gross)}</strong><div style="font-size:10px;color:var(--muted)">${fmtC(calc.basic)} أساسي + ${fmtC(calc.allowances)} بدلات</div></div>`,
+          `<strong class="text-green">${fmtC(calc.netSalary)}</strong>`,
+          `<span class="badge ${e.status==='active'?'b-green':e.status==='on_leave'?'b-amber':'b-gray'}">${e.status==='active'?'نشط':e.status==='on_leave'?'في إجازة':'موقوف'}</span>`,
+          `<div class="action-bar" style="gap:3px">
+            <button class="btn btn-white btn-sm" style="font-size:10px" onclick="showEmployeeCard(${e.id})">ملف</button>
+            <button class="icon-btn edit" onclick="editEmployee(${e.id})">${ic.edit}</button>
+            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('employees',${e.id});go('employees')}">${ic.del}</button>
+          </div>`
+        );
+      })
+    ,'tbl_emps')}</div>`
+  );
+};
+
+function addEmployee(){ showEmployeeForm(); }
+function editEmployee(id){ showEmployeeForm(getById('employees',id)||{}); }
+
+function showEmployeeForm(e={}){
+  const deptPositions = e.department ? (PHARMA_POSITIONS[e.department]||[]) : [];
+  showModal(modal(e.id?'✏️ تعديل موظف':'👤 موظف جديد', `
+    <div style="max-height:82vh;overflow-y:auto;padding-right:4px">
+    <div class="tabs" id="emp-tabs">
+      <button class="tab active" onclick="switchTab('emp-tabs','emp-personal')">👤 شخصية</button>
+      <button class="tab" onclick="switchTab('emp-tabs','emp-job')">💼 وظيفية</button>
+      <button class="tab" onclick="switchTab('emp-tabs','emp-salary')">💰 هيكل الراتب</button>
+      <button class="tab" onclick="switchTab('emp-tabs','emp-pharma')">🧪 متطلبات EDA</button>
+    </div>
+
+    <!-- ══ البيانات الشخصية ══ -->
+    <div id="emp-personal" class="tab-content active">
+      ${fg('الاسم الكامل *', inp('e-name','text',e.name||'',''))}
+      <div class="form-row">
+        ${fg('الرقم القومي *', inp('e-nid','text',e.nationalId||'','14 رقم'))}
+        ${fg('تاريخ الميلاد', inp('e-dob','date',e.dateOfBirth||''))}
+      </div>
+      <div class="form-row">
+        ${fg('الجنس', `<select id="e-gender" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+          <option value="male" ${(e.gender||'male')==='male'?'selected':''}>ذكر</option>
+          <option value="female" ${e.gender==='female'?'selected':''}>أنثى</option>
+        </select>`)}
+        ${fg('الحالة الاجتماعية', `<select id="e-marital" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+          <option value="single" ${(e.maritalStatus||'single')==='single'?'selected':''}>أعزب</option>
+          <option value="married" ${e.maritalStatus==='married'?'selected':''}>متزوج</option>
+          <option value="divorced" ${e.maritalStatus==='divorced'?'selected':''}>مطلق</option>
+          <option value="widowed" ${e.maritalStatus==='widowed'?'selected':''}>أرمل</option>
+        </select>`)}
+      </div>
+      <div class="form-row">
+        ${fg('عدد المعالين', inp('e-dep','number',e.dependents||0,'للتأمينات'))}
+        ${fg('الجنسية', inp('e-nat','text',e.nationality||'مصري',''))}
+      </div>
+      <div class="form-row">
+        ${fg('رقم الهاتف *', inp('e-phone','tel',e.phone||'','01xxxxxxxxx'))}
+        ${fg('البريد الإلكتروني', inp('e-email','email',e.email||'',''))}
+      </div>
+      ${fg('العنوان', `<textarea id="e-addr" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif">${escapeHtml(e.address||'')}</textarea>`)}
+      <div class="form-row">
+        ${fg('شخص للطوارئ', inp('e-emname','text',e.emergencyName||'',''))}
+        ${fg('هاتف الطوارئ', inp('e-emphone','tel',e.emergencyPhone||'',''))}
+      </div>
+    </div>
+
+    <!-- ══ البيانات الوظيفية ══ -->
+    <div id="emp-job" class="tab-content">
+      <div class="form-row">
+        ${fg('القسم *', `<select id="e-dept" onchange="updatePositionList(this.value)"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+          ${PHARMA_DEPARTMENTS.map(d=>`<option value="${d.v}" ${(e.department||'')==d.v?'selected':''}>${d.l}</option>`).join('')}
+        </select>`)}
+        ${fg('المسمى الوظيفي *', `<select id="e-pos"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+          ${(PHARMA_POSITIONS[e.department||'production']||[]).map(p=>`<option ${p===e.position?'selected':''}>${escapeHtml(p)}</option>`).join('')}
+          <option value="other" ${!PHARMA_POSITIONS[e.department||'']?.includes(e.position)?'selected':''}>أخرى — حدد يدوياً</option>
+        </select>`)}
+      </div>
+      ${fg('المسمى اليدوي (إن اخترت أخرى)', inp('e-pos-custom','text',e.position||'',''))}
+      <div class="form-row">
+        ${fg('تاريخ التعيين *', inp('e-hire','date',e.hireDate||today()))}
+        ${fg('نوع العقد', `<select id="e-contract" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+          <option value="permanent" ${(e.contractType||'permanent')==='permanent'?'selected':''}>دائم (غير محدد المدة)</option>
+          <option value="fixed" ${e.contractType==='fixed'?'selected':''}>محدد المدة</option>
+          <option value:"temporary" ${e.contractType==='temporary'?'selected':''}>مؤقت</option>
+          <option value="probation" ${e.contractType==='probation'?'selected':''}>فترة تجربة (3 أشهر)</option>
+        </select>`)}
+      </div>
+      <div class="form-row">
+        ${fg('تاريخ انتهاء العقد', inp('e-cont-exp','date',e.contractExpiry||''))}
+        ${fg('رقم تسجيل التأمينات', inp('e-ins','text',e.insuranceNo||'',''))}
+      </div>
+      <div class="form-row">
+        ${fg('المؤهل العلمي', `<select id="e-edu" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+          ${['دكتوراه','ماجستير','بكالوريوس صيدلة','بكالوريوس علوم','دبلوم معهد','مؤهل متوسط','ثانوية عامة'].map(q=>`<option ${q===e.education?'selected':''}>${q}</option>`).join('')}
+        </select>`)}
+        ${fg('التخصص', inp('e-spec','text',e.specialization||'','مثال: صيدلانيات — كيمياء تحليلية'))}
+      </div>
+      <div class="form-row">
+        ${fg('رقم التسجيل المهني', inp('e-lic','text',e.licenseNo||'','نقابة الصيادلة / الكيميائيين'))}
+        ${fg('انتهاء التسجيل', inp('e-lic-exp','date',e.licenseExpiry||''))}
+      </div>
+      ${fg('الحالة', `<select id="e-status" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        <option value="active" ${(e.status||'active')==='active'?'selected':''}>✅ نشط</option>
+        <option value="on_leave" ${e.status==='on_leave'?'selected':''}>⏸️ في إجازة</option>
+        <option value="suspended" ${e.status==='suspended'?'selected':''}>🚫 موقوف</option>
+        <option value="terminated" ${e.status==='terminated'?'selected':''}>❌ منهي الخدمة</option>
+      </select>`)}
+    </div>
+
+    <!-- ══ هيكل الراتب ══ -->
+    <div id="emp-salary" class="tab-content">
+      <div style="padding:10px;background:rgba(46,160,67,.06);border:1px solid rgba(46,160,67,.2);border-radius:8px;margin-bottom:12px;font-size:11px">
+        💰 الحد الأدنى للأجور: <strong>3,500 ج.م/شهر</strong> — قانون العمل 12/2003 م.34
+      </div>
+      ${fg('الأجر الأساسي (ج.م/شهر) *', inp('e-basic','number',e.basicSalary||e.salary||'','الحد الأدنى 3,500 ج.م'))}
+      <div style="font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 6px">البدلات (ج.م/شهر)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        ${ALLOWANCE_TYPES.map(a=>`<div class="fg"><label style="font-size:11px">${a.l}</label>
+          <input type="number" id="e-${a.k}" value="${Number(e[a.k]||0)}" min="0"
+            style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px;font-size:12px;color:var(--text)"></div>`).join('')}
+      </div>
+      <div style="font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 6px">الخصومات الإضافية (ج.م/شهر)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        ${DEDUCTION_TYPES.map(d=>`<div class="fg"><label style="font-size:11px">${d.l}</label>
+          <input type="number" id="e-${d.k}" value="${Number(e[d.k]||0)}" min="0"
+            style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px;font-size:12px;color:var(--text)"></div>`).join('')}
+      </div>
+      <div id="emp-salary-preview" style="margin-top:12px;padding:10px;background:var(--hover);border-radius:8px;font-size:12px">
+        <button class="btn btn-white btn-sm" onclick="previewEmpSalary()">🔍 حساب صافي الراتب تلقائياً</button>
+      </div>
+    </div>
+
+    <!-- ══ متطلبات EDA/GMP ══ -->
+    <div id="emp-pharma" class="tab-content">
+      <div style="padding:10px;background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.2);border-radius:8px;margin-bottom:12px;font-size:11px">
+        🏛️ <strong>هيئة الدواء 151/2019 + EU GMP Annex 1:</strong> يجب توثيق جميع المؤهلات والتدريب
+      </div>
+      <div class="form-row">
+        ${fg('تاريخ انتهاء الكشف الطبي', inp('e-med','date',e.medicalExpiry||''))}
+        ${fg('تاريخ تجديد تدريب GMP', inp('e-gmp','date',e.gmpTrainingExpiry||''))}
+      </div>
+      <div class="form-row">
+        ${fg('شهادة سلامة مواد كيميائية (حتى)', inp('e-chem','date',e.chemSafetyExpiry||''))}
+        ${fg('مؤهل Qualified Person (QP)', `<select id="e-qp" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+          <option value="no" ${!e.isQP?'selected':''}>لا</option>
+          <option value="yes" ${e.isQP?'selected':''}>✅ نعم — مسؤول إفراج دفعات</option>
+        </select>`)}
+      </div>
+      ${fg('سجل التدريب / ملاحظات GMP', `<textarea id="e-training" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:12px;color:var(--text);font-family:Cairo,sans-serif" placeholder="دورات مكتملة، شهادات، ملاحظات...">${escapeHtml(e.trainingNotes||'')}</textarea>`)}
+      <div class="form-row">
+        ${fg('رقم صندوق البريد الداخلي', inp('e-mailbox','text',e.mailbox||'',''))}
+        ${fg('رقم الباج / الدخول', inp('e-badge','text',e.badgeNo||'',''))}
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveEmployee(${e.id||''})">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>
+    </div>`, null, '720px'));
+  setTimeout(()=>{ initTabs(); updatePositionList(e.department||'production'); }, 100);
+}
+
+function updatePositionList(dept){
+  const sel = document.getElementById('e-pos');
+  if(!sel) return;
+  const positions = PHARMA_POSITIONS[dept]||[];
+  sel.innerHTML = positions.map(p=>`<option>${escapeHtml(p)}</option>`).join('') +
+    '<option value="other">أخرى — حدد يدوياً</option>';
+}
+
+function previewEmpSalary(){
+  const basic = Number(document.getElementById('e-basic')?.value||0);
+  let allows = 0;
+  ALLOWANCE_TYPES.forEach(a=>{allows += Number(document.getElementById('e-'+a.k)?.value||0);});
+  let deds = 0;
+  DEDUCTION_TYPES.forEach(d=>{deds += Number(document.getElementById('e-'+d.k)?.value||0);});
+  const mockEmp = {basicSalary:basic, ...Object.fromEntries(ALLOWANCE_TYPES.map(a=>[a.k,Number(document.getElementById('e-'+a.k)?.value||0)])), ...Object.fromEntries(DEDUCTION_TYPES.map(d=>[d.k,Number(document.getElementById('e-'+d.k)?.value||0)]))};
+  const c = calcEmployeeNet(mockEmp);
+  const el = document.getElementById('emp-salary-preview');
+  if(!el) return;
+  const ts = getTaxSettings();
+  el.innerHTML = `
+    <div style="font-weight:700;margin-bottom:8px">📊 محاكاة الراتب</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:12px">
+      <span>الأجر الأساسي:</span><strong>${fmtC(c.basic)}</strong>
+      <span>إجمالي البدلات:</span><strong class="text-green">+ ${fmtC(c.allowances)}</strong>
+      <span style="border-top:1px solid var(--border);padding-top:4px">الإجمالي:</span><strong style="border-top:1px solid var(--border);padding-top:4px">${fmtC(c.gross)}</strong>
+      <span>تأمينات موظف (${(ts.siEmployee*100).toFixed(2)}%):</span><span class="text-red">- ${fmtC(c.siEmployee)}</span>
+      <span>ضريبة دخل:</span><span class="text-red">- ${fmtC(c.incomeTax)}</span>
+      <span>دمغة رواتب (${(ts.stampPayrollEmployee*100).toFixed(3)}%):</span><span class="text-red">- ${fmtC(c.stamp)}</span>
+      <span>خصومات إضافية:</span><span class="text-red">- ${fmtC(deds)}</span>
+      <span style="border-top:2px solid var(--green);padding-top:4px;font-weight:700">صافي الراتب:</span><strong style="border-top:2px solid var(--green);padding-top:4px;font-size:14px;color:var(--green-light)">${fmtC(c.netSalary)}</strong>
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin-top:4px">* تأمينات صاحب العمل (${(ts.siEmployer*100).toFixed(2)}%) = ${fmtC(c.siEmployer)} — غير مُستقطعة من الراتب</div>`;
+}
+
+function saveEmployee(id){
+  const name  = val('e-name');
+  const nid   = val('e-nid');
+  const basic = numVal('e-basic');
+  if(!name)    return alert('الاسم إلزامي');
+  if(!nid)     return alert('الرقم القومي إلزامي');
+  if(!basic || basic < 3500) return alert('الأجر الأساسي يجب ألا يقل عن 3,500 ج.م (قانون العمل 12/2003 م.34)');
+
+  const pos = document.getElementById('e-pos')?.value;
+  const posFinal = pos==='other' ? (val('e-pos-custom')||pos) : pos;
+
+  const d = {
+    name, nationalId:nid,
+    dateOfBirth: document.getElementById('e-dob')?.value||null,
+    gender: document.getElementById('e-gender')?.value||'male',
+    maritalStatus: document.getElementById('e-marital')?.value||'single',
+    dependents: Number(val('e-dep')||0),
+    nationality: val('e-nat')||'مصري',
+    phone: val('e-phone')||null,
+    email: val('e-email')||null,
+    address: document.getElementById('e-addr')?.value||null,
+    emergencyName: val('e-emname')||null,
+    emergencyPhone: val('e-emphone')||null,
+    // وظيفية
+    department: document.getElementById('e-dept')?.value||'production',
+    position: posFinal,
+    hireDate: document.getElementById('e-hire')?.value||today(),
+    contractType: document.getElementById('e-contract')?.value||'permanent',
+    contractExpiry: document.getElementById('e-cont-exp')?.value||null,
+    insuranceNo: val('e-ins')||null,
+    education: document.getElementById('e-edu')?.value||null,
+    specialization: val('e-spec')||null,
+    licenseNo: val('e-lic')||null,
+    licenseExpiry: document.getElementById('e-lic-exp')?.value||null,
+    status: document.getElementById('e-status')?.value||'active',
+    // راتب
+    basicSalary: basic, salary: basic,
+    ...Object.fromEntries(ALLOWANCE_TYPES.map(a=>[a.k,Number(document.getElementById('e-'+a.k)?.value||0)])),
+    ...Object.fromEntries(DEDUCTION_TYPES.map(d2=>[d2.k,Number(document.getElementById('e-'+d2.k)?.value||0)])),
+    // EDA/GMP
+    medicalExpiry: document.getElementById('e-med')?.value||null,
+    gmpTrainingExpiry: document.getElementById('e-gmp')?.value||null,
+    chemSafetyExpiry: document.getElementById('e-chem')?.value||null,
+    isQP: document.getElementById('e-qp')?.value==='yes',
+    trainingNotes: document.getElementById('e-training')?.value||null,
+    mailbox: val('e-mailbox')||null,
+    badgeNo: val('e-badge')||null,
+  };
+  id ? update('employees',id,d) : insert('employees',d);
+  closeModal(); go('employees');
+}
+
+function showEmployeeCard(id){
+  const e = getById('employees',id); if(!e) return;
+  const c = calcEmployeeNet(e);
+  const ts= getTaxSettings();
+  const dept = PHARMA_DEPARTMENTS.find(d=>d.v===e.department)||{l:e.department||'—'};
+  const years = e.hireDate ? Math.floor((new Date()-new Date(e.hireDate))/31557600000) : 0;
+  const gratuity = c.gross * years; // شهر عن كل سنة
+
+  showModal(modal('👤 ملف الموظف — '+escapeHtml(e.name||'—'), `
+    <div style="max-height:75vh;overflow-y:auto">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;font-size:12px">
+      <div class="card" style="padding:12px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">👤 بيانات شخصية</div>
+        <div>الرقم القومي: <code>${escapeHtml(e.nationalId||'—')}</code></div>
+        <div>الجنس: ${e.gender==='female'?'أنثى':'ذكر'} | الحالة: ${e.maritalStatus||'—'}</div>
+        <div>المعالون: ${e.dependents||0} | الجنسية: ${escapeHtml(e.nationality||'—')}</div>
+        <div>الهاتف: ${escapeHtml(e.phone||'—')}</div>
+        <div>طوارئ: ${escapeHtml(e.emergencyName||'—')} — ${escapeHtml(e.emergencyPhone||'—')}</div>
+      </div>
+      <div class="card" style="padding:12px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">💼 بيانات وظيفية</div>
+        <div>القسم: <strong>${escapeHtml(dept.l.split(' (')[0])}</strong></div>
+        <div>المسمى: ${escapeHtml(e.position||'—')}</div>
+        <div>تاريخ التعيين: ${e.hireDate||'—'} | سنوات الخدمة: ${years}</div>
+        <div>نوع العقد: ${escapeHtml(e.contractType||'—')}</div>
+        ${e.licenseNo?`<div style="color:var(--blue)">رقم التسجيل: ${escapeHtml(e.licenseNo)}</div>`:''}
+        ${e.isQP?`<div style="color:var(--green-light);font-weight:700">✅ مسؤول إفراج (QP)</div>`:''}
+      </div>
+    </div>
+
+    <div class="card" style="padding:12px;margin-bottom:12px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">💰 هيكل الراتب</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px">
+        <div>الأساسي: <strong>${fmtC(c.basic)}</strong></div>
+        <div>البدلات: <strong class="text-green">${fmtC(c.allowances)}</strong></div>
+        <div>الإجمالي: <strong>${fmtC(c.gross)}</strong></div>
+        <div>تأمينات موظف: <span class="text-red">${fmtC(c.siEmployee)}</span></div>
+        <div>ضريبة دخل: <span class="text-red">${fmtC(c.incomeTax)}</span></div>
+        <div>صافي الراتب: <strong class="text-green" style="font-size:14px">${fmtC(c.netSalary)}</strong></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px">تأمينات صاحب العمل: ${fmtC(c.siEmployer)} | مكافأة نهاية الخدمة التقديرية: ${fmtC(gratuity)}</div>
+    </div>
+
+    ${(e.medicalExpiry||e.gmpTrainingExpiry)?`
+    <div class="card" style="padding:12px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">🏛️ متطلبات EDA / GMP</div>
+      ${e.medicalExpiry?`<div style="font-size:12px;color:${new Date(e.medicalExpiry)<new Date()?'var(--red)':'inherit'}">كشف طبي: ${e.medicalExpiry}</div>`:''}
+      ${e.gmpTrainingExpiry?`<div style="font-size:12px;color:${new Date(e.gmpTrainingExpiry)<new Date()?'var(--red)':'inherit'}">تدريب GMP: ${e.gmpTrainingExpiry}</div>`:''}
+      ${e.trainingNotes?`<div style="font-size:11px;color:var(--muted);margin-top:4px">${escapeHtml(e.trainingNotes)}</div>`:''}
+    </div>`:''}
+
+    <div class="form-actions">
+      <button class="btn btn-white" onclick="closeModal();editEmployee(${id})">✏️ تعديل</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إغلاق</button>
+    </div>
+    </div>`));
+}
+
+// ══════════════════════════════════════════════════════════════════
+// B. مسير الرواتب الشهري
+// ══════════════════════════════════════════════════════════════════
+PAGES.payroll = function(){
+  const emps  = (getAll('employees')||[]).filter(e=>e.status==='active');
+  const runs  = getAll('payrollRuns')||[];
+  const ts    = getTaxSettings();
+  const curM  = today().slice(0,7);
+  const selM  = window._payrollMonth||curM;
+  const run   = runs.find(r=>r.period===selM);
+
+  const preview = emps.map(e=>({...e, ...calcEmployeeNet(e)}));
+  const totGross = preview.reduce((s,e)=>s+e.gross,0);
+  const totNet   = preview.reduce((s,e)=>s+e.netSalary,0);
+  const totTax   = preview.reduce((s,e)=>s+e.incomeTax,0);
+  const totSI    = preview.reduce((s,e)=>s+e.siEmployee+e.siEmployer,0);
+  const totStamp = preview.reduce((s,e)=>s+e.stamp,0);
+
+  setPage('💸 مسير الرواتب','Payroll — قانون العمل 12/2003 + تأمينات 148/2019',
+    `<div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-green" onclick="runPayroll('${selM}')">⚙️ صرف رواتب ${selM}</button>
+      <button class="btn btn-white" onclick="exportPayrollExcel('${selM}')">📊 تصدير Excel</button>
+      <button class="btn btn-white" onclick="go('employees')">👤 الموظفون</button>
+    </div>`,
+    `<div class="form-row" style="margin-bottom:12px">
+      ${fg('الشهر', `<input type="month" id="pay-month" value="${selM}" onchange="window._payrollMonth=this.value;go('payroll')"
+        style="width:200px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">`)}
+      ${run?`<div style="padding:10px 14px;background:rgba(46,160,67,.08);border:1px solid rgba(46,160,67,.2);border-radius:8px;font-size:12px;display:flex;align-items:center">
+        ✅ رُوتِّب في ${run.processedAt?.slice(0,10)||run.createdAt?.slice(0,10)||'—'} — بواسطة ${escapeHtml(run.processedBy||'—')}
+      </div>`:'<div style="padding:10px;background:var(--hover);border-radius:8px;font-size:12px;color:var(--muted)">⏳ لم يُصرف بعد</div>'}
+    </div>
+    <div class="stats-grid g4" style="margin-bottom:14px">
+      <div class="stat-card"><div class="lbl">إجمالي الرواتب</div><div class="val">${fmtC(totGross)}</div></div>
+      <div class="stat-card"><div class="lbl text-green">صافي للصرف</div><div class="val text-green">${fmtC(totNet)}</div></div>
+      <div class="stat-card"><div class="lbl text-red">ضريبة دخل</div><div class="val text-red">${fmtC(totTax)}</div></div>
+      <div class="stat-card"><div class="lbl text-purple">تأمينات (الكل)</div><div class="val text-purple">${fmtC(totSI)}</div></div>
+    </div>
+    <div class="card">${tbl(
+      ['الموظف','القسم','الأساسي','البدلات','الإجمالي','تأمين موظف','ضريبة','دمغة','صافي'],
+      preview.map(e=>{
+        const dept = PHARMA_DEPARTMENTS.find(d=>d.v===e.department)||{l:e.department||'—'};
+        return tr(
+          escapeHtml(e.name||'—'),
+          `<span style="font-size:11px">${escapeHtml(dept.l.split(' (')[0])}</span>`,
+          fmtC(e.basic),
+          fmtC(e.allowances),
+          `<strong>${fmtC(e.gross)}</strong>`,
+          `<span class="text-red">${fmtC(e.siEmployee)}</span>`,
+          `<span class="text-red">${fmtC(e.incomeTax)}</span>`,
+          `<span class="text-red">${fmtC(e.stamp)}</span>`,
+          `<strong class="text-green">${fmtC(e.netSalary)}</strong>`
+        );
+      })
+    ,'tbl_payroll')}
+    <tr style="background:rgba(56,139,253,.04);font-weight:700">
+      <td colspan="4">الإجمالي (${emps.length} موظف)</td>
+      <td>${fmtC(totGross)}</td>
+      <td class="text-red">${fmtC(preview.reduce((s,e)=>s+e.siEmployee,0))}</td>
+      <td class="text-red">${fmtC(totTax)}</td>
+      <td class="text-red">${fmtC(totStamp)}</td>
+      <td class="text-green">${fmtC(totNet)}</td>
+    </tr>
+    </div>`
+  );
+};
+
+function runPayroll(period){
+  const emps = (getAll('employees')||[]).filter(e=>e.status==='active');
+  if(!emps.length){ alert('لا يوجد موظفون نشطون'); return; }
+  const ts = getTaxSettings();
+  const existing = (getAll('payrollRuns')||[]).find(r=>r.period===period);
+  if(existing && !confirm(`⚠️ تم صرف رواتب ${period} مسبقاً.\nهل تريد إعادة الصرف؟`)) return;
+
+  const lines = emps.map(e=>({...e, ...calcEmployeeNet(e)}));
+  const totGross = lines.reduce((s,e)=>s+e.gross,0);
+  const totNet   = lines.reduce((s,e)=>s+e.netSalary,0);
+  const totTax   = lines.reduce((s,e)=>s+e.incomeTax,0);
+  const totSIEmp = lines.reduce((s,e)=>s+e.siEmployer,0);
+  const totSIEE  = lines.reduce((s,e)=>s+e.siEmployee,0);
+  const totStamp = lines.reduce((s,e)=>s+e.stamp,0);
+
+  const run = {period, processedAt:new Date().toISOString(), processedBy:_authUser?.name||'—',
+    employeeCount:emps.length, totalGross:totGross, totalNet:totNet,
+    totalIncomeTax:totTax, totalSIEmployer:totSIEmp, totalSIEmployee:totSIEE,
+    totalStamp:totStamp, lines:lines};
+
+  existing ? update('payrollRuns',existing.id,run) : insert('payrollRuns',run);
+
+  // قيد محاسبي شامل
+  const deptTotals = {};
+  lines.forEach(e=>{
+    const dept = e.department||'admin';
+    if(!deptTotals[dept]) deptTotals[dept]={gross:0,siEmp:0,tax:0,stamp:0};
+    deptTotals[dept].gross  += e.gross;
+    deptTotals[dept].siEmp  += e.siEmployer;
+    deptTotals[dept].tax    += e.incomeTax;
+    deptTotals[dept].stamp  += e.stamp;
+  });
+
+  const debitLines = [
+    {accountCode:'5501',debit:totGross,credit:0,accountName:'رواتب وأجور'},
+    {accountCode:'5501',debit:totSIEmp,credit:0,accountName:'تأمينات صاحب العمل'},
+    {accountCode:'5703',debit:totStamp,credit:0,accountName:'دمغة رواتب'},
+  ];
+  const netForEmps = totNet;
+  const creditLines = [
+    {accountCode:'2301',debit:0,credit:netForEmps,accountName:'رواتب مستحقة للموظفين'},
+    {accountCode:'2304',debit:0,credit:totSIEE+totSIEmp,accountName:'تأمينات مستحقة'},
+    {accountCode:'2204',debit:0,credit:totTax,accountName:'ضريبة دخل مستحقة'},
+    {accountCode:'2203',debit:0,credit:totStamp,accountName:'دمغة مستحقة'},
+  ];
+  autoJournalEntry(`مسير رواتب ${period} — ${emps.length} موظف`,
+    [...debitLines,...creditLines], 'PAY-'+period, 'payroll');
+
+  showNotif&&showNotif(`✅ تم صرف رواتب ${period} — صافي ${fmtC(totNet)} لـ ${emps.length} موظف`, 'success');
+  go('payroll');
+}
+
+function exportPayrollExcel(period){
+  const run = (getAll('payrollRuns')||[]).find(r=>r.period===period);
+  const emps= run?.lines || (getAll('employees')||[]).filter(e=>e.status==='active').map(e=>({...e,...calcEmployeeNet(e)}));
+  const header = ['م','اسم الموظف','الرقم القومي','القسم','المسمى','الأجر الأساسي',
+    ...ALLOWANCE_TYPES.map(a=>a.l),'الإجمالي',
+    'تأمينات موظف','ضريبة دخل','دمغة',
+    ...DEDUCTION_TYPES.map(d=>d.l),'إجمالي الخصومات','صافي الراتب','تأمينات صاحب العمل'];
+  const rows = emps.map((e,i)=>[
+    i+1, e.name||'', e.nationalId||'',
+    PHARMA_DEPARTMENTS.find(d=>d.v===e.department)?.l||e.department||'',
+    e.position||'',
+    e.basic||e.basicSalary||e.salary||0,
+    ...ALLOWANCE_TYPES.map(a=>e[a.k]||0),
+    e.gross||0,
+    (e.siEmployee||0).toFixed(2),(e.incomeTax||0).toFixed(2),(e.stamp||0).toFixed(2),
+    ...DEDUCTION_TYPES.map(d=>e[d.k]||0),
+    e.totalDeductions?.toFixed(2)||0,
+    e.netSalary?.toFixed(2)||0,
+    (e.siEmployer||0).toFixed(2),
+  ]);
+  const bom = '\uFEFF';
+  const csv = [
+    `مسير الرواتب — ${period}`,
+    `قانون العمل 12/2003 | تأمينات 148/2019 | تاريخ: ${today()}`,
+    '', header.join(','),
+    ...rows.map(r=>r.join(',')),
+    ['','','','','','الإجمالي', ...ALLOWANCE_TYPES.map(_=>''),
+      emps.reduce((s,e)=>s+(e.gross||0),0).toFixed(2),
+      emps.reduce((s,e)=>s+(e.siEmployee||0),0).toFixed(2),
+      emps.reduce((s,e)=>s+(e.incomeTax||0),0).toFixed(2),
+      emps.reduce((s,e)=>s+(e.stamp||0),0).toFixed(2),
+      ...DEDUCTION_TYPES.map(_=>''), '',
+      emps.reduce((s,e)=>s+(e.netSalary||0),0).toFixed(2),
+      emps.reduce((s,e)=>s+(e.siEmployer||0),0).toFixed(2),
+    ].join(','),
+  ].join('\n');
+  const blob = new Blob([bom+csv],{type:'text/csv;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a'); a.href=url;
+  a.download = `Payroll-${period}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+  showNotif&&showNotif(`✅ تم تصدير مسير الرواتب — ${period}`, 'success');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// C. الحضور والإجازات
+// ══════════════════════════════════════════════════════════════════
+PAGES.attendance = function(){
+  const emps   = (getAll('employees')||[]).filter(e=>e.status==='active'||e.status==='on_leave');
+  const leaves = getAll('leaveRequests')||[];
+  const pending= leaves.filter(l=>l.status==='pending');
+  const selM   = window._attMonth||today().slice(0,7);
+
+  const mLeaves= leaves.filter(l=>(l.startDate||'').startsWith(selM));
+  const approved= mLeaves.filter(l=>l.status==='approved');
+
+  setPage('📅 الحضور والإجازات','Leave Management — قانون العمل 12/2003 م.47-57',
+    `<div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-green" onclick="addLeaveRequest()">+ طلب إجازة</button>
+      <button class="btn btn-white" onclick="go('employees')">← الموظفون</button>
+    </div>`,
+    `<div class="stats-grid g4" style="margin-bottom:14px">
+      <div class="stat-card"><div class="lbl text-amber">طلبات معلقة ⏳</div><div class="val text-amber">${pending.length}</div></div>
+      <div class="stat-card"><div class="lbl text-green">موافق عليها ${selM}</div><div class="val text-green">${approved.length}</div></div>
+      <div class="stat-card"><div class="lbl">في إجازة الآن</div><div class="val">${emps.filter(e=>e.status==='on_leave').length}</div></div>
+      <div class="stat-card"><div class="lbl">إجمالي الطلبات</div><div class="val">${leaves.length}</div></div>
+    </div>
+
+    ${pending.length ? `
+    <div style="padding:12px;background:rgba(240,136,0,.06);border:1px solid rgba(240,136,0,.2);border-radius:10px;margin-bottom:14px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px">⏳ طلبات تنتظر الموافقة (${pending.length})</div>
+      ${pending.map(l=>{
+        const emp = getById('employees',l.employeeId);
+        const lt  = LEAVE_TYPES.find(x=>x.v===l.leaveType)||{l:l.leaveType||'—'};
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:var(--hover);border-radius:8px;margin-bottom:4px">
+          <div>
+            <strong>${escapeHtml(emp?.name||'—')}</strong>
+            <span class="badge b-amber" style="font-size:10px;margin-right:6px">${lt.l}</span>
+            <span style="font-size:11px;color:var(--muted)">${l.startDate||'—'} → ${l.endDate||'—'} (${l.days||'?'} يوم)</span>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-green btn-sm" onclick="approveLeave(${l.id})">✅ موافقة</button>
+            <button class="btn btn-white btn-sm" onclick="rejectLeave(${l.id})">❌ رفض</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>` : ''}
+
+    <!-- رصيد الإجازات -->
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:10px">📊 رصيد الإجازات السنوية</div>
+      ${tbl(['الموظف','القسم','الرصيد الكلي','المستهلك','المتبقي','الحالة'],
+        emps.map(e=>{
+          const empLeaves = leaves.filter(l=>l.employeeId===e.id&&l.leaveType==='annual'&&l.status==='approved');
+          const used      = empLeaves.reduce((s,l)=>s+Number(l.days||0),0);
+          const hireYears = e.hireDate ? Math.floor((new Date()-new Date(e.hireDate))/31557600000) : 0;
+          const total     = hireYears >= 10 ? 30 : 21;
+          const curYearLeaves = empLeaves.filter(l=>(l.startDate||'').startsWith(new Date().getFullYear()+''));
+          const usedThisYear  = curYearLeaves.reduce((s,l)=>s+Number(l.days||0),0);
+          const remaining     = total - usedThisYear;
+          return tr(
+            escapeHtml(e.name||'—'),
+            PHARMA_DEPARTMENTS.find(d=>d.v===e.department)?.l?.split(' (')[0]||'—',
+            total+' يوم',
+            usedThisYear+' يوم',
+            `<strong style="color:${remaining<5?'var(--red)':remaining<10?'var(--amber)':'var(--green-light)'}">${remaining} يوم</strong>`,
+            `<span class="badge ${e.status==='on_leave'?'b-amber':'b-green'}">${e.status==='on_leave'?'في إجازة':'نشط'}</span>`
+          );
+        })
+      ,'tbl_leave_balance')}
+    </div>
+
+    <!-- سجل الطلبات -->
+    <div class="card">
+      <div style="font-weight:700;font-size:12px;margin-bottom:10px">📋 سجل طلبات الإجازة</div>
+      ${tbl(['الموظف','النوع','من','إلى','الأيام','السبب','الحالة','إجراء'],
+        leaves.sort((a,b)=>b.id-a.id).slice(0,50).map(l=>{
+          const emp = getById('employees',l.employeeId);
+          const lt  = LEAVE_TYPES.find(x=>x.v===l.leaveType)||{l:l.leaveType||'—'};
+          return tr(
+            escapeHtml(emp?.name||'—'),
+            `<span class="badge b-blue" style="font-size:10px">${lt.l}</span>`,
+            l.startDate||'—', l.endDate||'—',
+            l.days||'—',
+            escapeHtml((l.reason||'—').slice(0,30)),
+            `<span class="badge ${l.status==='approved'?'b-green':l.status==='rejected'?'b-red':'b-amber'}">${l.status==='approved'?'✅ موافق':l.status==='rejected'?'❌ مرفوض':'⏳ معلق'}</span>`,
+            `<div class="action-bar" style="gap:3px">
+              ${l.status==='pending'?`<button class="btn btn-white btn-sm" style="font-size:10px" onclick="approveLeave(${l.id})">✅</button>`:''}
+              <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('leaveRequests',${l.id});go('attendance')}">${ic.del}</button>
+            </div>`
+          );
+        })
+      ,'tbl_leaves')}
+    </div>`
+  );
+};
+
+function addLeaveRequest(){
+  const emps = (getAll('employees')||[]).filter(e=>e.status==='active');
+  showModal(modal('📅 طلب إجازة جديد',`
+    <div style="padding:10px;background:rgba(56,139,253,.06);border-radius:8px;margin-bottom:12px;font-size:11px">
+      قانون العمل 12/2003 م.47: سنوية 21 يوم | عارضة 6 أيام/سنة | مرضية 90 يوم
+    </div>
+    <div class="form-row">
+      ${fg('الموظف *', `<select id="lr-emp" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        <option value="0">اختر موظفاً...</option>
+        ${emps.map(e=>`<option value="${e.id}">${escapeHtml(e.name)}</option>`).join('')}
+      </select>`)}
+      ${fg('نوع الإجازة *', `<select id="lr-type" onchange="updateLeaveDays(this.value)" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        ${LEAVE_TYPES.map(t=>`<option value="${t.v}">${t.l} (${t.days||'—'} يوم قانونية)</option>`).join('')}
+      </select>`)}
+    </div>
+    <div class="form-row">
+      ${fg('من تاريخ *', inp('lr-start','date',today()))}
+      ${fg('حتى تاريخ *', inp('lr-end','date',today()))}
+    </div>
+    <div id="lr-days-info" style="padding:8px;background:var(--hover);border-radius:6px;margin-bottom:10px;font-size:12px">الأيام: —</div>
+    ${fg('سبب الإجازة *', `<textarea id="lr-reason" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif"></textarea>`)}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveLeaveRequest()">💾 تقديم الطلب</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+  setTimeout(()=>{
+    ['lr-start','lr-end'].forEach(id=>{
+      document.getElementById(id)?.addEventListener('change', calcLeaveDays);
+    });
+  },100);
+}
+
+function calcLeaveDays(){
+  const s=document.getElementById('lr-start')?.value;
+  const e=document.getElementById('lr-end')?.value;
+  if(!s||!e) return;
+  const days=Math.max(1,Math.floor((new Date(e)-new Date(s))/86400000)+1);
+  const el=document.getElementById('lr-days-info');
+  if(el) el.innerHTML=`<strong>${days} يوم</strong> من ${s} حتى ${e}`;
+  return days;
+}
+function updateLeaveDays(type){ calcLeaveDays(); }
+
+function saveLeaveRequest(){
+  const empId = numVal('lr-emp');
+  const type  = document.getElementById('lr-type')?.value;
+  const start = document.getElementById('lr-start')?.value;
+  const end   = document.getElementById('lr-end')?.value;
+  const reason= document.getElementById('lr-reason')?.value;
+  if(!empId)  return alert('اختر الموظف');
+  if(!start||!end) return alert('حدد تواريخ الإجازة');
+  if(!reason?.trim()) return alert('سبب الإجازة إلزامي');
+  const days = Math.max(1,Math.floor((new Date(end)-new Date(start))/86400000)+1);
+  insert('leaveRequests',{employeeId:empId, leaveType:type, startDate:start, endDate:end,
+    days, reason, status:'pending', requestedAt:today(), requestedBy:_authUser?.name||'—'});
+  closeModal(); go('attendance');
+}
+
+function approveLeave(id){
+  update('leaveRequests',id,{status:'approved',approvedBy:_authUser?.name||'—',approvedAt:today()});
+  const lr = getById('leaveRequests',id);
+  if(lr) update('employees',lr.employeeId,{status:'on_leave'});
+  showNotif&&showNotif('✅ تمت الموافقة على الإجازة','success');
+  go('attendance');
+}
+function rejectLeave(id){
+  update('leaveRequests',id,{status:'rejected',rejectedBy:_authUser?.name||'—'});
+  go('attendance');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// D. تقييم الأداء — مخصص قطاع الدواء
+// ══════════════════════════════════════════════════════════════════
+PAGES.appraisals = function(){
+  const appraisals = getAll('appraisals')||[];
+  const emps = (getAll('employees')||[]).filter(e=>e.status==='active'||e.status==='on_leave');
+
+  const gradeStats = {A_plus:0,A:0,B:0,C:0,D:0};
+  appraisals.forEach(a=>{
+    const g = a.overallGrade||'—';
+    if(g==='A+')gradeStats.A_plus++;
+    else if(g==='A')gradeStats.A++;
+    else if(g==='B')gradeStats.B++;
+    else if(g==='C')gradeStats.C++;
+    else if(g==='D')gradeStats.D++;
+  });
+
+  setPage('⭐ تقييم الأداء','Performance Appraisal — معايير GMP + قانون العمل',
+    `<button class="btn btn-green" onclick="addAppraisal()">+ تقييم جديد</button>`,
+    `<div class="stats-grid g5" style="margin-bottom:14px">
+      <div class="stat-card"><div class="lbl">ممتاز A+</div><div class="val text-green">${gradeStats.A_plus}</div></div>
+      <div class="stat-card"><div class="lbl">جيد جداً A</div><div class="val text-green">${gradeStats.A}</div></div>
+      <div class="stat-card"><div class="lbl">جيد B</div><div class="val text-blue">${gradeStats.B}</div></div>
+      <div class="stat-card"><div class="lbl">مقبول C</div><div class="val text-amber">${gradeStats.C}</div></div>
+      <div class="stat-card"><div class="lbl">ضعيف D</div><div class="val text-red">${gradeStats.D}</div></div>
+    </div>
+    <div class="card">${tbl(
+      ['الموظف','القسم','الفترة','GMP','إنتاجية','جودة','سلامة','تدريب','حضور','الإجمالي','التقدير','توصية'],
+      appraisals.sort((a,b)=>b.id-a.id).map(ap=>{
+        const emp  = getById('employees',ap.employeeId);
+        const dept = PHARMA_DEPARTMENTS.find(d=>d.v===emp?.department)||{l:emp?.department||'—'};
+        const score= Number(ap.overallScore||0);
+        return tr(
+          escapeHtml(emp?.name||'—'),
+          `<span style="font-size:11px">${escapeHtml(dept.l.split(' (')[0])}</span>`,
+          escapeHtml(ap.period||'—'),
+          ap.gmpCompliance||'—',
+          ap.productivity||'—',
+          ap.quality||'—',
+          ap.safety||'—',
+          ap.training||'—',
+          ap.attendance||'—',
+          `<strong style="color:${score>=90?'var(--green-light)':score>=70?'var(--blue)':score>=60?'var(--amber)':'var(--red)'}">${score.toFixed(1)}</strong>`,
+          `<span class="badge ${ap.overallGrade==='A+'||ap.overallGrade==='A'?'b-green':ap.overallGrade==='B'?'b-blue':ap.overallGrade==='C'?'b-amber':'b-red'}">${ap.overallGrade||'—'}</span>`,
+          escapeHtml((ap.recommendation||'—').slice(0,20))
+        );
+      })
+    ,'tbl_appraisals')}</div>`
+  );
+};
+
+function addAppraisal(){
+  const emps = (getAll('employees')||[]).filter(e=>e.status==='active');
+  const yr = new Date().getFullYear();
+  showModal(modal('⭐ تقييم أداء جديد',`
+    <div style="max-height:78vh;overflow-y:auto;padding-right:4px">
+    <div style="padding:10px;background:rgba(56,139,253,.06);border:1px solid rgba(56,139,253,.2);border-radius:8px;margin-bottom:12px;font-size:11px">
+      📋 معايير التقييم وفق GMP EU Annex 1 + هيئة الدواء 151/2019
+    </div>
+    <div class="form-row">
+      ${fg('الموظف *', `<select id="ap-emp" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        <option value="0">اختر موظفاً...</option>
+        ${emps.map(e=>`<option value="${e.id}">${escapeHtml(e.name)} — ${e.position||'—'}</option>`).join('')}
+      </select>`)}
+      ${fg('الفترة *', `<select id="ap-period" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        <option>سنوي ${yr}</option>
+        <option>ربع سنوي Q1-${yr}</option>
+        <option>ربع سنوي Q2-${yr}</option>
+        <option>ربع سنوي Q3-${yr}</option>
+        <option>ربع سنوي Q4-${yr}</option>
+        <option>نصف سنوي H1-${yr}</option>
+        <option>نصف سنوي H2-${yr}</option>
+      </select>`)}
+    </div>
+
+    <div style="font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 8px">
+      📊 معايير التقييم (0-100 لكل معيار)
+    </div>
+    <div style="background:var(--hover);padding:10px;border-radius:8px;margin-bottom:12px;font-size:11px;color:var(--muted)">
+      الوزن الإجمالي: ${APPRAISAL_CRITERIA.reduce((s,c)=>s+c.weight,0)}% |
+      ${APPRAISAL_CRITERIA.map(c=>c.l+' ('+c.weight+'%)').join(' | ')}
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      ${APPRAISAL_CRITERIA.map(c=>`
+      <div class="fg">
+        <label style="font-size:11px">${c.l} <span style="color:var(--muted)">(وزن ${c.weight}%)</span></label>
+        <input type="number" id="ap-${c.k}" value="80" min="0" max="100"
+          oninput="calcAppraisalTotal()"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:14px;font-weight:700;color:var(--text)">
+      </div>`).join('')}
+    </div>
+
+    <div id="ap-total-preview" style="margin:12px 0;padding:12px;background:rgba(46,160,67,.06);border:1px solid rgba(46,160,67,.2);border-radius:8px;text-align:center;font-size:15px;font-weight:700">
+      الدرجة الإجمالية: <span id="ap-total-score">80.0</span> / 100
+      &nbsp;|&nbsp; التقدير: <span id="ap-grade">A</span>
+    </div>
+
+    ${fg('توصيات المُقيِّم', `<textarea id="ap-rec" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif" placeholder="مثال: مرشح للترقية — يحتاج تدريب إضافي — أداء متميز في GMP"></textarea>`)}
+
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveAppraisal()">💾 حفظ التقييم</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>
+    </div>`, null, '700px'));
+  setTimeout(()=>calcAppraisalTotal(),100);
+}
+
+function calcAppraisalTotal(){
+  let total = 0;
+  APPRAISAL_CRITERIA.forEach(c=>{
+    const v = Number(document.getElementById('ap-'+c.k)?.value||0);
+    total += v * (c.weight/100);
+  });
+  const grade = total>=90?'A+':total>=80?'A':total>=70?'B':total>=60?'C':'D';
+  const scoreEl = document.getElementById('ap-total-score');
+  const gradeEl = document.getElementById('ap-grade');
+  const previewEl= document.getElementById('ap-total-preview');
+  if(scoreEl) scoreEl.textContent = total.toFixed(1);
+  if(gradeEl){
+    gradeEl.textContent = grade;
+    gradeEl.style.color = grade==='A+'||grade==='A'?'var(--green-light)':grade==='B'?'var(--blue)':grade==='C'?'var(--amber)':'var(--red)';
+  }
+  if(previewEl){
+    previewEl.style.background = grade==='A+'||grade==='A'?'rgba(46,160,67,.08)':grade==='B'?'rgba(56,139,253,.08)':grade==='C'?'rgba(240,136,0,.08)':'rgba(248,81,73,.08)';
+  }
+}
+
+function saveAppraisal(){
+  const empId = numVal('ap-emp');
+  if(!empId){ alert('اختر الموظف'); return; }
+  let total = 0;
+  const scores = {};
+  APPRAISAL_CRITERIA.forEach(c=>{
+    const v = Number(document.getElementById('ap-'+c.k)?.value||0);
+    scores[c.k] = v;
+    total += v * (c.weight/100);
+  });
+  const grade = total>=90?'A+':total>=80?'A':total>=70?'B':total>=60?'C':'D';
+  insert('appraisals',{
+    employeeId:empId,
+    period: document.getElementById('ap-period')?.value||today().slice(0,7),
+    ...scores,
+    overallScore: total,
+    overallGrade: grade,
+    recommendation: document.getElementById('ap-rec')?.value||null,
+    evaluatedBy: _authUser?.name||'—',
+    evaluatedAt: today(),
+  });
+  closeModal(); go('appraisals');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// E. لوحة HR الرئيسية
+// ══════════════════════════════════════════════════════════════════
+PAGES.hr = function(){
+  const emps    = getAll('employees')||[];
+  const active  = emps.filter(e=>e.status==='active');
+  const leaves  = (getAll('leaveRequests')||[]).filter(l=>l.status==='pending');
+  const ts      = getTaxSettings();
+  const now     = new Date();
+
+  // تنبيهات EDA/GMP
+  const expiredMedical  = active.filter(e=>e.medicalExpiry && new Date(e.medicalExpiry)<now);
+  const expiringMedical = active.filter(e=>e.medicalExpiry && new Date(e.medicalExpiry)>now && (new Date(e.medicalExpiry)-now)/86400000<30);
+  const expiredGMP      = active.filter(e=>e.gmpTrainingExpiry && new Date(e.gmpTrainingExpiry)<now);
+  const expiredLicense  = active.filter(e=>e.licenseExpiry && new Date(e.licenseExpiry)<now);
+
+  const totGross = active.reduce((s,e)=>s+calcEmployeeGross(e),0);
+
+  setPage('👥 الموارد البشرية','HR Dashboard — قانون العمل 12/2003 + هيئة الدواء 151/2019',
+    `<div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-green" onclick="go('employees')">👤 الموظفون</button>
+      <button class="btn btn-white" onclick="go('payroll')">💸 الرواتب</button>
+      <button class="btn btn-white" onclick="go('attendance')">📅 الإجازات</button>
+      <button class="btn btn-white" onclick="go('appraisals')">⭐ التقييم</button>
+    </div>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card" onclick="go('employees')" style="cursor:pointer"><div class="lbl">إجمالي الموظفين</div><div class="val">${emps.length}</div></div>
+      <div class="stat-card" onclick="go('employees')" style="cursor:pointer"><div class="lbl text-green">نشطون</div><div class="val text-green">${active.length}</div></div>
+      <div class="stat-card" onclick="go('attendance')" style="cursor:pointer"><div class="lbl text-amber">طلبات إجازة معلقة</div><div class="val text-amber">${leaves.length}</div></div>
+      <div class="stat-card" onclick="go('payroll')" style="cursor:pointer"><div class="lbl">فاتورة الرواتب</div><div class="val" style="font-size:13px">${fmtC(totGross)}</div></div>
+    </div>
+
+    ${(expiredMedical.length+expiredGMP.length+expiredLicense.length>0)?`
+    <div style="padding:12px;background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.2);border-radius:10px;margin-bottom:14px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:var(--red)">⚠️ تنبيهات هيئة الدواء EDA / GMP</div>
+      ${expiredMedical.length?`<div style="font-size:12px;margin-bottom:4px">🏥 كشف طبي منتهي: <strong>${expiredMedical.map(e=>escapeHtml(e.name)).join('، ')}</strong></div>`:''}
+      ${expiredGMP.length?`<div style="font-size:12px;margin-bottom:4px">🧪 تدريب GMP منتهي: <strong>${expiredGMP.map(e=>escapeHtml(e.name)).join('، ')}</strong></div>`:''}
+      ${expiredLicense.length?`<div style="font-size:12px">🎓 تسجيل مهني منتهي: <strong>${expiredLicense.map(e=>escapeHtml(e.name)).join('، ')}</strong></div>`:''}
+    </div>` : ''}
+
+    <!-- توزيع الأقسام -->
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:12px">🏭 توزيع الموظفين على الأقسام</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px">
+        ${PHARMA_DEPARTMENTS.map(d=>{
+          const dEmps = active.filter(e=>e.department===d.v);
+          if(!dEmps.length) return '';
+          const pct = (dEmps.length/active.length*100).toFixed(0);
+          return `<div style="padding:8px 12px;background:var(--hover);border-radius:8px">
+            <div style="font-size:12px;font-weight:700">${d.l.split(' (')[0]}</div>
+            <div style="font-size:20px;font-weight:900;color:var(--blue)">${dEmps.length}</div>
+            <div style="height:4px;background:var(--border);border-radius:2px;margin-top:4px;overflow:hidden">
+              <div style="height:100%;width:${pct}%;background:var(--blue);border-radius:2px"></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <!-- QP والتسجيل المهني -->
+    <div class="card">
+      <div style="font-weight:700;font-size:13px;margin-bottom:10px">🎓 الكوادر المهنية المسجلة</div>
+      ${tbl(['الموظف','المسمى','القسم','رقم التسجيل','انتهاء','GMP حتى','كشف طبي حتى'],
+        active.filter(e=>e.licenseNo||e.isQP).map(e=>tr(
+          `<div><strong>${escapeHtml(e.name||'—')}</strong>${e.isQP?'<span class="badge b-green" style="font-size:10px;margin-right:4px">QP</span>':''}</div>`,
+          escapeHtml(e.position||'—'),
+          PHARMA_DEPARTMENTS.find(d=>d.v===e.department)?.l?.split(' (')[0]||'—',
+          `<code>${escapeHtml(e.licenseNo||'—')}</code>`,
+          e.licenseExpiry?`<span style="color:${new Date(e.licenseExpiry)<now?'var(--red)':'inherit'}">${e.licenseExpiry}</span>`:'—',
+          e.gmpTrainingExpiry?`<span style="color:${new Date(e.gmpTrainingExpiry)<now?'var(--red)':'inherit'}">${e.gmpTrainingExpiry}</span>`:'—',
+          e.medicalExpiry?`<span style="color:${new Date(e.medicalExpiry)<now?'var(--red)':''}">${e.medicalExpiry}</span>`:'—'
+        ))
+      ,'tbl_licensed')}
+    </div>`
+  );
+};
 
 // renderNav/go called by coEnter() after company is selected
 
