@@ -3159,68 +3159,6 @@ function rejectReceipt(id){
   go('materials');
 }
 
-// ── FULL Material Form (GMP-compliant) ───────────────────────
-{
-  const isRaw = !m.materialType || m.materialType==='raw_material';
-  return `
-    <div class="tabs">
-      <button class="tab active" data-group="mf" data-tab="mf-basic">البيانات الأساسية</button>
-      <button class="tab" data-group="mf" data-tab="mf-specs">المواصفات والجودة</button>
-      ${isRaw?`<button class="tab" data-group="mf" data-tab="mf-supplier">المورد والتوريد</button>`:''}
-    </div>
-
-    <div id="mf-basic" class="tab-pane" data-group="mf">
-      ${fg('اسم المادة *',inp('m-name','text',m.name))}
-      <div class="form-row">
-        ${fg('نوع المادة',sel('m-type',[{v:'raw_material',l:'مادة خام'},{v:'packaging',l:'مادة تغليف'}],m.materialType||'raw_material'))}
-        ${isRaw ? fg('التصنيف',sel('m-subtype',[{v:'api',l:'API — مادة فعالة'},{v:'excipient',l:'Excipient — سواغ'},{v:'other',l:'أخرى'}],m.subType||'excipient'))
-                : fg('نوع التغليف',sel('m-pkgtype',[{v:'primary',l:'Primary — تلامس مباشر'},{v:'secondary',l:'Secondary — ثانوي'},{v:'tertiary',l:'Tertiary — للنقل'}],m.subType||'primary'))}
-      </div>
-      <div class="form-row">
-        ${fg('وحدة القياس',sel('m-unit',UNITS,m.unit||'كجم'))}
-        ${fg('المخزون الحالي',inp('m-stock','number',m.currentStock||0))}
-      </div>
-      <div class="form-row">
-        ${fg('حد إعادة الطلب',inp('m-reorder','number',m.reorderLevel))}
-        ${fg('سعر الوحدة (ج.م)',inp('m-cost','number',m.unitCost))}
-      </div>
-      ${fg('الحالة',sel('m-status',[{v:'active',l:'نشط'},{v:'inactive',l:'معطل'},{v:'quarantine',l:'محجوز'}],m.status||'active'))}
-    </div>
-
-    <div id="mf-specs" class="tab-pane" data-group="mf" style="display:none">
-      ${isRaw ? `
-      <div class="form-row">
-        ${fg('رقم CAS',inp('m-cas','text',m.casNumber||'','مثال: 61336-70-7'))}
-        ${fg('درجة الجودة',sel('m-grade',[{v:'USP',l:'USP'},{v:'BP',l:'BP'},{v:'EP',l:'EP'},{v:'JP',l:'JP'},{v:'PharmGrade',l:'Pharmaceutical Grade'},{v:'other',l:'أخرى'}],m.qualityGrade||'USP'))}
-      </div>
-      ${fg('المرجع الدوائي (Pharmacopoeial Ref)',inp('m-pharma','text',m.pharmacopoeialRef||'','مثال: USP <1>، BP 2024'))}
-      ${fg('المواصفات القياسية (Specifications)',`<textarea id="m-specs" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:12px;color:var(--text);font-family:'Cairo',sans-serif">${m.specifications||''}</textarea>`)}`
-      : `${fg('مواصفة التغليف',inp('m-pkgspec','text',m.packagingSpec||'','مثال: زجاجة HDPE 100مل، غطاء Child-proof'))}`}
-      ${fg('ظروف التخزين',sel('m-storage',[
-        {v:'15-25°C بعيداً عن الرطوبة',l:'15-25°C — درجة حرارة الغرفة'},
-        {v:'2-8°C مبرد',l:'2-8°C — مبرد'},
-        {v:'<-20°C مجمد',l:'-20°C — مجمد'},
-        {v:'بعيداً عن الضوء والرطوبة',l:'بعيداً عن الضوء والرطوبة'},
-        {v:'يُحفظ في وعاء محكم الإغلاق',l:'وعاء محكم الإغلاق'}
-      ],m.storageCondition||'15-25°C بعيداً عن الرطوبة'))}
-    </div>
-
-    ${isRaw ? `
-    <div id="mf-supplier" class="tab-pane" data-group="mf" style="display:none">
-      ${fg('المورد المعتمد الأساسي',inp('m-supplier','text',m.approvedSupplier||m.supplier||''))}
-      ${fg('مورد بديل معتمد',inp('m-supplier2','text',m.alternateSupplier||''))}
-      <div class="form-row">
-        ${fg('مدة الصلاحية القياسية (أشهر)',inp('m-shelflife','number',m.shelfLifeMonths||'','مثال: 36'))}
-        ${fg('Lead Time (أيام)',inp('m-leadtime','number',m.leadTimeDays||'','أيام التوريد'))}
-      </div>
-      ${fg('ملاحظات الجودة والتوريد',`<textarea id="m-qnotes" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:12px;color:var(--text);font-family:'Cairo',sans-serif">${m.qualityNotes||''}</textarea>`)}
-    </div>` : ''}
-
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="saveMaterial(${m.id||''})">💾 حفظ</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>`;
-}
 
 
 // ── FULL Material Receipt Form (COA + GMP fields) ────────────
