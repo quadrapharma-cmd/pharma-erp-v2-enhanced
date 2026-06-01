@@ -1283,27 +1283,7 @@ PAGES.expiry=function(){
     ,'tbl_expiry')}</div>`);
 };
 
-PAGES.returns=function(){
-  const rows=getAll('returns');
-  const total=rows.reduce((s,r)=>s+Number(r.quantity||0),0);
-  const val2=rows.reduce((s,r)=>s+Number(r.totalValue||0),0);
-  setPage('المرتجعات','تسجيل البضاعة المرتجعة من الموزعين',
-    `<button class="btn btn-green" onclick="addReturn()">${ic.plus} تسجيل مرتجع</button>`,
-    `<div class="stats-grid g3">
-      <div class="stat-card"><div class="lbl">إجمالي المرتجعات</div><div class="val text-red">${rows.length}</div></div>
-      <div class="stat-card"><div class="lbl">إجمالي الوحدات</div><div class="val text-amber">${fmtN(total)}</div></div>
-      <div class="stat-card"><div class="lbl">قيمة المرتجعات</div><div class="val text-red">${fmt(val2)} ج.م</div></div>
-    </div>
-    <div class="card">${tbl(['الموزع','المنتج','رقم التشغيلة','الكمية','سبب الإرجاع','تاريخ الإرجاع','الإجراء',''],
-      rows.map(r=>tr(
-        getAll('distributors').find(d=>d.id===r.distributorId)?.name||'-',
-        getAll('products').find(p=>p.id===r.productId)?.name||'-',
-        r.batchNumber||'-',fmtN(r.quantity),r.reason||'-',r.returnDate||'-',
-        badge(r.action==='إتلاف'?'cancelled':r.action==='إعادة مخزون'?'received':'pending'),
-        `<button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('returns',${r.id});go('returns')}">${ic.del}</button>`
-      ))
-    ,'tbl_returns')}</div>`);
-};
+;
 
 PAGES.contracts=function(){
   const rows=getAll('contracts'),now=new Date();
@@ -1422,26 +1402,6 @@ function editPurchaseOrder(id){
     <div class="form-actions"><button class="btn btn-green" onclick="savePurchaseOrder(${id})">💾 حفظ</button><button class="btn btn-ghost" onclick="closeModal()">إلغاء</button></div>`));
 }
 
-
-function addReturn(){
-  const dOpts=[{v:0,l:'اختر موزع...'},...getAll('distributors').map(d=>({v:d.id,l:d.name}))];
-  const pOpts=[{v:0,l:'اختر منتج...'},...getAll('products').map(p=>({v:p.id,l:p.name}))];
-  showModal(modal('تسجيل مرتجع',`
-    ${fg('الموزع *',sel('ret-dist',dOpts))}
-    ${fg('المنتج *',sel('ret-prod',pOpts))}
-    <div class="form-row">${fg('رقم التشغيلة',inp('ret-batch'))}${fg('الكمية *',inp('ret-qty','number'))}</div>
-    ${fg('سبب الإرجاع',sel('ret-reason',[{v:'قارب الانتهاء',l:'قارب الانتهاء'},{v:'تلف',l:'تلف'},{v:'خطأ في الشحن',l:'خطأ في الشحن'},{v:'عيب تصنيع',l:'عيب تصنيع'},{v:'أخرى',l:'أخرى'}],'قارب الانتهاء'))}
-    ${fg('الإجراء المتخذ',sel('ret-action',[{v:'إعادة مخزون',l:'إعادة للمخزون'},{v:'إتلاف',l:'إتلاف'},{v:'إعادة للمصنع',l:'إعادة للمصنع'}],'إعادة مخزون'))}
-    ${fg('تاريخ الإرجاع',inp('ret-date','date',today()))}
-    <div class="form-actions"><button class="btn btn-green" onclick="saveReturn()">💾 حفظ</button><button class="btn btn-ghost" onclick="closeModal()">إلغاء</button></div>`));
-}
-function saveReturn(){
-  const prodId=numVal('ret-prod'),qty=numVal('ret-qty');
-  if(!prodId||!qty)return alert('يرجى تعبئة الحقول الإلزامية');
-  const prod=getById('products',prodId);
-  insert('returns',{distributorId:numVal('ret-dist')||null,productId:prodId,batchNumber:val('ret-batch')||null,quantity:qty,totalValue:String(qty*Number(prod?.sellingPrice||0)),reason:val('ret-reason'),action:val('ret-action'),returnDate:val('ret-date')||null});
-  closeModal();go('returns');
-}
 
 function editContract(id){
   const c=getById('contracts',id);if(!c)return;
@@ -3158,7 +3118,6 @@ function rejectReceipt(id){
   if(mat) update('materials', r.materialId, {currentStock: String(Math.max(0,Number(mat.currentStock||0)-Number(r.quantityReceived||0)))});
   go('materials');
 }
-
 
 
 // ── FULL Material Receipt Form (COA + GMP fields) ────────────
@@ -6383,92 +6342,8 @@ PAGES.vat = function(){
 };
 
 // ── SALES vs TARGET — full CRUD ───────────────────────────────
-PAGES.salesvstarget = function(){
-  const targets   = getAll('salesTargets');
-  const delivered = getAll('deliveryOrders').filter(o=>o.status==='delivered');
-  const totalTarget  = targets.reduce((s,t)=>s+Number(t.targetAmount||0),0);
-  const totalActual  = delivered.reduce((s,o)=>s+Number(o.totalAmount||0),0);
-  const achievement  = totalTarget>0 ? totalActual/totalTarget : 0;
+;
 
-  setPage('المبيعات مقابل الأهداف','مقارنة المبيعات الفعلية بالأهداف المحددة',
-    `<button class="btn btn-green" onclick="addTarget()">${ic.plus} هدف جديد</button>`,
-    `<div class="stats-grid g4" style="margin-bottom:16px">
-      <div class="stat-card"><div class="lbl">إجمالي الأهداف</div><div class="val text-blue">${fmt(totalTarget)} ج.م</div></div>
-      <div class="stat-card"><div class="lbl">المبيعات الفعلية</div><div class="val text-green">${fmt(totalActual)} ج.م</div></div>
-      <div class="stat-card"><div class="lbl">نسبة التحقق</div><div class="val ${achievement>=1?'text-green':achievement>=0.7?'text-amber':'text-red'}">${(achievement*100).toFixed(1)}%</div></div>
-      <div class="stat-card"><div class="lbl">الفرق</div><div class="val ${totalActual>=totalTarget?'text-green':'text-red'}">${fmt(Math.abs(totalActual-totalTarget))} ج.م</div><div class="sub">${totalActual>=totalTarget?'✅ تجاوز الهدف':'⚠️ أقل من الهدف'}</div></div>
-    </div>
-    <div class="card">${tbl(
-      ['المنتج','الموزع','السنة','الشهر','الهدف (ج.م)','الفعلي (ج.م)','الفرق','نسبة التحقق',''],
-      targets.map(t=>{
-        const prod=getById('products',t.productId);
-        const dist=getById('distributors',t.distributorId);
-        // Calc actual for this target
-        const actual=delivered.filter(o=>{
-          const match_dist=!t.distributorId||o.distributorId===t.distributorId;
-          const match_year=!t.year||new Date(o.orderDate||'').getFullYear()==t.year;
-          const match_month=!t.month||new Date(o.orderDate||'').getMonth()+1==t.month;
-          return match_dist&&match_year&&match_month;
-        }).reduce((s,o)=>s+Number(o.totalAmount||0),0);
-        const target=Number(t.targetAmount||0);
-        const diff=actual-target;
-        const pct=target>0?actual/target:0;
-        return tr(
-          prod?.name||'كل المنتجات',
-          dist?.name||'كل الموزعين',
-          t.year||'—',
-          t.month?MONTHS[t.month-1]:'السنة كاملة',
-          `<span class="text-blue fw7">${fmt(target)} ج.م</span>`,
-          `<span class="text-green fw7">${fmt(actual)} ج.م</span>`,
-          `<span class="${diff>=0?'text-green':'text-red'} fw7">${diff>=0?'+':''}${fmt(diff)} ج.م</span>`,
-          `<div style="display:flex;align-items:center;gap:6px">
-            <div style="width:60px;height:5px;background:rgba(255,255,255,.08);border-radius:3px">
-              <div style="height:100%;width:${Math.min(pct*100,100)}%;background:${pct>=1?'var(--green)':pct>=0.7?'var(--amber)':'var(--red)'};border-radius:3px"></div>
-            </div>
-            <span class="${pct>=1?'text-green':pct>=0.7?'text-amber':'text-red'} fw7">${(pct*100).toFixed(0)}%</span>
-          </div>`,
-          `<div class="action-bar">
-            <button class="icon-btn edit" onclick="editTarget(${t.id})">${ic.edit}</button>
-            <button class="icon-btn del" onclick="if(confirm('حذف الهدف؟')){remove('salesTargets',${t.id});go('salesvstarget')}">${ic.del}</button>
-          </div>`
-        );
-      })
-    ,'tbl_salesvstarget')}</div>`);
-};
-
-function addTarget(){
-  const prods=getAll('products'), dists=getAll('distributors');
-  showModal(modal('➕ هدف مبيعات جديد',`
-    <div class="form-row">
-      ${fg('المنتج',sel('st-prod',[{v:0,l:'كل المنتجات'},...prods.map(p=>({v:p.id,l:p.name}))],'0'))}
-      ${fg('الموزع',sel('st-dist',[{v:0,l:'كل الموزعين'},...dists.map(d=>({v:d.id,l:d.name}))],'0'))}
-    </div>
-    <div class="form-row">
-      ${fg('السنة *',inp('st-year','number',new Date().getFullYear()))}
-      ${fg('الشهر',sel('st-month',[{v:0,l:'السنة كاملة'},...MONTHS.map((m,i)=>({v:i+1,l:m}))],'0'))}
-    </div>
-    <div class="form-row">
-      ${fg('الهدف بالقيمة (ج.م) *',inp('st-amt','number','','الهدف المالي'))}
-      ${fg('الهدف بالكمية (وحدة)',inp('st-qty','number','','اختياري'))}
-    </div>
-    ${fg('ملاحظات',inp('st-notes','text',''))}
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="saveTarget()">💾 حفظ</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>`));
-}
-
-function saveTarget(){
-  if(!val('st-amt')) return alert('يرجى إدخال الهدف');
-  insert('salesTargets',{
-    productId:numVal('st-prod')||null, distributorId:numVal('st-dist')||null,
-    year:val('st-year')||new Date().getFullYear(),
-    month:numVal('st-month')||null,
-    targetAmount:val('st-amt'), targetQuantity:val('st-qty')||null,
-    notes:val('st-notes')||null
-  });
-  closeModal(); go('salesvstarget');
-}
 
 // ── MATERIALS — add edit/delete buttons to existing page ──────
 // Patch the materials PAGES to include edit/delete in raw materials table
@@ -9438,28 +9313,12 @@ function syncSmartSelect(id){
 // ══════════════════════════════════════════
 
 // 45. WhatsApp integration
-function sendWhatsApp(phone, message){
-  if(!phone){ alert('رقم الهاتف غير متوفر'); return; }
-  const cleanPhone = phone.replace(/\D/g,'');
-  const formattedPhone = cleanPhone.startsWith('0') ? '2'+cleanPhone : cleanPhone.startsWith('2') ? cleanPhone : '2'+cleanPhone;
-  const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
-  window.open(url, '_blank');
-}
 
 function sendDistributorWhatsApp(distId){
   const dist = getById('distributors', distId);
   if(!dist){ alert('الموزع غير موجود'); return; }
   const phone = dist.phone||dist.mobile||'';
   const message = `مرحباً ${dist.name}،\n\nنود التواصل معكم بشأن التعاون الدوائي.\n\nشكراً لكم\nفريق نظام ERP الدوائي`;
-  sendWhatsApp(phone, message);
-}
-
-function sendPaymentReminder(receivableId){
-  const rec = getById('receivables', receivableId);
-  if(!rec){ return; }
-  const dist = getById('distributors', rec.distributorId);
-  const phone = dist?.phone||'';
-  const message = `مرحباً ${dist?.name||''},\n\nنود تذكيركم بمبلغ ${Number(rec.amount||0).toLocaleString('ar-EG')} ج.م المستحق بتاريخ ${rec.dueDate||'—'}.\n\nيرجى التواصل معنا لتسوية الأمر.\n\nشكراً`;
   sendWhatsApp(phone, message);
 }
 
@@ -14749,327 +14608,17 @@ const ORDER_STATUSES = {
   returned:  {l:'مرتجع',     c:'b-red'},
 };
 
-// ── صفحة أوامر البيع ─────────────────────────────────
 
-PAGES.salesorders = function(){
-  const orders = getAll('salesOrders')||[];
-  const total  = orders.reduce((s,o)=>s+Number(o.totalAmount||0),0);
-  const pending= orders.filter(o=>['confirmed','processing'].includes(o.status));
-
-  setPage('📋 أوامر البيع — Sales Orders','إدارة طلبات العملاء',
-    `<div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-green" onclick="addSalesOrder()">+ أمر بيع جديد</button>
-      <button class="btn btn-white" onclick="go('salesinvoices')">📄 الفواتير</button>
-      <button class="btn btn-white" onclick="go('delivery')">🚚 الشحن</button>
-    </div>`,
-    `<div class="stats-grid g4" style="margin-bottom:16px">
-      <div class="stat-card"><div class="lbl">إجمالي الأوامر</div><div class="val">${orders.length}</div></div>
-      <div class="stat-card"><div class="lbl text-blue">قيد التنفيذ</div><div class="val text-blue">${pending.length}</div></div>
-      <div class="stat-card"><div class="lbl text-green">مُسلَّم ✅</div><div class="val text-green">${orders.filter(o=>o.status==='delivered').length}</div></div>
-      <div class="stat-card"><div class="lbl">إجمالي القيمة</div><div class="val">${fmtC(total)}</div></div>
-    </div>
-    <div class="card">${tbl(
-      ['رقم الأمر','العميل','التاريخ','الإجمالي','الحالة','إجراء'],
-      orders.sort((a,b)=>b.id-a.id).map(o=>{
-        const st = ORDER_STATUSES[o.status]||{l:o.status,c:'b-gray'};
-        return tr(
-          `<code style="font-size:11px">SO-${String(o.id).padStart(5,'0')}</code>`,
-          escapeHtml(o.customerName||'—'),
-          o.orderDate||'—',
-          fmtC(o.totalAmount||0),
-          `<span class="badge ${st.c}">${st.l}</span>`,
-          `<div class="action-bar">
-            <button class="btn btn-white btn-sm" onclick="viewSalesOrder(${o.id})">عرض</button>
-            <button class="icon-btn edit" onclick="editSalesOrder(${o.id})">${ic.edit}</button>
-            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('salesOrders',${o.id});go('salesorders')}">${ic.del}</button>
-          </div>`
-        );
-      })
-    ,'tbl_so')}</div>`
-  );
-};
-
-function addSalesOrder(){ showSOForm(); }
-function editSalesOrder(id){ showSOForm(getById('salesOrders',id)||{}); }
-function showSOForm(o={}){
-  const prods = getAll('products').filter(p=>p.status==='active'||!p.status);
-  const lines = o.lines||[{productId:'',qty:1,unitPrice:0}];
-  showModal(modal(o.id?'تعديل أمر بيع':'📋 أمر بيع جديد',`
-    <div class="form-row">
-      ${fg('اسم العميل *', inp('so-cust','text',o.customerName||'',''))}
-      ${fg('كود العميل', inp('so-custcode','text',o.customerCode||'',''))}
-    </div>
-    <div class="form-row">
-      ${fg('تاريخ الأمر', inp('so-date','date',o.orderDate||today()))}
-      ${fg('تاريخ التسليم المطلوب', inp('so-deldate','date',o.requestedDelivery||''))}
-    </div>
-    <div class="form-row">
-      ${fg('الحالة', sel('so-status',Object.entries(ORDER_STATUSES).map(([v,{l}])=>({v,l})),o.status||'draft'))}
-      ${fg('المرجع الخارجي (PO رقم العميل)', inp('so-ref','text',o.customerPORef||'',''))}
-    </div>
-    <div style="margin-bottom:10px">
-      <div style="font-weight:700;font-size:12px;margin-bottom:8px">📦 بنود الأمر</div>
-      <div id="so-lines">
-        ${lines.map((l,i)=>`
-        <div class="form-row" id="so-line-${i}" style="align-items:center">
-          <div class="fg" style="flex:2">
-            ${i===0?'<label>المنتج</label>':''}
-            <select id="so-prod-${i}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:12px;color:var(--text)">
-              <option value="">اختر منتج...</option>
-              ${prods.map(p=>`<option value="${p.id}" ${p.id==l.productId?'selected':''}>${escapeHtml(p.name)}</option>`).join('')}
-            </select>
-          </div>
-          ${i===0?fg('الكمية',''):''}<input type="number" id="so-qty-${i}" value="${l.qty||1}" min="1" style="width:80px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:12px;color:var(--text)">
-          ${i===0?fg('السعر',''):''}<input type="number" id="so-price-${i}" value="${l.unitPrice||0}" min="0" style="width:100px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:12px;color:var(--text)">
-          <button onclick="document.getElementById('so-line-${i}').remove()" style="background:none;border:none;color:var(--red);font-size:18px;cursor:pointer;padding:4px">✕</button>
-        </div>`).join('')}
-      </div>
-      <button class="btn btn-white btn-sm" style="margin-top:6px" onclick="addSOLine()">+ إضافة منتج</button>
-    </div>
-    <div class="form-row">
-      ${fg('ملاحظات', `<textarea id="so-notes" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif">${escapeHtml(o.notes||'')}</textarea>`)}
-    </div>
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="saveSalesOrder(${o.id||''})">💾 حفظ الأمر</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>`,null,'700px'));
-}
-
-let _soLineCount = 1;
-function addSOLine(){
-  const i = _soLineCount++;
-  const prods = getAll('products').filter(p=>p.status==='active'||!p.status);
-  const div = document.createElement('div');
-  div.className='form-row'; div.id=`so-line-${i}`; div.style.alignItems='center';
-  div.innerHTML=`
-    <div class="fg" style="flex:2">
-      <select id="so-prod-${i}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:12px;color:var(--text)">
-        <option value="">اختر منتج...</option>
-        ${prods.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}
-      </select>
-    </div>
-    <input type="number" id="so-qty-${i}" value="1" min="1" style="width:80px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:12px;color:var(--text)">
-    <input type="number" id="so-price-${i}" value="0" min="0" style="width:100px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:12px;color:var(--text)">
-    <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--red);font-size:18px;cursor:pointer;padding:4px">✕</button>`;
-  document.getElementById('so-lines')?.appendChild(div);
-}
-
-function saveSalesOrder(id){
-  const cust = val('so-cust');
-  if(!cust) return alert('اسم العميل إلزامي');
-  // Collect lines
-  const lines=[]; let total=0;
-  document.querySelectorAll('[id^="so-prod-"]').forEach(el=>{
-    const i = el.id.split('-')[2];
-    const prodId = Number(el.value)||null;
-    if(!prodId) return;
-    const qty   = Number(document.getElementById(`so-qty-${i}`)?.value||1);
-    const price = Number(document.getElementById(`so-price-${i}`)?.value||0);
-    const prod  = getById('products',prodId);
-    lines.push({productId:prodId, productName:prod?.name||'', qty, unitPrice:price, lineTotal:qty*price});
-    total += qty*price;
-  });
-  if(!lines.length) return alert('أضف منتجاً واحداً على الأقل');
-  const vatRate = 0.14;
-  const vatAmt  = total * vatRate;
-  const d = {
-    customerName: cust,
-    customerCode: val('so-custcode')||null,
-    orderDate: document.getElementById('so-date')?.value||today(),
-    requestedDelivery: document.getElementById('so-deldate')?.value||null,
-    status: document.getElementById('so-status')?.value||'draft',
-    customerPORef: val('so-ref')||null,
-    lines, subtotal:total, vatRate, vatAmount:vatAmt,
-    totalAmount: total+vatAmt,
-    notes: document.getElementById('so-notes')?.value||null,
-    createdBy: _authUser?.name||'—',
-  };
-  id ? update('salesOrders',id,d) : insert('salesOrders',d);
-  closeModal(); go('salesorders');
-}
-
-function viewSalesOrder(id){
-  const o = getById('salesOrders',id);
-  if(!o) return;
-  const st = ORDER_STATUSES[o.status]||{l:o.status,c:'b-gray'};
-  showModal(modal(`أمر البيع SO-${String(o.id).padStart(5,'0')}`,`
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;font-size:13px">
-      <div><span style="color:var(--muted)">العميل:</span> <strong>${escapeHtml(o.customerName||'—')}</strong></div>
-      <div><span style="color:var(--muted)">الحالة:</span> <span class="badge ${st.c}">${st.l}</span></div>
-      <div><span style="color:var(--muted)">تاريخ الأمر:</span> ${o.orderDate||'—'}</div>
-      <div><span style="color:var(--muted)">التسليم المطلوب:</span> ${o.requestedDelivery||'—'}</div>
-    </div>
-    ${tbl(['المنتج','الكمية','السعر','الإجمالي'],
-      (o.lines||[]).map(l=>tr(escapeHtml(l.productName||'—'),fmtN(l.qty),fmtC(l.unitPrice),fmtC(l.lineTotal)))
-    ,'tbl_so_view')}
-    <div style="text-align:left;margin-top:12px;font-size:13px">
-      <div>الإجمالي قبل الضريبة: <strong>${fmtC(o.subtotal||0)}</strong></div>
-      <div>ضريبة القيمة المضافة (14%): <strong>${fmtC(o.vatAmount||0)}</strong></div>
-      <div style="font-size:16px;font-weight:700;color:var(--green-light)">الإجمالي النهائي: ${fmtC(o.totalAmount||0)}</div>
-    </div>
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="closeModal();createInvoiceFromSO(${id})">📄 إنشاء فاتورة</button>
-      <button class="btn btn-white" onclick="closeModal();createDeliveryFromSO(${id})">🚚 إنشاء شحنة</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إغلاق</button>
-    </div>`));
-}
 
 
 // ── فواتير المبيعات ───────────────────────────────────
 
-PAGES.salesinvoices = function(){
-  const invs = getAll('salesInvoices')||[];
-  setPage('📄 فواتير المبيعات','Sales Invoices — مرتبطة بالفاتورة الإلكترونية ETA',
-    `<div style="display:flex;gap:8px">
-      <button class="btn btn-green" onclick="addSalesInvoice()">+ فاتورة جديدة</button>
-      <button class="btn btn-white" onclick="go('salesorders')">← أوامر البيع</button>
-    </div>`,
-    `<div class="stats-grid g4" style="margin-bottom:16px">
-      <div class="stat-card"><div class="lbl">إجمالي الفواتير</div><div class="val">${invs.length}</div></div>
-      <div class="stat-card"><div class="lbl text-red">غير مدفوعة</div><div class="val text-red">${invs.filter(i=>i.paymentStatus==='unpaid').length}</div></div>
-      <div class="stat-card"><div class="lbl text-green">مدفوعة</div><div class="val text-green">${invs.filter(i=>i.paymentStatus==='paid').length}</div></div>
-      <div class="stat-card"><div class="lbl">الإجمالي</div><div class="val">${fmtC(invs.reduce((s,i)=>s+Number(i.totalAmount||0),0))}</div></div>
-    </div>
-    <div class="card">${tbl(
-      ['رقم الفاتورة','العميل','تاريخ الفاتورة','الإجمالي','ضريبة 14%','الصافي','سداد','إجراء'],
-      invs.sort((a,b)=>b.id-a.id).map(inv=>tr(
-        `<code>INV-${String(inv.id).padStart(6,'0')}</code>`,
-        escapeHtml(inv.customerName||'—'),
-        inv.invoiceDate||'—',
-        fmtC(inv.subtotal||0),
-        fmtC(inv.vatAmount||0),
-        `<strong>${fmtC(inv.totalAmount||0)}</strong>`,
-        `<span class="badge ${inv.paymentStatus==='paid'?'b-green':'b-red'}">${inv.paymentStatus==='paid'?'✅ مدفوع':'⏳ معلق'}</span>`,
-        `<div class="action-bar">
-          <button class="btn btn-white btn-sm" onclick="printInvoice(${inv.id})">🖨️ طباعة</button>
-          <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('salesInvoices',${inv.id});go('salesinvoices')}">${ic.del}</button>
-        </div>`
-      ))
-    ,'tbl_inv')}</div>`
-  );
-};
-
-function createInvoiceFromSO(soId){
-  const so = getById('salesOrders',soId);
-  if(!so) return;
-  if(!so.customerName) return alert('أمر البيع لا يحتوي على اسم عميل');
-  const inv = insert('salesInvoices',{
-    salesOrderId: soId,
-    customerName: so.customerName,
-    customerCode: so.customerCode,
-    invoiceDate:  today(),
-    lines:        so.lines,
-    subtotal:     so.subtotal,
-    vatRate:      so.vatRate||0.14,
-    vatAmount:    so.vatAmount,
-    totalAmount:  so.totalAmount,
-    paymentStatus:'unpaid',
-    createdBy:    _authUser?.name||'—',
-  });
-  update('salesOrders',soId,{status:'processing'});
-  showNotif&&showNotif(`✅ تم إنشاء الفاتورة INV-${String((getAll('salesInvoices')||[]).length).padStart(6,'0')}`, 'success');
-  go('salesinvoices');
-}
-
-function addSalesInvoice(){
-  const sos = (getAll('salesOrders')||[]).filter(o=>o.status==='confirmed'||o.status==='processing');
-  showModal(modal('📄 فاتورة مبيعات جديدة',`
-    <div class="form-row">
-      ${fg('من أمر بيع', sel('inv-so',[{v:0,l:'بدون أمر بيع'},...sos.map(s=>({v:s.id,l:`SO-${s.id} — ${s.customerName}`}))]))}
-      ${fg('اسم العميل *', inp('inv-cust','text','',''))}
-    </div>
-    <div class="form-row">
-      ${fg('تاريخ الفاتورة', inp('inv-date','date',today()))}
-      ${fg('الإجمالي قبل الضريبة (ج.م) *', inp('inv-sub','number','',''))}
-    </div>
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="saveSalesInvoice()">💾 حفظ</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>`));
-  setTimeout(()=>{
-    document.getElementById('inv-so')?.addEventListener('change',function(){
-      const so = getById('salesOrders',Number(this.value));
-      if(so){
-        document.getElementById('inv-cust').value = so.customerName||'';
-        document.getElementById('inv-sub').value  = so.subtotal||0;
-      }
-    });
-  },100);
-}
-
-function saveSalesInvoice(){
-  const cust = val('inv-cust'); if(!cust) return alert('اسم العميل إلزامي');
-  const sub  = numVal('inv-sub')||0;
-  const vat  = sub * 0.14;
-  const soId = numVal('inv-so')||null;
-  insert('salesInvoices',{
-    salesOrderId:soId, customerName:cust,
-    invoiceDate: document.getElementById('inv-date')?.value||today(),
-    subtotal:sub, vatRate:0.14, vatAmount:vat, totalAmount:sub+vat,
-    paymentStatus:'unpaid', createdBy:_authUser?.name||'—',
-  });
-  if(soId) update('salesOrders',soId,{status:'processing'});
-  closeModal(); go('salesinvoices');
-}
-
-function printInvoice(id){
-  const inv = getById('salesInvoices',id); if(!inv) return;
-  const comp= getAll('companies').find(c=>c.isActive);
-  const w=window.open('','_blank','width=900,height=700');
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>فاتورة</title>
-  <style>body{font-family:Cairo,Arial,sans-serif;padding:30px;direction:rtl}
-  h2{color:#1a3a5c}table{width:100%;border-collapse:collapse;margin:16px 0}
-  th,td{border:1px solid #ccc;padding:8px}th{background:#f0f4f8}
-  .total{font-size:18px;font-weight:700;color:#1a7a3c}@media print{body{padding:0}}</style></head><body>
-  <h2>📄 فاتورة ضريبية — Tax Invoice</h2>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
-    <div><strong>${escapeHtml(comp?.name||'ميديسنيا')}</strong><br>${escapeHtml(comp?.address||'')}</div>
-    <div style="text-align:left">
-      <div>رقم الفاتورة: <strong>INV-${String(inv.id).padStart(6,'0')}</strong></div>
-      <div>التاريخ: <strong>${inv.invoiceDate||today()}</strong></div>
-      <div>العميل: <strong>${escapeHtml(inv.customerName||'—')}</strong></div>
-    </div>
-  </div>
-  ${(inv.lines||[]).length?`<table><tr><th>المنتج</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr>
-  ${(inv.lines||[]).map(l=>`<tr><td>${escapeHtml(l.productName||'—')}</td><td>${fmtN(l.qty)}</td><td>${fmtC(l.unitPrice)}</td><td>${fmtC(l.lineTotal)}</td></tr>`).join('')}</table>`:''}
-  <div style="text-align:left;margin-top:16px">
-    <div>الإجمالي: ${fmtC(inv.subtotal||0)}</div>
-    <div>ضريبة القيمة المضافة (14%): ${fmtC(inv.vatAmount||0)}</div>
-    <div class="total">الإجمالي النهائي: ${fmtC(inv.totalAmount||0)}</div>
-  </div>
-  \x3Cscript\x3Ewindow.print()\x3C/script\x3E</body></html>`);
-  w.document.close();
-}
+;
 
 
 // ── صفحة الشحن والتوزيع ──────────────────────────────
 
-PAGES.delivery = function(){
-  const orders = getAll('deliveryOrders')||[];
-  setPage('🚚 الشحن والتوزيع — Delivery','تتبع الشحنات والتسليم',
-    `<div style="display:flex;gap:8px">
-      <button class="btn btn-green" onclick="addDeliveryOrder()">+ شحنة جديدة</button>
-      <button class="btn btn-white" onclick="go('salesorders')">← أوامر البيع</button>
-    </div>`,
-    `<div class="card">${tbl(
-      ['رقم الشحنة','العميل','تاريخ الشحن','القيمة','الحالة','إجراء'],
-      orders.sort((a,b)=>b.id-a.id).map(o=>{
-        const st = ORDER_STATUSES[o.status]||{l:o.status,c:'b-gray'};
-        return tr(
-          `<code>DO-${String(o.id).padStart(5,'0')}</code>`,
-          escapeHtml(o.customerName||'—'),
-          o.shippingDate||'—',
-          fmtC(o.totalAmount||0),
-          `<span class="badge ${st.c}">${st.l}</span>`,
-          `<div class="action-bar">
-            ${o.status==='shipped'?`<button class="btn btn-white btn-sm" onclick="confirmDelivery(${o.id})">✅ تأكيد التسليم</button>`:''}
-            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('deliveryOrders',${o.id});go('delivery')}">${ic.del}</button>
-          </div>`
-        );
-      })
-    ,'tbl_do')}</div>`
-  );
-};
+;
 
 function addDeliveryOrder(){
   const sos = (getAll('salesOrders')||[]).filter(o=>['confirmed','processing'].includes(o.status));
@@ -16689,6 +16238,1210 @@ function printMultipleLabels(id, n){ printProductLabel(id, n); }
 
 // ── Nav item for labels ───────────────────────────────────────────
 // (injected via navItems array below)
+
+// ══════════════════════════════════════════════════════════════════
+// 🚚 المبيعات والتوزيع — Sales & Distribution
+// قانون 151/2019 + قانون VAT 67/2016 + قانون التجارة 17/1999
+// قرار 121/2021 (الفاتورة الإلكترونية ETA)
+// ══════════════════════════════════════════════════════════════════
+
+// ── ثوابت القوانين المصرية ────────────────────────────────────────
+
+const EGY_VAT_RATE       = 0.14;    // 14% — قانون 67/2016
+const EGY_LATE_INTEREST  = 0.05;    // 5% سنوياً — قانون التجارة 17/1999 م.103
+const EGY_RECORDS_YEARS  = 5;       // 5 سنوات احتفاظ — قانون 151/2019 م.32
+const EGY_PAYMENT_DAYS   = [30,60,90]; // Net 30/60/90
+
+const DISTRIBUTOR_TYPES = [
+  {v:'pharmacy_chain',  l:'🏪 سلسلة صيدليات'},
+  {v:'hospital',        l:'🏥 مستشفى / مجمع طبي'},
+  {v:'wholesale',       l:'🏭 موزع جملة (Class A)'},
+  {v:'retail',          l:'💊 موزع تجزئة (Class B)'},
+  {v:'export',          l:'✈️ تصدير (Class C)'},
+  {v:'tender',          l:'📋 تقديم مناقصات (Tender)'},
+  {v:'government',      l:'🏛️ قطاع حكومي / وزارة الصحة'},
+];
+
+const PAYMENT_TERMS = [
+  {v:'cash',    l:'نقد فوري'},
+  {v:'net15',   l:'Net 15 — 15 يوم'},
+  {v:'net30',   l:'Net 30 — 30 يوم'},
+  {v:'net45',   l:'Net 45 — 45 يوم'},
+  {v:'net60',   l:'Net 60 — 60 يوم'},
+  {v:'net90',   l:'Net 90 — 90 يوم'},
+];
+
+const RETURN_REASONS = [
+  {v:'near_expiry',    l:'⏰ قرب انتهاء الصلاحية (م.48/151/2019)'},
+  {v:'mfg_defect',     l:'🔬 عيب تصنيعي موثق'},
+  {v:'shipping_damage',l:'📦 تلف أثناء الشحن'},
+  {v:'recall',         l:'🚨 سحب من السوق (EDA Recall)'},
+  {v:'wrong_product',  l:'❌ خطأ في الشحن — منتج خاطئ'},
+  {v:'wrong_qty',      l:'❌ خطأ في الشحن — كمية خاطئة'},
+  {v:'cold_break',     l:'🌡️ كسر سلسلة التبريد (م.31/151/2019)'},
+  {v:'customer_req',   l:'📋 طلب العميل (بموافقة إدارية)'},
+];
+
+const RETURN_ACTIONS = [
+  {v:'restock',        l:'✅ إعادة للمخزون (بعد فحص QC)'},
+  {v:'destruction',    l:'🗑️ إتلاف (موقع من مدير الجودة)'},
+  {v:'reprocess',      l:'🔄 إعادة تصنيع / تعبئة'},
+  {v:'return_factory', l:'🏭 إعادة للمصنع'},
+];
+
+// ── توليد UUID للفاتورة الإلكترونية (ETA) ────────────────────────
+function generateEInvoiceUUID(){
+  const ts  = Date.now().toString(36).toUpperCase();
+  const rnd = Math.random().toString(36).slice(2,8).toUpperCase();
+  return 'ETA-' + ts + '-' + rnd;
+}
+
+// ── توليد QR Code text (بيانات ETA) ──────────────────────────────
+function generateQRData(inv, companyTRN){
+  const parts = [
+    'INV:' + (inv.invoiceNumber||inv.id),
+    'DATE:' + (inv.invoiceDate||today()),
+    'TRN:' + (companyTRN||'—'),
+    'AMT:' + Number(inv.totalAmount||0).toFixed(2),
+    'VAT:' + Number(inv.vatAmount||0).toFixed(2),
+  ];
+  return parts.join('|');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// A. الموزعون — Distributors
+// ══════════════════════════════════════════════════════════════════
+
+PAGES.distributors = function(){
+  const dists = getAll('distributors')||[];
+  const invs  = getAll('salesInvoices')||[];
+  const rets  = getAll('returns')||[];
+
+  // حساب الرصيد الحالي لكل موزع
+  function distBalance(distId){
+    const distInvs = invs.filter(i=>i.distributorId===distId && i.paymentStatus!=='paid');
+    return distInvs.reduce((s,i)=>s+Number(i.totalAmount||0),0);
+  }
+
+  // تصنيف حسب الحد الائتماني
+  const overCredit = dists.filter(d=>distBalance(d.id)>Number(d.creditLimit||0));
+
+  setPage('🤝 الموزعون — Distributors',
+    'قاعدة بيانات الموزعين المرخصين — قانون 151/2019',
+    `<div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-green" onclick="addDistributor()">+ موزع جديد</button>
+      <button class="btn btn-white" onclick="go('receivables')">💳 الذمم المدينة</button>
+    </div>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي الموزعين</div><div class="val">${dists.length}</div></div>
+      <div class="stat-card"><div class="lbl text-green">نشط ✅</div><div class="val text-green">${dists.filter(d=>d.status==='active').length}</div></div>
+      <div class="stat-card"><div class="lbl text-red">تجاوز الحد ⚠️</div><div class="val text-red">${overCredit.length}</div></div>
+      <div class="stat-card"><div class="lbl">إجمالي مديونية</div><div class="val">${fmtC(dists.reduce((s,d)=>s+distBalance(d.id),0))}</div></div>
+    </div>
+    ${overCredit.length ? `<div style="padding:12px;background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.2);border-radius:10px;margin-bottom:14px;font-size:12px">
+      <strong style="color:var(--red)">⚠️ ${overCredit.length} موزع تجاوز الحد الائتماني</strong>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+        ${overCredit.map(d=>`<span class="badge b-red">${escapeHtml(d.name)} (${fmtC(distBalance(d.id))})</span>`).join('')}
+      </div></div>` : ''}
+    <div class="card">${tbl(
+      ['الموزع','النوع','رقم الترخيص','رقم الضريبة TIN','واتساب','الحد الائتماني','الرصيد الحالي','الحالة','إجراء'],
+      dists.map(d=>{
+        const bal   = distBalance(d.id);
+        const limit = Number(d.creditLimit||0);
+        const over  = bal > limit && limit > 0;
+        return tr(
+          `<div>
+            <strong>${escapeHtml(d.name||'—')}</strong>
+            ${d.address?`<div style="font-size:11px;color:var(--muted)">${escapeHtml(d.address)}</div>`:''}
+            ${d.contactPerson?`<div style="font-size:11px;color:var(--muted)">👤 ${escapeHtml(d.contactPerson)}</div>`:''}
+          </div>`,
+          DISTRIBUTOR_TYPES.find(t=>t.v===d.distributorType)?.l||'—',
+          d.edaLicenseNo ? `<code style="font-size:11px">${escapeHtml(d.edaLicenseNo)}</code>` : '<span style="color:var(--red);font-size:11px">⚠️ ناقص</span>',
+          d.taxRegNo ? `<code style="font-size:11px">${escapeHtml(d.taxRegNo)}</code>` : '—',
+          d.whatsapp ? `<a href="https://wa.me/2${d.whatsapp.replace(/\D/g,'')}" target="_blank" style="color:var(--green-light);text-decoration:none;font-size:13px">📱 ${escapeHtml(d.whatsapp)}</a>` : '—',
+          fmtC(limit),
+          `<span style="color:${over?'var(--red)':'var(--green-light)'};font-weight:700">${fmtC(bal)}${over?' ⚠️':''}</span>`,
+          `<span class="badge ${d.status==='active'?'b-green':'b-gray'}">${d.status==='active'?'نشط':'موقوف'}</span>`,
+          `<div class="action-bar" style="gap:4px">
+            <button class="btn btn-white btn-sm" style="font-size:10px" onclick="addSalesOrder(${d.id})">+ أمر</button>
+            <button class="btn btn-white btn-sm" style="font-size:10px" onclick="sendWhatsApp(${d.id})">📱</button>
+            <button class="icon-btn edit" onclick="editDistributor(${d.id})">${ic.edit}</button>
+            <button class="icon-btn del" onclick="if(confirm('حذف الموزع؟')){remove('distributors',${d.id});go('distributors')}">${ic.del}</button>
+          </div>`
+        );
+      })
+    ,'tbl_dists')}</div>`
+  );
+};
+
+function addDistributor(){ showDistForm(); }
+function editDistributor(id){ showDistForm(getById('distributors',id)||{}); }
+function showDistForm(d={}){
+  showModal(modal(d.id?'تعديل موزع':'🤝 موزع جديد',`
+    <div style="max-height:75vh;overflow-y:auto;padding-right:4px">
+    <div class="tabs" id="dist-tabs">
+      <button class="tab active" onclick="switchTab('dist-tabs','dist-basic')">📋 البيانات الأساسية</button>
+      <button class="tab" onclick="switchTab('dist-tabs','dist-legal')">⚖️ البيانات القانونية</button>
+      <button class="tab" onclick="switchTab('dist-tabs','dist-credit')">💳 الائتمان والدفع</button>
+    </div>
+
+    <div id="dist-basic" class="tab-content active">
+      ${fg('الاسم التجاري *', inp('d-name','text',d.name||'','اسم شركة الموزع'))}
+      <div class="form-row">
+        ${fg('نوع الموزع', `<select id="d-type" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">${DISTRIBUTOR_TYPES.map(t=>`<option value="${t.v}" ${(d.distributorType||'wholesale')===t.v?'selected':''}>${t.l}</option>`).join('')}</select>`)}
+        ${fg('الحالة', `<select id="d-status" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)"><option value="active" ${(d.status||'active')==='active'?'selected':''}>✅ نشط</option><option value="suspended" ${d.status==='suspended'?'selected':''}>⏸️ موقوف</option><option value="blacklisted" ${d.status==='blacklisted'?'selected':''}>🚫 قائمة سوداء</option></select>`)}
+      </div>
+      <div class="form-row">
+        ${fg('جهة الاتصال', inp('d-contact','text',d.contactPerson||'','اسم المسؤول'))}
+        ${fg('📱 رقم واتساب *', inp('d-whatsapp','tel',d.whatsapp||'01','مثال: 01012345678'))}
+      </div>
+      <div class="form-row">
+        ${fg('هاتف العمل', inp('d-phone','tel',d.phone||'',''))}
+        ${fg('البريد الإلكتروني', inp('d-email','email',d.email||'',''))}
+      </div>
+      ${fg('العنوان', `<textarea id="d-address" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif">${escapeHtml(d.address||'')}</textarea>`)}
+      ${fg('المنطقة / المحافظة', inp('d-region','text',d.region||'','مثال: القاهرة الكبرى / الإسكندرية / الصعيد'))}
+    </div>
+
+    <div id="dist-legal" class="tab-content">
+      <div style="padding:10px;background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.2);border-radius:8px;margin-bottom:12px;font-size:11px;color:var(--red)">
+        ⚖️ <strong>قانون 151/2019 م.30:</strong> يُحظر البيع إلا لموزعين مرخصين من هيئة الدواء المصرية
+      </div>
+      <div class="form-row">
+        ${fg('رقم ترخيص التوزيع (EDA) *', inp('d-eda','text',d.edaLicenseNo||'','مثال: DIST-2024-1234'))}
+        ${fg('تاريخ انتهاء الترخيص', inp('d-eda-exp','date',d.edaLicenseExpiry||''))}
+      </div>
+      <div class="form-row">
+        ${fg('رقم الضريبة (TIN) *', inp('d-tin','text',d.taxRegNo||'','Tax Registration Number — مطلوب للفاتورة'))}
+        ${fg('السجل التجاري', inp('d-cr','text',d.commercialReg||'','Commercial Registration'))}
+      </div>
+      ${fg('عنوان المخزن الرئيسي', inp('d-warehouse','text',d.warehouseAddress||'',''))}
+      ${fg('ملاحظات قانونية', `<textarea id="d-legal-notes" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif">${escapeHtml(d.legalNotes||'')}</textarea>`)}
+    </div>
+
+    <div id="dist-credit" class="tab-content">
+      <div style="padding:10px;background:rgba(56,139,253,.06);border:1px solid rgba(56,139,253,.2);border-radius:8px;margin-bottom:12px;font-size:11px">
+        💳 <strong>قانون التجارة 17/1999 م.94:</strong> الحد الائتماني يجب توثيقه في العقد
+      </div>
+      <div class="form-row">
+        ${fg('الحد الائتماني (ج.م) *', inp('d-credit','number',d.creditLimit||50000,''))}
+        ${fg('شروط الدفع', `<select id="d-terms" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">${PAYMENT_TERMS.map(t=>`<option value="${t.v}" ${(d.paymentTerms||'net30')===t.v?'selected':''}>${t.l}</option>`).join('')}</select>`)}
+      </div>
+      <div class="form-row">
+        ${fg('نسبة الخصم %', inp('d-discount','number',d.discountPct||0,'0-100'))}
+        ${fg('مدة عقد التوريد (أشهر)', inp('d-contract','number',d.contractMonths||12,''))}
+      </div>
+      ${fg('ملاحظات الائتمان', `<textarea id="d-credit-notes" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif">${escapeHtml(d.creditNotes||'')}</textarea>`)}
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveDistributor(${d.id||''})">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>
+    </div>`,null,'680px'));
+  setTimeout(()=>initTabs(),100);
+}
+
+function saveDistributor(id){
+  const name = val('d-name');
+  if(!name) return alert('اسم الموزع إلزامي');
+  const d = {
+    name,
+    distributorType: document.getElementById('d-type')?.value||'wholesale',
+    status: document.getElementById('d-status')?.value||'active',
+    contactPerson: val('d-contact')||null,
+    whatsapp: val('d-whatsapp')||null,
+    phone: val('d-phone')||null,
+    email: val('d-email')||null,
+    address: document.getElementById('d-address')?.value||null,
+    region: val('d-region')||null,
+    edaLicenseNo: val('d-eda')||null,
+    edaLicenseExpiry: document.getElementById('d-eda-exp')?.value||null,
+    taxRegNo: val('d-tin')||null,
+    commercialReg: val('d-cr')||null,
+    warehouseAddress: val('d-warehouse')||null,
+    legalNotes: document.getElementById('d-legal-notes')?.value||null,
+    creditLimit: Number(val('d-credit'))||50000,
+    paymentTerms: document.getElementById('d-terms')?.value||'net30',
+    discountPct: Number(val('d-discount'))||0,
+    contractMonths: Number(val('d-contract'))||12,
+    creditNotes: document.getElementById('d-credit-notes')?.value||null,
+  };
+  id ? update('distributors',id,d) : insert('distributors',d);
+  closeModal(); go('distributors');
+}
+
+function sendWhatsApp(distId){
+  const d = getById('distributors', distId);
+  if(!d?.whatsapp) return alert('لا يوجد رقم واتساب مسجل');
+  const num = d.whatsapp.replace(/\D/g,'');
+  const invs = (getAll('salesInvoices')||[]).filter(i=>i.distributorId===distId && i.paymentStatus!=='paid');
+  const bal  = invs.reduce((s,i)=>s+Number(i.totalAmount||0),0);
+  const msg  = encodeURIComponent(
+    `مرحباً ${d.name}،\n` +
+    `رسالة من شركتنا الدوائية.\n` +
+    (bal>0 ? `الرصيد المستحق: ${Number(bal).toFixed(2)} ج.م\n` +
+              `الفواتير المفتوحة: ${invs.length}\n\n` +
+              `يرجى ترتيب السداد وفق شروط الاتفاقية.\n` : '') +
+    `للاستفسار: ${today()}`
+  );
+  window.open(`https://wa.me/2${num}?text=${msg}`, '_blank');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// B. أوامر البيع — Sales Orders (محسّنة)
+// ══════════════════════════════════════════════════════════════════
+
+PAGES.salesorders = function(){
+  const orders = getAll('salesOrders')||[];
+  const dists  = getAll('distributors')||[];
+  const total  = orders.reduce((s,o)=>s+Number(o.totalAmount||0),0);
+
+  setPage('📋 أوامر البيع','Sales Orders — قانون 151/2019 م.45',
+    `<div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-green" onclick="addSalesOrder()">+ أمر بيع جديد</button>
+      <button class="btn btn-white" onclick="go('salesinvoices')">📄 الفواتير</button>
+      <button class="btn btn-white" onclick="go('delivery')">🚚 الشحن</button>
+      <button class="btn btn-white" onclick="go('distributors')">🤝 الموزعون</button>
+    </div>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي الأوامر</div><div class="val">${orders.length}</div></div>
+      <div class="stat-card"><div class="lbl text-blue">قيد التنفيذ</div><div class="val text-blue">${orders.filter(o=>['confirmed','processing'].includes(o.status)).length}</div></div>
+      <div class="stat-card"><div class="lbl text-green">مُسلَّم ✅</div><div class="val text-green">${orders.filter(o=>o.status==='delivered').length}</div></div>
+      <div class="stat-card"><div class="lbl">إجمالي القيمة</div><div class="val">${fmtC(total)}</div></div>
+    </div>
+    <div class="card">${tbl(
+      ['رقم الأمر','الموزع / العميل','تاريخ الأمر','البنود','الإجمالي','الحالة','إجراء'],
+      orders.sort((a,b)=>b.id-a.id).map(o=>{
+        const dist = o.distributorId ? getById('distributors',o.distributorId) : null;
+        const st   = ORDER_STATUSES[o.status]||{l:o.status,c:'b-gray'};
+        return tr(
+          `<code style="font-size:11px">SO-${String(o.id).padStart(5,'0')}</code>`,
+          `<div>
+            <strong>${escapeHtml(dist?.name||o.customerName||'—')}</strong>
+            ${dist?.region?`<div style="font-size:10px;color:var(--muted)">${escapeHtml(dist.region)}</div>`:''}
+          </div>`,
+          o.orderDate||'—',
+          `<span style="font-size:11px">${(o.lines||[]).length} بند</span>`,
+          `<strong>${fmtC(o.totalAmount||0)}</strong>`,
+          `<span class="badge ${st.c}">${st.l}</span>`,
+          `<div class="action-bar" style="gap:4px">
+            <button class="btn btn-white btn-sm" style="font-size:10px" onclick="viewSalesOrder(${o.id})">عرض</button>
+            <button class="icon-btn edit" onclick="editSalesOrder(${o.id})">${ic.edit}</button>
+            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('salesOrders',${o.id});go('salesorders')}">${ic.del}</button>
+          </div>`
+        );
+      })
+    ,'tbl_so')}</div>`
+  );
+};
+
+function addSalesOrder(distId){ showSOForm({}, distId||null); }
+function editSalesOrder(id){ showSOForm(getById('salesOrders',id)||{}); }
+
+function showSOForm(o={}, preDistId=null){
+  const dists = getAll('distributors').filter(d=>d.status==='active');
+  const prods = getAll('products').filter(p=>p.status==='active'||!p.status);
+  const lines = o.lines||[{productId:'',qty:1,unitPrice:0,lotNo:'',vatExempt:false}];
+  const selDistId = preDistId || o.distributorId || 0;
+  const selDist   = selDistId ? getById('distributors', selDistId) : null;
+  const discPct   = selDist?.discountPct || 0;
+
+  showModal(modal(o.id?'تعديل أمر بيع':'📋 أمر بيع جديد',`
+    <div style="max-height:80vh;overflow-y:auto;padding-right:4px">
+    <div class="form-row">
+      <div class="fg"><label>الموزع / العميل *</label>
+        <select id="so-dist" onchange="updateSODistInfo(this.value)"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+          <option value="0">اختر موزعاً...</option>
+          <option value="manual">➕ إدخال يدوي</option>
+          ${dists.map(d=>`<option value="${d.id}" ${d.id===selDistId?'selected':''}>${d.name} — ${d.region||'—'}</option>`).join('')}
+        </select>
+      </div>
+      ${fg('تاريخ الأمر', inp('so-date','date',o.orderDate||today()))}
+    </div>
+    <div id="so-dist-info" style="padding:10px;background:var(--hover);border-radius:8px;margin-bottom:12px;font-size:12px;${selDist?'':'display:none'}">
+      ${selDist ? `<strong>${escapeHtml(selDist.name)}</strong> | TIN: ${selDist.taxRegNo||'—'} | ترخيص: ${selDist.edaLicenseNo||'—'} | خصم: ${selDist.discountPct||0}%` : ''}
+    </div>
+    <div id="so-manual-input" style="${selDistId==='manual'?'':'display:none'}">
+      ${fg('اسم العميل (يدوي)', inp('so-cust','text',o.customerName||'',''))}
+    </div>
+
+    <div style="margin-bottom:10px">
+      <div style="font-weight:700;font-size:12px;margin-bottom:8px">📦 بنود الأمر (يجب إدخال رقم التشغيلة — قانون 151/2019 م.45)</div>
+      <div id="so-lines">
+        ${lines.map((l,i)=>`
+        <div class="form-row" id="so-line-${i}" style="align-items:flex-end;flex-wrap:wrap;gap:6px;padding:8px;background:var(--hover);border-radius:8px;margin-bottom:6px">
+          <div class="fg" style="flex:2;min-width:150px">
+            ${i===0?'<label style="font-size:11px">المنتج</label>':''}
+            <select id="so-prod-${i}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;color:var(--text)">
+              <option value="">اختر...</option>
+              ${prods.map(p=>`<option value="${p.id}" ${p.id==l.productId?'selected':''}>${escapeHtml(p.name)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="fg" style="width:90px">
+            ${i===0?'<label style="font-size:11px">LOT#</label>':''}
+            <input type="text" id="so-lot-${i}" value="${escapeHtml(l.lotNo||'')}" placeholder="رقم الدفعة"
+              style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:11px;color:var(--text)">
+          </div>
+          <div class="fg" style="width:70px">
+            ${i===0?'<label style="font-size:11px">الكمية</label>':''}
+            <input type="number" id="so-qty-${i}" value="${l.qty||1}" min="1"
+              style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;color:var(--text)">
+          </div>
+          <div class="fg" style="width:90px">
+            ${i===0?'<label style="font-size:11px">السعر</label>':''}
+            <input type="number" id="so-price-${i}" value="${l.unitPrice||0}" min="0"
+              style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;color:var(--text)">
+          </div>
+          <div class="fg" style="width:80px">
+            ${i===0?'<label style="font-size:11px">VAT</label>':''}
+            <select id="so-vat-${i}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:11px;color:var(--text)">
+              <option value="std" ${!l.vatExempt?'selected':''}>14%</option>
+              <option value="exempt" ${l.vatExempt?'selected':''}>معفى</option>
+            </select>
+          </div>
+          <button onclick="document.getElementById('so-line-${i}').remove()"
+            style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px;padding:0 4px;flex-shrink:0">✕</button>
+        </div>`).join('')}
+      </div>
+      <button class="btn btn-white btn-sm" onclick="addSOLine()">+ إضافة منتج</button>
+    </div>
+
+    <div class="form-row">
+      ${fg('ملاحظات', `<textarea id="so-notes" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif">${escapeHtml(o.notes||'')}</textarea>`)}
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveSalesOrder(${o.id||''})">💾 حفظ الأمر</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>
+    </div>`,null,'750px'));
+
+  setTimeout(()=>{
+    window._soLineCount = lines.length;
+    if(selDistId && selDistId!=='manual'){
+      document.getElementById('so-dist')&&(document.getElementById('so-dist').value=selDistId);
+    }
+    document.getElementById('so-dist')?.addEventListener('change',function(){
+      updateSODistInfo(this.value);
+    });
+  },100);
+}
+
+function updateSODistInfo(distId){
+  const dist = distId && distId!=='0' && distId!=='manual' ? getById('distributors',Number(distId)) : null;
+  const infoEl = document.getElementById('so-dist-info');
+  const manEl  = document.getElementById('so-manual-input');
+  if(infoEl){
+    if(dist){
+      infoEl.style.display='block';
+      infoEl.innerHTML=`<strong>${escapeHtml(dist.name)}</strong> | TIN: ${dist.taxRegNo||'—'} | ترخيص: ${dist.edaLicenseNo||'—'} | خصم: ${dist.discountPct||0}%`;
+    } else {
+      infoEl.style.display='none';
+    }
+  }
+  if(manEl) manEl.style.display = (distId==='manual') ? 'block' : 'none';
+}
+
+let _soLineCount = 1;
+function addSOLine(){
+  const i = window._soLineCount++;
+  const prods = getAll('products').filter(p=>p.status==='active'||!p.status);
+  const div = document.createElement('div');
+  div.className='form-row'; div.id=`so-line-${i}`;
+  div.style.cssText='align-items:flex-end;flex-wrap:wrap;gap:6px;padding:8px;background:var(--hover);border-radius:8px;margin-bottom:6px';
+  div.innerHTML=`
+    <div class="fg" style="flex:2;min-width:150px">
+      <select id="so-prod-${i}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;color:var(--text)">
+        <option value="">اختر...</option>${prods.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="fg" style="width:90px"><input type="text" id="so-lot-${i}" placeholder="LOT#"
+      style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:11px;color:var(--text)"></div>
+    <div class="fg" style="width:70px"><input type="number" id="so-qty-${i}" value="1" min="1"
+      style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;color:var(--text)"></div>
+    <div class="fg" style="width:90px"><input type="number" id="so-price-${i}" value="0" min="0"
+      style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;color:var(--text)"></div>
+    <div class="fg" style="width:80px">
+      <select id="so-vat-${i}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:11px;color:var(--text)">
+        <option value="std">14%</option><option value="exempt">معفى</option>
+      </select>
+    </div>
+    <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px;padding:0 4px">✕</button>`;
+  document.getElementById('so-lines')?.appendChild(div);
+}
+
+function saveSalesOrder(id){
+  const distVal = document.getElementById('so-dist')?.value;
+  const distId  = (distVal && distVal!=='0' && distVal!=='manual') ? Number(distVal) : null;
+  const dist    = distId ? getById('distributors',distId) : null;
+  const custName= distId ? dist?.name : (val('so-cust')||'');
+  if(!custName) return alert('يرجى اختيار موزع أو إدخال اسم العميل');
+
+  const lines=[]; let subtotal=0; let vatTotal=0;
+  document.querySelectorAll('[id^="so-prod-"]').forEach(el=>{
+    const i = el.id.split('-')[2];
+    const prodId = Number(el.value)||null;
+    if(!prodId) return;
+    const qty    = Number(document.getElementById(`so-qty-${i}`)?.value||1);
+    const price  = Number(document.getElementById(`so-price-${i}`)?.value||0);
+    const lot    = document.getElementById(`so-lot-${i}`)?.value||'';
+    const vatEx  = document.getElementById(`so-vat-${i}`)?.value === 'exempt';
+    const disc   = dist?.discountPct||0;
+    const discAmt= price * qty * (disc/100);
+    const lineNet= price * qty - discAmt;
+    const vat    = vatEx ? 0 : lineNet * EGY_VAT_RATE;
+    const prod   = getById('products',prodId);
+    lines.push({ productId:prodId, productName:prod?.name||'',
+      qty, unitPrice:price, lotNo:lot||null,
+      discountPct:disc, discountAmount:discAmt,
+      lineSubtotal:lineNet, vatExempt:vatEx,
+      vatAmount:vat, lineTotal:lineNet+vat });
+    subtotal+=lineNet; vatTotal+=vat;
+  });
+  if(!lines.length) return alert('أضف منتجاً واحداً على الأقل');
+
+  const d = {
+    distributorId: distId,
+    customerName:  custName,
+    customerTIN:   dist?.taxRegNo||null,
+    orderDate:     document.getElementById('so-date')?.value||today(),
+    status:        'confirmed',
+    lines, subtotal, vatAmount:vatTotal,
+    totalAmount: subtotal+vatTotal,
+    discountTotal: lines.reduce((s,l)=>s+l.discountAmount,0),
+    notes: document.getElementById('so-notes')?.value||null,
+    createdBy: _authUser?.name||'—',
+  };
+
+  // Check credit limit
+  if(dist){
+    const unpaid = (getAll('salesInvoices')||[])
+      .filter(i=>i.distributorId===distId && i.paymentStatus!=='paid')
+      .reduce((s,i)=>s+Number(i.totalAmount||0),0);
+    const newTotal = unpaid + (subtotal+vatTotal);
+    if(newTotal > Number(dist.creditLimit||0) && dist.creditLimit){
+      if(!confirm(`⚠️ تجاوز الحد الائتماني!\nالرصيد الحالي: ${fmtC(unpaid)}\nهذا الأمر: ${fmtC(subtotal+vatTotal)}\nالحد: ${fmtC(dist.creditLimit)}\n\nهل تريد المتابعة؟`)) return;
+    }
+  }
+
+  id ? update('salesOrders',id,d) : insert('salesOrders',d);
+  closeModal(); go('salesorders');
+}
+
+function viewSalesOrder(id){
+  const o = getById('salesOrders',id); if(!o) return;
+  const dist = o.distributorId ? getById('distributors',o.distributorId) : null;
+  const st   = ORDER_STATUSES[o.status]||{l:o.status,c:'b-gray'};
+  showModal(modal(`أمر البيع SO-${String(o.id).padStart(5,'0')}`,`
+    <div style="font-size:13px;margin-bottom:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div>الموزع: <strong>${escapeHtml(dist?.name||o.customerName||'—')}</strong></div>
+        <div>الحالة: <span class="badge ${st.c}">${st.l}</span></div>
+        <div>التاريخ: ${o.orderDate||'—'}</div>
+        <div>رقم الضريبة: ${escapeHtml(dist?.taxRegNo||o.customerTIN||'—')}</div>
+      </div>
+    </div>
+    ${tbl(['المنتج','LOT#','الكمية','السعر','الخصم','VAT','الإجمالي'],
+      (o.lines||[]).map(l=>tr(
+        escapeHtml(l.productName||'—'),
+        `<code style="font-size:10px">${escapeHtml(l.lotNo||'—')}</code>`,
+        fmtN(l.qty), fmtC(l.unitPrice),
+        l.discountAmount?fmtC(l.discountAmount):'—',
+        l.vatExempt?'<span class="badge b-gray">معفى</span>':fmtC(l.vatAmount),
+        fmtC(l.lineTotal)
+      )),'tbl_so_v')}
+    <div style="text-align:left;margin-top:12px;font-size:13px">
+      <div>الإجمالي قبل الضريبة: ${fmtC(o.subtotal||0)}</div>
+      ${o.discountTotal?`<div>خصم: -${fmtC(o.discountTotal)}</div>`:''}
+      <div>ضريبة القيمة المضافة (14%): ${fmtC(o.vatAmount||0)}</div>
+      <div style="font-size:16px;font-weight:700;color:var(--green-light)">الإجمالي: ${fmtC(o.totalAmount||0)}</div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="closeModal();createInvoiceFromSO(${id})">📄 إنشاء فاتورة</button>
+      <button class="btn btn-white" onclick="closeModal();createDeliveryFromSO(${id})">🚚 شحن</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إغلاق</button>
+    </div>`));
+}
+
+// ══════════════════════════════════════════════════════════════════
+// C. فواتير المبيعات — Sales Invoices (فاتورة ضريبية مصرية كاملة)
+// ══════════════════════════════════════════════════════════════════
+
+PAGES.salesinvoices = function(){
+  const invs = getAll('salesInvoices')||[];
+  const unpaid= invs.filter(i=>i.paymentStatus==='unpaid');
+  const overdueInvs = unpaid.filter(i=>{
+    if(!i.dueDate) return false;
+    return new Date(i.dueDate) < new Date();
+  });
+
+  setPage('📄 فواتير المبيعات','فاتورة ضريبية مصرية — قانون VAT 67/2016 + منظومة ETA',
+    `<div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-green" onclick="addSalesInvoice()">+ فاتورة يدوية</button>
+      <button class="btn btn-white" onclick="go('salesorders')">← أوامر البيع</button>
+    </div>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي الفواتير</div><div class="val">${invs.length}</div></div>
+      <div class="stat-card"><div class="lbl text-red">غير مدفوعة</div><div class="val text-red">${unpaid.length}</div></div>
+      <div class="stat-card"><div class="lbl text-red">متأخرة ⚠️</div><div class="val text-red">${overdueInvs.length}</div></div>
+      <div class="stat-card"><div class="lbl">إجمالي المديونية</div><div class="val">${fmtC(unpaid.reduce((s,i)=>s+Number(i.totalAmount||0),0))}</div></div>
+    </div>
+    ${overdueInvs.length ? `<div style="padding:12px;background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.2);border-radius:10px;margin-bottom:14px;font-size:12px">
+      <strong style="color:var(--red)">⚠️ ${overdueInvs.length} فاتورة متأخرة — قانون التجارة 17/1999 م.103 — فائدة تأخير 5%</strong></div>` : ''}
+    <div class="card">${tbl(
+      ['رقم الفاتورة','العميل / الموزع','التاريخ','تاريخ الاستحقاق','الإجمالي','الضريبة','سداد','ETA UUID','إجراء'],
+      invs.sort((a,b)=>b.id-a.id).map(inv=>{
+        const overdue = inv.dueDate && new Date(inv.dueDate)<new Date() && inv.paymentStatus!=='paid';
+        const dist = inv.distributorId ? getById('distributors',inv.distributorId) : null;
+        return tr(
+          `<code>INV-${String(inv.id).padStart(6,'0')}</code>`,
+          `<div><strong>${escapeHtml(dist?.name||inv.customerName||'—')}</strong>
+           ${dist?.taxRegNo?`<div style="font-size:10px;color:var(--muted)">TIN: ${dist.taxRegNo}</div>`:''}
+           </div>`,
+          inv.invoiceDate||'—',
+          `<span style="color:${overdue?'var(--red)':'inherit'}">${inv.dueDate||'—'}${overdue?' ⚠️':''}</span>`,
+          `<strong>${fmtC(inv.totalAmount||0)}</strong>`,
+          `<span style="font-size:11px">${fmtC(inv.vatAmount||0)}</span>`,
+          `<span class="badge ${inv.paymentStatus==='paid'?'b-green':overdue?'b-red':'b-amber'}">${inv.paymentStatus==='paid'?'✅ مدفوع':overdue?'⚠️ متأخر':'⏳ معلق'}</span>`,
+          inv.etaUUID ? `<code style="font-size:9px">${escapeHtml(inv.etaUUID.slice(0,12))}...</code>` : '<span style="color:var(--muted);font-size:10px">—</span>',
+          `<div class="action-bar" style="gap:4px">
+            <button class="btn btn-white btn-sm" style="font-size:10px" onclick="printEgyptianInvoice(${inv.id})">🖨️</button>
+            ${inv.paymentStatus!=='paid'?`<button class="btn btn-white btn-sm" style="font-size:10px;color:var(--green-light)" onclick="markInvoicePaid(${inv.id})">✅ سداد</button>`:''}
+            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('salesInvoices',${inv.id});go('salesinvoices')}">${ic.del}</button>
+          </div>`
+        );
+      })
+    ,'tbl_inv')}</div>`
+  );
+};
+
+function createInvoiceFromSO(soId){
+  const so = getById('salesOrders',soId);
+  if(!so) return;
+  if(!so.customerName && !so.distributorId) return alert('أمر البيع لا يحتوي على بيانات العميل');
+  const dist = so.distributorId ? getById('distributors',so.distributorId) : null;
+  const payTerms = dist?.paymentTerms||'net30';
+  const dueDays  = {'cash':0,'net15':15,'net30':30,'net45':45,'net60':60,'net90':90}[payTerms]||30;
+  const dueDate  = new Date(so.orderDate||today());
+  dueDate.setDate(dueDate.getDate()+dueDays);
+  const uuid = generateEInvoiceUUID();
+  insert('salesInvoices',{
+    salesOrderId:soId, distributorId:so.distributorId,
+    customerName:dist?.name||so.customerName,
+    customerTIN: dist?.taxRegNo||so.customerTIN||null,
+    invoiceDate:today(),
+    dueDate:dueDate.toISOString().split('T')[0],
+    lines:so.lines, subtotal:so.subtotal,
+    vatRate:EGY_VAT_RATE, vatAmount:so.vatAmount,
+    discountTotal:so.discountTotal||0,
+    totalAmount:so.totalAmount,
+    paymentStatus:'unpaid',
+    etaUUID: uuid,
+    qrData: generateQRData({...so, invoiceDate:today(), vatAmount:so.vatAmount, totalAmount:so.totalAmount, id:'INV-'+Date.now()}, getAll('companies').find(c=>c.isActive)?.taxRegNo),
+    createdBy:_authUser?.name||'—',
+  });
+  update('salesOrders',soId,{status:'processing'});
+  showNotif&&showNotif('✅ تم إنشاء الفاتورة مع UUID الإلكتروني','success');
+  go('salesinvoices');
+}
+
+function addSalesInvoice(){
+  const sos = (getAll('salesOrders')||[]).filter(o=>['confirmed','processing'].includes(o.status));
+  showModal(modal('📄 فاتورة مبيعات جديدة',`
+    <div class="form-row">
+      ${fg('من أمر بيع', `<select id="inv-so" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        <option value="0">بدون أمر بيع</option>
+        ${sos.map(s=>`<option value="${s.id}">SO-${s.id} — ${escapeHtml(s.customerName||'')}</option>`).join('')}
+      </select>`)}
+      ${fg('اسم العميل *', inp('inv-cust','text','',''))}
+    </div>
+    <div class="form-row">
+      ${fg('تاريخ الفاتورة', inp('inv-date','date',today()))}
+      ${fg('الإجمالي قبل الضريبة (ج.م) *', inp('inv-sub','number','',''))}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveSalesInvoice()">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+  setTimeout(()=>{
+    document.getElementById('inv-so')?.addEventListener('change',function(){
+      const so=getById('salesOrders',Number(this.value));
+      if(so){ document.getElementById('inv-cust').value=so.customerName||'';
+              document.getElementById('inv-sub').value=so.subtotal||0; }
+    });
+  },100);
+}
+
+function saveSalesInvoice(){
+  const cust = val('inv-cust'); if(!cust) return alert('اسم العميل إلزامي');
+  const sub  = numVal('inv-sub')||0;
+  const vat  = sub * EGY_VAT_RATE;
+  const soId = numVal('inv-so')||null;
+  const uuid = generateEInvoiceUUID();
+  insert('salesInvoices',{
+    salesOrderId:soId, customerName:cust,
+    invoiceDate:document.getElementById('inv-date')?.value||today(),
+    subtotal:sub, vatRate:EGY_VAT_RATE, vatAmount:vat, totalAmount:sub+vat,
+    paymentStatus:'unpaid', etaUUID:uuid,
+    qrData:generateQRData({invoiceDate:today(),vatAmount:vat,totalAmount:sub+vat,id:'INV-'+Date.now()},null),
+    createdBy:_authUser?.name||'—',
+  });
+  if(soId) update('salesOrders',soId,{status:'processing'});
+  closeModal(); go('salesinvoices');
+}
+
+function markInvoicePaid(id){
+  const payDate = prompt('تاريخ السداد (YYYY-MM-DD):',today());
+  if(!payDate) return;
+  update('salesInvoices',id,{paymentStatus:'paid',paidDate:payDate,paidBy:_authUser?.name||'—'});
+  // Post to receivables
+  const inv = getById('salesInvoices',id);
+  insert('receivables',{
+    distributorId:inv.distributorId||null, customerName:inv.customerName,
+    invoiceId:id, type:'payment', amount:inv.totalAmount||0,
+    date:payDate, notes:'سداد فاتورة INV-'+String(id).padStart(6,'0'),
+  });
+  showNotif&&showNotif('✅ تم تسجيل السداد','success');
+  go('salesinvoices');
+}
+
+// ── الفاتورة الضريبية المصرية الكاملة ────────────────────────────
+function printEgyptianInvoice(id){
+  const inv  = getById('salesInvoices',id); if(!inv) return;
+  const dist = inv.distributorId ? getById('distributors',inv.distributorId) : null;
+  const comp = getAll('companies').find(c=>c.isActive)||{};
+  const invNo= 'INV-'+String(id).padStart(6,'0');
+
+  const w = window.open('','_blank','width=900,height=800');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${invNo}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Cairo',Arial,sans-serif;direction:rtl;padding:20px;font-size:12px;color:#1a1a1a}
+    .header{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:start;margin-bottom:16px;padding-bottom:12px;border-bottom:3px solid #1a3a5c}
+    .company-name{font-size:20px;font-weight:900;color:#1a3a5c}
+    .invoice-title{text-align:center;font-size:16px;font-weight:700;color:#fff;background:#1a3a5c;padding:8px 16px;border-radius:6px}
+    .inv-details{text-align:left;font-size:11px}
+    .parties{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+    .party-box{padding:10px;border:1px solid #ddd;border-radius:6px}
+    .party-title{font-size:10px;font-weight:700;color:#666;text-transform:uppercase;margin-bottom:6px;border-bottom:1px solid #eee;padding-bottom:4px}
+    table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:11px}
+    th{background:#1a3a5c;color:#fff;padding:7px 8px;text-align:right}
+    td{border:1px solid #ddd;padding:6px 8px}
+    tr:nth-child(even)td{background:#f9f9f9}
+    .totals{width:280px;margin-right:0;margin-left:auto}
+    .totals tr td{border:none;padding:3px 8px}
+    .totals tr:last-child td{font-size:14px;font-weight:700;background:#1a3a5c;color:#fff;padding:6px 8px}
+    .footer{margin-top:16px;padding-top:10px;border-top:2px solid #1a3a5c;display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:10px;color:#666}
+    .legal-note{font-size:9px;color:#999;margin-top:6px;padding:6px;background:#f5f5f5;border-radius:4px}
+    .qr-box{width:80px;height:80px;border:2px solid #1a3a5c;border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:monospace;font-size:7px;word-break:break-all;padding:4px;text-align:center}
+    .uuid{font-family:monospace;font-size:9px;background:#f0f4f8;padding:2px 6px;border-radius:3px}
+    .exempt-badge{background:#e8f5e9;color:#2e7d32;padding:1px 4px;border-radius:3px;font-size:10px}
+    .sig-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:20px}
+    .sig-box{border-top:1px solid #999;padding-top:6px;text-align:center;font-size:10px;color:#666}
+    @media print{body{padding:10px}}
+  </style></head><body>
+
+  <div class="header">
+    <div>
+      <div class="company-name">💊 ${escapeHtml(comp.name||'الشركة الدوائية')}</div>
+      <div style="font-size:10px;color:#666;margin-top:4px">${escapeHtml(comp.address||'')}</div>
+      <div style="font-size:10px;color:#666">رقم الضريبة: ${escapeHtml(comp.taxRegNo||'—')}</div>
+      <div style="font-size:10px;color:#666">ترخيص التوزيع: ${escapeHtml(comp.edaLicense||'—')}</div>
+    </div>
+    <div style="text-align:center">
+      <div class="invoice-title">فاتورة ضريبية</div>
+      <div style="font-size:9px;color:#666;margin-top:4px">TAX INVOICE</div>
+      <div style="margin-top:8px" class="qr-box">${escapeHtml(inv.qrData||'QR-'+invNo)}</div>
+    </div>
+    <div class="inv-details">
+      <div><strong>رقم الفاتورة:</strong> ${invNo}</div>
+      <div><strong>تاريخ الإصدار:</strong> ${inv.invoiceDate||today()}</div>
+      <div><strong>تاريخ الاستحقاق:</strong> ${inv.dueDate||'—'}</div>
+      <div style="margin-top:4px"><strong>UUID الفاتورة الإلكترونية:</strong></div>
+      <div class="uuid">${escapeHtml(inv.etaUUID||'—')}</div>
+    </div>
+  </div>
+
+  <div class="parties">
+    <div class="party-box">
+      <div class="party-title">البائع — Seller</div>
+      <div><strong>${escapeHtml(comp.name||'—')}</strong></div>
+      <div>${escapeHtml(comp.address||'—')}</div>
+      <div>TRN: ${escapeHtml(comp.taxRegNo||'—')}</div>
+      <div>ترخيص EDA: ${escapeHtml(comp.edaLicense||'—')}</div>
+    </div>
+    <div class="party-box">
+      <div class="party-title">المشتري — Buyer</div>
+      <div><strong>${escapeHtml(dist?.name||inv.customerName||'—')}</strong></div>
+      <div>${escapeHtml(dist?.address||'—')}</div>
+      <div>TRN: ${escapeHtml(dist?.taxRegNo||inv.customerTIN||'—')}</div>
+      <div>ترخيص EDA: ${escapeHtml(dist?.edaLicenseNo||'—')}</div>
+    </div>
+  </div>
+
+  <table>
+    <thead><tr>
+      <th>المنتج</th><th>رقم التسجيل</th><th>LOT#</th>
+      <th>الكمية</th><th>سعر الوحدة</th><th>الخصم</th>
+      <th>وعاء الضريبة</th><th>الضريبة</th><th>الإجمالي</th>
+    </tr></thead>
+    <tbody>
+    ${(inv.lines||[{productName:inv.customerName||'—',qty:1,unitPrice:inv.subtotal||0,vatExempt:false,vatAmount:inv.vatAmount||0,lineTotal:inv.totalAmount||0}]).map(l=>{
+      const prod = l.productId ? getById('products',l.productId) : null;
+      return `<tr>
+        <td><strong>${escapeHtml(l.productName||prod?.name||'—')}</strong></td>
+        <td style="font-size:10px">${escapeHtml(prod?.registrationNo||'—')}</td>
+        <td><code style="font-size:10px">${escapeHtml(l.lotNo||'—')}</code></td>
+        <td style="text-align:center">${fmtN(l.qty||1)}</td>
+        <td>${fmtC(l.unitPrice||0)}</td>
+        <td>${l.discountAmount?fmtC(l.discountAmount):'—'}</td>
+        <td>${fmtC(l.lineSubtotal||((l.qty||1)*(l.unitPrice||0)))}</td>
+        <td>${l.vatExempt?'<span class="exempt-badge">معفى</span>':fmtC(l.vatAmount||0)}</td>
+        <td><strong>${fmtC(l.lineTotal||0)}</strong></td>
+      </tr>`;
+    }).join('')}
+    </tbody>
+  </table>
+
+  <table class="totals">
+    <tr><td>الإجمالي قبل الضريبة:</td><td style="text-align:left"><strong>${fmtC(inv.subtotal||0)}</strong></td></tr>
+    ${(inv.discountTotal&&inv.discountTotal>0)?`<tr><td>الخصم:</td><td style="text-align:left;color:#c00">-${fmtC(inv.discountTotal)}</td></tr>`:''}
+    <tr><td>ضريبة القيمة المضافة (14%):</td><td style="text-align:left">${fmtC(inv.vatAmount||0)}</td></tr>
+    <tr><td>الإجمالي النهائي:</td><td style="text-align:left">${fmtC(inv.totalAmount||0)}</td></tr>
+  </table>
+
+  <div class="legal-note">
+    📋 هذه فاتورة ضريبية وفق قانون الضريبة على القيمة المضافة رقم 67 لسنة 2016 |
+    قرار 121/2021 (الفاتورة الإلكترونية) | قانون الدواء 151/2019 م.45 |
+    UUID الإلكتروني: ${escapeHtml(inv.etaUUID||'—')}
+  </div>
+
+  <div class="footer">
+    <div>
+      <div><strong>شروط الدفع:</strong> ${escapeHtml(dist?.paymentTerms||'net30')}</div>
+      <div><strong>تاريخ الاستحقاق:</strong> ${inv.dueDate||'—'}</div>
+      <div style="margin-top:6px;font-size:9px;color:#f00">ملاحظة: التأخر في السداد يُرتب فائدة تأخيرية 5% سنوياً وفق قانون التجارة 17/1999 م.103</div>
+    </div>
+    <div>
+      <div><strong>رقم التسلسلي ETA:</strong> ${escapeHtml(inv.etaUUID||'—')}</div>
+      <div><strong>أُصدرت بواسطة:</strong> ${escapeHtml(inv.createdBy||'—')}</div>
+    </div>
+  </div>
+
+  <div class="sig-grid">
+    <div class="sig-box">المحاسب المسؤول<br><br>__________________</div>
+    <div class="sig-box">مدير المبيعات<br><br>__________________</div>
+    <div class="sig-box">ختم الشركة<br><br>__________________</div>
+  </div>
+
+  \x3Cscript\x3Ewindow.print()\x3C/script\x3E</body></html>`);
+  w.document.close();
+}
+
+// Legacy alias
+function printInvoice(id){ printEgyptianInvoice(id); }
+
+// ══════════════════════════════════════════════════════════════════
+// D. المرتجعات — Returns (محسّنة مع أثر على المخزون)
+// ══════════════════════════════════════════════════════════════════
+
+PAGES.returns = function(){
+  const rets  = getAll('returns')||[];
+  const total = rets.reduce((s,r)=>s+Number(r.quantity||0),0);
+  const val2  = rets.reduce((s,r)=>s+Number(r.totalValue||0),0);
+
+  setPage('🔄 المرتجعات','Return Authorization — قانون 151/2019 م.48',
+    `<button class="btn btn-green" onclick="addReturn()">+ تسجيل مرتجع</button>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي المرتجعات</div><div class="val">${rets.length}</div></div>
+      <div class="stat-card"><div class="lbl text-red">قيمة الإرجاع</div><div class="val text-red">${fmtC(val2)}</div></div>
+      <div class="stat-card"><div class="lbl text-amber">إعادة للمخزون</div><div class="val text-amber">${rets.filter(r=>r.action==='restock').length}</div></div>
+      <div class="stat-card"><div class="lbl text-red">إتلاف</div><div class="val text-red">${rets.filter(r=>r.action==='destruction').length}</div></div>
+    </div>
+    <div class="card">${tbl(
+      ['رقم الإشعار','الموزع','المنتج','LOT#','الكمية','السبب','الإجراء','أثر المخزون','التاريخ','إجراء'],
+      rets.sort((a,b)=>b.id-a.id).map(r=>{
+        const dist = r.distributorId ? getById('distributors',r.distributorId) : null;
+        const prod = r.productId ? getById('products',r.productId) : null;
+        const reason = RETURN_REASONS.find(x=>x.v===r.returnReason)||{l:r.returnReason||'—'};
+        const action = RETURN_ACTIONS.find(x=>x.v===r.action)||{l:r.action||'—'};
+        return tr(
+          `<code style="font-size:11px">RA-${String(r.id).padStart(5,'0')}</code>`,
+          escapeHtml(dist?.name||r.distributorName||'—'),
+          escapeHtml(prod?.name||r.productName||'—'),
+          `<code style="font-size:10px">${escapeHtml(r.batchNumber||'—')}</code>`,
+          fmtN(r.quantity||0),
+          `<span style="font-size:11px">${escapeHtml(reason.l.split('(')[0])}</span>`,
+          `<span class="badge ${r.action==='restock'?'b-green':r.action==='destruction'?'b-red':'b-amber'}">${escapeHtml(action.l.split('(')[0])}</span>`,
+          r.inventoryAdjusted ? '<span class="badge b-green" style="font-size:10px">✅ تم</span>' : '<span class="badge b-gray" style="font-size:10px">معلق</span>',
+          r.returnDate||'—',
+          `<div class="action-bar" style="gap:4px">
+            ${!r.inventoryAdjusted?`<button class="btn btn-white btn-sm" style="font-size:10px" onclick="applyReturnToInventory(${r.id})">تطبيق</button>`:''}
+            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('returns',${r.id});go('returns')}">${ic.del}</button>
+          </div>`
+        );
+      })
+    ,'tbl_rets')}</div>`
+  );
+};
+
+function addReturn(){
+  const dists = getAll('distributors').filter(d=>d.status==='active');
+  const prods = getAll('products').filter(p=>p.status==='active'||!p.status);
+  showModal(modal('🔄 تسجيل مرتجع — Return Authorization',`
+    <div style="padding:10px;background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.2);border-radius:8px;margin-bottom:12px;font-size:11px;color:var(--red)">
+      ⚖️ <strong>قانون 151/2019 م.48:</strong> يجب توثيق كل مرتجع برقم إشعار إرجاع + سبب + رقم التشغيلة
+    </div>
+    <div class="form-row">
+      ${fg('الموزع *', `<select id="ret-dist" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        <option value="0">اختر موزعاً...</option>
+        ${dists.map(d=>`<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('')}
+      </select>`)}
+      ${fg('المنتج *', `<select id="ret-prod" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        <option value="0">اختر منتجاً...</option>
+        ${prods.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}
+      </select>`)}
+    </div>
+    <div class="form-row">
+      ${fg('رقم التشغيلة (LOT#) *', inp('ret-batch','text','','إلزامي — قانون 151/2019'))}
+      ${fg('الكمية المُرجَعة *', inp('ret-qty','number','',''))}
+    </div>
+    <div class="form-row">
+      ${fg('سبب الإرجاع *', `<select id="ret-reason" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        ${RETURN_REASONS.map(r=>`<option value="${r.v}">${r.l}</option>`).join('')}
+      </select>`)}
+      ${fg('الإجراء المتخذ *', `<select id="ret-action" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        ${RETURN_ACTIONS.map(r=>`<option value="${r.v}">${r.l}</option>`).join('')}
+      </select>`)}
+    </div>
+    <div class="form-row">
+      ${fg('تاريخ الإرجاع', inp('ret-date','date',today()))}
+      ${fg('سعر الوحدة (للقيد المحاسبي)', inp('ret-price','number','',''))}
+    </div>
+    ${fg('تفاصيل / ملاحظات *', `<textarea id="ret-notes" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text);font-family:Cairo,sans-serif" placeholder="وصف تفصيلي للسبب يُرفق بالوثائق الداعمة..."></textarea>`)}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveReturn()">💾 حفظ وإنشاء إشعار إرجاع</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+function saveReturn(){
+  const distId  = numVal('ret-dist');
+  const prodId  = numVal('ret-prod');
+  const batchNo = val('ret-batch');
+  const qty     = numVal('ret-qty');
+  const reason  = document.getElementById('ret-reason')?.value;
+  const action  = document.getElementById('ret-action')?.value;
+  const notes   = document.getElementById('ret-notes')?.value;
+  if(!distId||!prodId)   return alert('الموزع والمنتج إلزاميان');
+  if(!batchNo)           return alert('رقم التشغيلة إلزامي (قانون 151/2019 م.48)');
+  if(!qty || qty<=0)     return alert('يرجى إدخال كمية صحيحة');
+  if(!notes?.trim())     return alert('التفاصيل إلزامية للتوثيق القانوني');
+  const prod  = getById('products',prodId);
+  const dist  = getById('distributors',distId);
+  const price = numVal('ret-price')||0;
+  const r = insert('returns',{
+    distributorId:distId, distributorName:dist?.name||'',
+    productId:prodId, productName:prod?.name||'',
+    batchNumber:batchNo, quantity:qty,
+    returnReason:reason, action,
+    returnDate:document.getElementById('ret-date')?.value||today(),
+    unitPrice:price, totalValue:qty*price,
+    notes,
+    inventoryAdjusted:false,
+    raNumber:'RA-'+Date.now().toString().slice(-6),
+    recordedBy:_authUser?.name||'—',
+  });
+  // Auto-apply simple cases
+  if(action==='restock' || action==='destruction'){
+    applyReturnToInventory(r.id);
+  }
+  closeModal(); go('returns');
+}
+
+function applyReturnToInventory(retId){
+  const r = getById('returns', retId); if(!r) return;
+  if(r.action === 'restock'){
+    // Add back to inventory with quarantine status (must pass QC)
+    insert('materialReceipts',{
+      materialId:r.productId||null,
+      batchNumber:r.batchNumber||'RET-'+retId,
+      quantity:r.quantity, remainingQuantity:r.quantity,
+      status:'quarantine',
+      receiptDate:r.returnDate||today(),
+      notes:'مرتجع من موزع — RA-'+String(retId).padStart(5,'0')+' — يجب فحص QC قبل الإفراج',
+      returnAuthId:retId,
+    });
+    showNotif&&showNotif('✅ تم إضافة الكمية للمخزون في QUARANTINE — يجب فحص QC','success');
+  } else if(r.action === 'destruction'){
+    insert('auditLogs',{
+      action:'RETURN_DESTRUCTION',
+      table:'returns', recordId:retId,
+      description:`إتلاف مرتجع: ${r.productName} | LOT: ${r.batchNumber} | كمية: ${r.quantity}`,
+      authorizedBy:_authUser?.name||'—',
+      timestamp:new Date().toISOString(),
+    });
+    showNotif&&showNotif('✅ تم توثيق الإتلاف في سجل التدقيق','success');
+  }
+  // Credit Note
+  if(r.totalValue > 0){
+    insert('salesInvoices',{
+      distributorId:r.distributorId, customerName:r.distributorName,
+      invoiceDate:r.returnDate||today(),
+      subtotal:-Number(r.totalValue), vatRate:EGY_VAT_RATE,
+      vatAmount:-Number(r.totalValue)*EGY_VAT_RATE,
+      totalAmount:-Number(r.totalValue)*(1+EGY_VAT_RATE),
+      paymentStatus:'credit_note',
+      etaUUID:generateEInvoiceUUID(),
+      notes:'إشعار دائن — مرتجع RA-'+String(retId).padStart(5,'0'),
+    });
+    showNotif&&showNotif(`✅ تم إنشاء إشعار دائن بقيمة ${fmtC(r.totalValue*(1+EGY_VAT_RATE))}`, 'success');
+  }
+  update('returns', retId, {inventoryAdjusted:true});
+  go('returns');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// E. الذمم المدينة — Receivables
+// ══════════════════════════════════════════════════════════════════
+
+PAGES.receivables = function(){
+  const dists = getAll('distributors')||[];
+  const invs  = getAll('salesInvoices')||[];
+
+  const distBalances = dists.map(d=>{
+    const dInvs     = invs.filter(i=>i.distributorId===d.id);
+    const unpaid    = dInvs.filter(i=>i.paymentStatus==='unpaid'||i.paymentStatus==='overdue');
+    const total     = unpaid.reduce((s,i)=>s+Number(i.totalAmount||0),0);
+    const oldest    = unpaid.reduce((oldest,i)=>(!oldest||i.invoiceDate<oldest.invoiceDate)?i:oldest, null);
+    const overdueDays= oldest?.dueDate ? Math.max(0,Math.floor((new Date()-new Date(oldest.dueDate))/86400000)) : 0;
+    const lateInterest= overdueDays>0 ? total * (EGY_LATE_INTEREST/365) * overdueDays : 0;
+    return {...d, unpaidAmount:total, invoiceCount:unpaid.length, overdueDays, lateInterest, unpaidInvs:unpaid};
+  }).filter(d=>d.invoiceCount>0 || d.status==='active');
+
+  const totalReceivable = distBalances.reduce((s,d)=>s+d.unpaidAmount,0);
+  const totalOverdue    = distBalances.filter(d=>d.overdueDays>0).reduce((s,d)=>s+d.unpaidAmount,0);
+
+  setPage('💳 الذمم المدينة — Receivables',
+    'تتبع المديونية — قانون التجارة 17/1999',
+    `<div style="display:flex;gap:8px">
+      <button class="btn btn-white" onclick="go('distributors')">🤝 الموزعون</button>
+      <button class="btn btn-white" onclick="go('salesinvoices')">📄 الفواتير</button>
+    </div>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي الذمم</div><div class="val">${fmtC(totalReceivable)}</div></div>
+      <div class="stat-card"><div class="lbl text-red">متأخرة ⚠️</div><div class="val text-red">${fmtC(totalOverdue)}</div></div>
+      <div class="stat-card"><div class="lbl text-amber">موزعين مدينين</div><div class="val text-amber">${distBalances.filter(d=>d.unpaidAmount>0).length}</div></div>
+      <div class="stat-card"><div class="lbl text-red">فوائد تأخير</div><div class="val text-red">${fmtC(distBalances.reduce((s,d)=>s+d.lateInterest,0))}</div></div>
+    </div>
+    <div class="card">${tbl(
+      ['الموزع','الفواتير المفتوحة','الرصيد المستحق','الحد الائتماني','أيام التأخير','فائدة تأخير','إجراء'],
+      distBalances.sort((a,b)=>b.unpaidAmount-a.unpaidAmount).map(d=>{
+        const overLimit = d.unpaidAmount > Number(d.creditLimit||0) && d.creditLimit;
+        return tr(
+          `<div>
+            <strong>${escapeHtml(d.name||'—')}</strong>
+            <div style="font-size:11px;color:var(--muted)">${escapeHtml(d.region||'')} | ${d.paymentTerms||'net30'}</div>
+          </div>`,
+          `<span class="badge b-blue">${d.invoiceCount}</span>`,
+          `<strong style="color:${d.unpaidAmount>0?'var(--red)':'var(--green-light)'}${overLimit?';font-size:14px':''}">${fmtC(d.unpaidAmount)}${overLimit?' ⚠️':''}</strong>`,
+          fmtC(d.creditLimit||0),
+          d.overdueDays>0 ? `<span style="color:var(--red);font-weight:700">${d.overdueDays} يوم</span>` : '<span style="color:var(--green-light)">في الموعد</span>',
+          d.lateInterest>0 ? `<span style="color:var(--red)">${fmtC(d.lateInterest)}</span>` : '—',
+          `<div class="action-bar" style="gap:4px">
+            ${d.unpaidAmount>0?`<button class="btn btn-white btn-sm" style="font-size:10px" onclick="sendPaymentReminder(${d.id})">📱 تذكير</button>`:''}
+            <button class="btn btn-white btn-sm" style="font-size:10px" onclick="showDistLedger(${d.id})">📊 كشف</button>
+          </div>`
+        );
+      })
+    ,'tbl_recv')}</div>`
+  );
+};
+
+function sendPaymentReminder(distId){
+  const d    = getById('distributors',distId);
+  const invs = (getAll('salesInvoices')||[]).filter(i=>i.distributorId===distId&&i.paymentStatus==='unpaid');
+  const total= invs.reduce((s,i)=>s+Number(i.totalAmount||0),0);
+  if(!d?.whatsapp) return alert('لا يوجد رقم واتساب — يرجى إضافته في بيانات الموزع');
+  const oldest = invs.reduce((o,i)=>(!o||i.invoiceDate<o.invoiceDate)?i:o, null);
+  const overdue= oldest?.dueDate ? Math.max(0,Math.floor((new Date()-new Date(oldest.dueDate))/86400000)) : 0;
+  const interest= overdue>0 ? total*(EGY_LATE_INTEREST/365)*overdue : 0;
+  const msg = encodeURIComponent(
+    `السادة / ${d.name}\n` +
+    `تحية طيبة،\n\n` +
+    `نرجو الاطلاع على بيان الحساب التالي:\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `📋 عدد الفواتير المفتوحة: ${invs.length}\n` +
+    `💰 إجمالي المستحق: ${Number(total).toFixed(2)} ج.م\n` +
+    (overdue>0 ? `⚠️ أيام التأخير: ${overdue} يوم\n` +
+                 `📈 فائدة تأخير (5%/سنة): ${Number(interest).toFixed(2)} ج.م\n` : '') +
+    `━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `يرجى تسوية المبالغ المستحقة وفق شروط الاتفاقية.\n` +
+    `وفق قانون التجارة 17/1999 م.103\n\n` +
+    `${today()}`
+  );
+  window.open(`https://wa.me/2${d.whatsapp.replace(/\D/g,'')}?text=${msg}`, '_blank');
+}
+
+function showDistLedger(distId){
+  const d     = getById('distributors',distId);
+  const invs  = (getAll('salesInvoices')||[]).filter(i=>i.distributorId===distId);
+  const sorted= invs.sort((a,b)=>a.invoiceDate>b.invoiceDate?1:-1);
+  let running = 0;
+  showModal(modal(`📊 كشف حساب — ${escapeHtml(d?.name||'—')}`,`
+    <div style="margin-bottom:10px;font-size:12px">
+      الموزع: <strong>${escapeHtml(d?.name||'—')}</strong> | TIN: ${escapeHtml(d?.taxRegNo||'—')} | الحد: ${fmtC(d?.creditLimit||0)}
+    </div>
+    ${tbl(['التاريخ','رقم الفاتورة','الإجمالي','نوع','الرصيد المتراكم'],
+      sorted.map(inv=>{
+        const isCredit = inv.paymentStatus==='credit_note' || Number(inv.totalAmount||0)<0;
+        running += Number(inv.totalAmount||0);
+        return tr(
+          inv.invoiceDate||'—',
+          `<code>INV-${String(inv.id).padStart(6,'0')}</code>`,
+          `<span style="color:${isCredit?'var(--green-light)':'inherit'}">${isCredit?'('+fmtC(Math.abs(inv.totalAmount||0))+')':fmtC(inv.totalAmount||0)}</span>`,
+          `<span class="badge ${inv.paymentStatus==='paid'?'b-green':inv.paymentStatus==='credit_note'?'b-blue':'b-amber'}">${inv.paymentStatus==='paid'?'مدفوع':inv.paymentStatus==='credit_note'?'إشعار دائن':'مستحق'}</span>`,
+          `<strong style="color:${running>0?'var(--red)':'var(--green-light)'}">${fmtC(Math.abs(running))}${running>0?' مدين':' دائن'}</strong>`
+        );
+      })
+    ,'tbl_ledger')}
+    <div style="text-align:left;font-weight:700;font-size:14px;margin-top:8px;color:var(--red)">
+      الرصيد النهائي: ${fmtC(Math.abs(running))} ${running>0?'مدين':'دائن'}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-white" onclick="sendPaymentReminder(${distId});closeModal()">📱 إرسال تذكير</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إغلاق</button>
+    </div>`));
+}
+
+// ══════════════════════════════════════════════════════════════════
+// F. المبيعات مقابل الأهداف — Sales vs Target
+// ══════════════════════════════════════════════════════════════════
+
+PAGES.salesvstarget = function(){
+  const targets  = getAll('salesTargets')||[];
+  const invs     = getAll('salesInvoices')||[];
+  const dists    = getAll('distributors')||[];
+  const curMonth = today().slice(0,7); // YYYY-MM
+
+  const paid     = invs.filter(i=>i.paymentStatus==='paid'||i.paymentStatus==='unpaid');
+  const totalAct = paid.reduce((s,i)=>s+Number(i.totalAmount||0),0);
+  const totalTgt = targets.reduce((s,t)=>s+Number(t.targetAmount||0),0);
+  const ach      = totalTgt>0 ? (totalAct/totalTgt)*100 : 0;
+
+  // Per-distributor achievement
+  const distPerf = dists.map(d=>{
+    const tgt = targets.filter(t=>t.distributorId===d.id).reduce((s,t)=>s+Number(t.targetAmount||0),0);
+    const act = paid.filter(i=>i.distributorId===d.id).reduce((s,i)=>s+Number(i.totalAmount||0),0);
+    const pct = tgt>0 ? (act/tgt)*100 : (act>0?100:0);
+    return {...d, target:tgt, actual:act, pct};
+  }).filter(d=>d.target>0||d.actual>0).sort((a,b)=>b.pct-a.pct);
+
+  setPage('📊 المبيعات مقابل الأهداف','Sales vs Target — مقارنة الأداء',
+    `<button class="btn btn-green" onclick="addTarget()">+ هدف جديد</button>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي الأهداف</div><div class="val">${fmtC(totalTgt)}</div></div>
+      <div class="stat-card"><div class="lbl">المبيعات الفعلية</div><div class="val">${fmtC(totalAct)}</div></div>
+      <div class="stat-card"><div class="lbl ${ach>=100?'text-green':'text-amber'}">نسبة الإنجاز</div><div class="val ${ach>=100?'text-green':'text-amber'}">${ach.toFixed(1)}%</div></div>
+      <div class="stat-card"><div class="lbl ${totalAct>=totalTgt?'text-green':'text-red'}">الفرق</div><div class="val ${totalAct>=totalTgt?'text-green':'text-red'}">${fmtC(totalAct-totalTgt)}</div></div>
+    </div>
+
+    <!-- Progress bar overall -->
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px">
+        <span>الإنجاز الإجمالي</span>
+        <strong>${ach.toFixed(1)}%</strong>
+      </div>
+      <div style="height:14px;background:var(--border);border-radius:7px;overflow:hidden">
+        <div style="height:100%;width:${Math.min(100,ach).toFixed(1)}%;background:${ach>=100?'var(--green)':ach>=80?'var(--amber)':'var(--red)'};border-radius:7px;transition:width .3s"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px">
+        <span>0</span><span style="color:var(--amber)">80%</span><span style="color:var(--green-light)">100%</span>
+      </div>
+    </div>
+
+    <!-- Per-distributor performance -->
+    <div class="card">
+      <h3 style="margin:0 0 12px;font-size:14px">🏆 أداء الموزعين</h3>
+      ${distPerf.length ? distPerf.map((d,i)=>`
+      <div style="margin-bottom:10px;padding:8px;background:var(--hover);border-radius:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div>
+            ${i===0?'🥇':i===1?'🥈':i===2?'🥉':'🔹'}
+            <strong>${escapeHtml(d.name)}</strong>
+            <span style="font-size:11px;color:var(--muted)">${escapeHtml(d.region||'')}</span>
+          </div>
+          <div style="text-align:left;font-size:12px">
+            <span class="badge ${d.pct>=100?'b-green':d.pct>=80?'b-amber':'b-red'}">${d.pct.toFixed(1)}%</span>
+            <div style="font-size:11px;color:var(--muted)">${fmtC(d.actual)} / ${fmtC(d.target)}</div>
+          </div>
+        </div>
+        <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${Math.min(100,d.pct).toFixed(1)}%;background:${d.pct>=100?'var(--green)':d.pct>=80?'var(--amber)':'var(--red)'};border-radius:4px"></div>
+        </div>
+      </div>`).join('') : '<div style="color:var(--muted);text-align:center;padding:20px">لا توجد بيانات — أضف أهدافاً للموزعين</div>'}
+    </div>
+
+    <!-- Targets table -->
+    <div class="card">
+      <h3 style="margin:0 0 12px;font-size:14px">📋 جدول الأهداف</h3>
+      ${tbl(['الموزع / المنطقة','الفترة','الهدف','الفعلي','الإنجاز','إجراء'],
+        targets.sort((a,b)=>b.id-a.id).map(t=>{
+          const distT = t.distributorId ? getById('distributors',t.distributorId) : null;
+          const actT  = paid.filter(i=>t.distributorId?i.distributorId===t.distributorId:true)
+            .filter(i=>!t.period||(i.invoiceDate||'').startsWith(t.period))
+            .reduce((s,i)=>s+Number(i.totalAmount||0),0);
+          const pctT  = Number(t.targetAmount||0)>0 ? (actT/Number(t.targetAmount))*100 : 0;
+          return tr(
+            escapeHtml(distT?.name||t.targetName||'إجمالي'),
+            escapeHtml(t.period||t.month||'—'),
+            fmtC(t.targetAmount||0),
+            fmtC(actT),
+            `<span class="badge ${pctT>=100?'b-green':pctT>=80?'b-amber':'b-red'}">${pctT.toFixed(1)}%</span>`,
+            `<button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('salesTargets',${t.id});go('salesvstarget')}">${ic.del}</button>`
+          );
+        })
+      ,'tbl_tgt')}
+    </div>`
+  );
+};
+
+function addTarget(){
+  const dists = getAll('distributors').filter(d=>d.status==='active');
+  showModal(modal('📊 هدف مبيعات جديد',`
+    <div class="form-row">
+      ${fg('الموزع (اختياري)', `<select id="tgt-dist" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        <option value="0">هدف إجمالي (كل الموزعين)</option>
+        ${dists.map(d=>`<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('')}
+      </select>`)}
+      ${fg('الفترة (YYYY-MM)', inp('tgt-period','text',today().slice(0,7),'مثال: 2024-06'))}
+    </div>
+    <div class="form-row">
+      ${fg('مبلغ الهدف (ج.م) *', inp('tgt-amount','number','',''))}
+      ${fg('اسم الهدف', inp('tgt-name','text','','مثال: هدف Q2 2024'))}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveTarget()">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+function saveTarget(){
+  const amount = numVal('tgt-amount');
+  if(!amount||amount<=0) return alert('يرجى إدخال مبلغ الهدف');
+  const distId = numVal('tgt-dist')||null;
+  insert('salesTargets',{
+    distributorId:distId||null,
+    targetName:val('tgt-name')||null,
+    period:val('tgt-period')||today().slice(0,7),
+    targetAmount:amount,
+    createdBy:_authUser?.name||'—',
+  });
+  closeModal(); go('salesvstarget');
+}
 
 // renderNav/go called by coEnter() after company is selected
 
