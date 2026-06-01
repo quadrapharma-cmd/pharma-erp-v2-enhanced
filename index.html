@@ -640,6 +640,9 @@ const navItems=[
   {id:'journal',icon:'📒',label:'دفتر اليومية',sec:'المالية'},
   {id:'balancesheet',icon:'📊',label:'الميزانية العمومية',sec:'المالية'},
   {id:'manufacturingcost',icon:'⚙️',label:'تكاليف التصنيع',sec:'المالية'},
+  {id:'incomestatement',icon:'📈',label:'قائمة الدخل P&L',sec:'المالية'},
+  {id:'cashflow',icon:'💧',label:'التدفقات النقدية',sec:'المالية'},
+  {id:'openingbalances',icon:'📅',label:'الموازين التاريخية',sec:'المالية'},
   {id:'vat',icon:'🧾',label:'ضريبة القيمة المضافة',sec:'الضرائب'},
   {id:'einvoice',icon:'📄',label:'الفواتير الإلكترونية',sec:'الضرائب'},
   {id:'taxes',icon:'🏦',label:'الضرائب العامة',sec:'الضرائب'},
@@ -1306,34 +1309,7 @@ PAGES.contracts=function(){
 };
 
 
-PAGES.costanalysis=function(){
-  const products=getAll('products');
-  const bom=getAll('productBOM')||[];
-  const production=getAll('productionOrders');
-  const expenses=getAll('expenses');
-  setPage('تحليل تكلفة المنتج','تحليل cost per unit لكل منتج','',
-    `<div class="card">${tbl(['المنتج','تكلفة المواد/وحدة','تكلفة الإنتاج CMO/وحدة','إجمالي التكلفة/وحدة','سعر البيع','هامش الربح','هامش %'],
-      products.map(p=>{
-        const matCost=bom.filter(b=>b.productId===p.id).reduce((s,b)=>{
-          const mat=getAll('materials').find(m=>m.id===b.materialId);
-          return s+Number(b.quantityPerUnit||0)*Number(mat?.unitCost||0);
-        },0);
-        const prodOrds=production.filter(o=>o.productId===p.id);
-        const cmoCost=prodOrds.length?prodOrds.reduce((s,o)=>s+Number(o.unitCost||0),0)/prodOrds.length:0;
-        const total=matCost+cmoCost;
-        const price=Number(p.sellingPrice||0);
-        const margin=price-total;
-        const pct=price>0?(margin/price*100):0;
-        return tr(`<strong>${escapeHtml(p.name)}</strong>`,
-          matCost?fmt(matCost)+' ج.م':'—',
-          cmoCost?fmt(cmoCost)+' ج.م':'—',
-          `<span class="text-red fw7">${fmt(total)} ج.م</span>`,
-          price?`<span class="text-blue fw7">${fmt(price)} ج.م</span>`:'—',
-          margin?`<span class="${margin>=0?'text-green':'text-red'} fw7">${fmt(margin)} ج.م</span>`:'—',
-          `<span class="${pct>=30?'text-green':pct>=10?'text-amber':'text-red'} fw7">${pct.toFixed(1)}%</span>`);
-      })
-    )}</div>`);
-};
+;
 
 // ═══════════════════════════════════════════════
 // MODALS — NEW MODULES
@@ -1577,45 +1553,7 @@ function saveDB(){
 // ════════════════════════════════════════════════
 // ASSETS PAGE — الأصول الثابتة
 // ════════════════════════════════════════════════
-PAGES.assets = function(){
-  const rows = getAll('assets');
-  const totalCost   = rows.reduce((s,a)=>s+Number(a.purchaseCost||0),0);
-  const totalDepAcc = rows.reduce((s,a)=>s+Number(a.accDepreciation||0),0);
-  const netBook     = totalCost - totalDepAcc;
-
-  // depreciation types
-  const cats = [...new Set(rows.map(a=>a.category||'أخرى'))];
-
-  setPage('الأصول الثابتة','سجل الأصول والإهلاك',
-    `<button class="btn btn-green" onclick="addAsset()">${ic.plus} إضافة أصل</button>`,
-    `<div class="stats-grid g4">
-      <div class="stat-card"><div class="lbl">عدد الأصول</div><div class="val">${rows.length}</div></div>
-      <div class="stat-card"><div class="lbl">إجمالي التكلفة</div><div class="val text-blue">${fmt(totalCost)} ج.م</div></div>
-      <div class="stat-card"><div class="lbl">مجمع الإهلاك</div><div class="val text-red">${fmt(totalDepAcc)} ج.م</div></div>
-      <div class="stat-card"><div class="lbl">القيمة الدفترية</div><div class="val text-green">${fmt(netBook)} ج.م</div></div>
-    </div>
-    <div class="card">${tbl(
-      ['اسم الأصل','الفئة','تاريخ الشراء','تكلفة الشراء (ج.م)','العمر الإنتاجي (سنة)','معدل الإهلاك %','مجمع الإهلاك (ج.م)','القيمة الدفترية (ج.م)','الحالة',''],
-      rows.map(a=>{
-        const netVal = Number(a.purchaseCost||0) - Number(a.accDepreciation||0);
-        return tr(
-          `<strong>${a.name}</strong>`,
-          a.category||'-',
-          a.purchaseDate||'-',
-          `<span class="text-blue fw7">${fmt(a.purchaseCost)} ج.م</span>`,
-          a.usefulLife||'-',
-          a.depRate?a.depRate+'%':'-',
-          `<span class="text-red">${fmt(a.accDepreciation||0)} ج.م</span>`,
-          `<span class="${netVal>0?'text-green':'text-red'} fw7">${fmt(netVal)} ج.م</span>`,
-          badge(a.status==='active'?'active':a.status==='disposed'?'cancelled':'pending'),
-          `<div class="action-bar">
-            <button class="icon-btn edit" onclick="editAsset(${a.id})">${ic.edit}</button>
-            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('assets',${a.id});go('assets')}">${ic.del}</button>
-          </div>`
-        );
-      })
-    ,'tbl_assets')}</div>`);
-};
+;
 
 function assetForm(a={}){
   const ASSET_CATS=['معدات وآلات','مباني وإنشاءات','سيارات ومركبات','أثاث ومفروشات',
@@ -1645,21 +1583,6 @@ function assetForm(a={}){
       <button class="btn btn-green" onclick="saveAsset(${a.id||''})">💾 حفظ</button>
       <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
     </div>`;
-}
-function addAsset(){ showModal(modal('إضافة أصل ثابت جديد', assetForm())); }
-function editAsset(id){ const a=getById('assets',id); if(!a)return; showModal(modal('تعديل أصل',assetForm(a))); }
-function saveAsset(id){
-  const name=val('as-name'), cost=val('as-cost');
-  if(!name||!cost) return alert('يرجى تعبئة اسم الأصل والتكلفة');
-  const d={
-    name, category:val('as-cat'), status:val('as-status'),
-    purchaseDate:val('as-date')||null, purchaseCost:cost,
-    usefulLife:val('as-life')||null, depRate:val('as-rate')||null,
-    accDepreciation:val('as-dep')||'0',
-    assetCode:val('as-code')||null, location:val('as-loc')||null, notes:val('as-notes')||null
-  };
-  id ? update('assets',id,d) : insert('assets',d);
-  closeModal(); go('assets');
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -6538,21 +6461,6 @@ function editBudget(id){
   const b=getById('budgetLines',id); if(!b) return;
   showModal(modal('تعديل بند الميزانية',budgetForm(b)));
 }
-function saveBudgetLine(id){
-  const cat  = document.getElementById('bl-cat')?.value;
-  const dept = document.getElementById('bl-dept')?.value;
-  const amt  = val('bl-amt');
-  if(!cat||!amt) return alert('يرجى تحديد الفئة والمبلغ');
-  const d={
-    category:cat, department:dept||null,
-    year:val('bl-year')||new Date().getFullYear(),
-    month:numVal('bl-month')||null,
-    budgetedAmount:amt, alertAt:val('bl-alert')||80,
-    notes:val('bl-notes')||null
-  };
-  id?update('budgetLines',id,d):insert('budgetLines',d);
-  closeModal(); go('budget');
-}
 
 // ── PURCHASE ORDER — expand fields ───────────────────────────
 function purchaseOrderForm(p={}){
@@ -7153,10 +7061,6 @@ function accountForm(a={}){
     </div>`;
 }
 
-function editAccount(id){
-  const a=getById('chartOfAccounts',id); if(!a) return;
-  showModal(modal('تعديل الحساب',accountForm(a)));
-}
 
 // ════════════════════════════════════════════════════════════════
 // ميزان المراجعة — Trial Balance (كامل من اليومية + DB)
@@ -7320,59 +7224,10 @@ function filterTrialBalance(type){
   });
 }
 
-PAGES.trialbalance = function(){ showTrialBalance(); };
+;
 
 // ── اليومية — Journal (محسّنة) ───────────────────────────────
-PAGES.journal = function(){
-  const entries = getAll('journalEntries').sort((a,b)=>(b.entryDate||'')>(a.entryDate||'')?1:-1);
-  const accounts = getChartOfAccounts();
-  const totalDebit  = entries.reduce((s,e)=>s+Number(e.debit||0),0);
-  const totalCredit = entries.reduce((s,e)=>s+Number(e.credit||0),0);
-  const isBalanced  = Math.abs(totalDebit-totalCredit) < 1;
-
-  setPage('اليومية الأمريكية — General Journal',
-    `${entries.length} قيد | ${isBalanced?'✅ متوازنة':'⚠️ غير متوازنة'}`,
-    `<div style="display:flex;gap:8px">
-      <button class="btn btn-green" onclick="addJournalEntry()">${ic.plus} قيد جديد</button><button class="btn btn-white" onclick="showBankFeedImport()">🏦 استيراد بنكي</button>
-      <button class="btn btn-white" onclick="go('trialbalance')">⚖️ ميزان المراجعة</button>
-      <button class="btn btn-white" onclick="go('chartofaccounts')">📑 دليل الحسابات</button>
-    </div>`,
-    `<div class="stats-grid g4" style="margin-bottom:16px">
-      <div class="stat-card"><div class="lbl">عدد القيود</div><div class="val">${entries.length}</div></div>
-      <div class="stat-card"><div class="lbl">إجمالي المدين</div><div class="val text-blue">${fmt(totalDebit)} ج.م</div></div>
-      <div class="stat-card"><div class="lbl">إجمالي الدائن</div><div class="val text-red">${fmt(totalCredit)} ج.م</div></div>
-      <div class="stat-card">
-        <div class="lbl">حالة الميزان</div>
-        <div class="val ${isBalanced?'text-green':'text-red'}">${isBalanced?'✅ متوازن':'⚠️ '+fmt(Math.abs(totalDebit-totalCredit))+' ج.م'}</div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-head">
-        <h2>📋 دفتر اليومية</h2>
-        <div style="display:flex;gap:8px">
-          <select onchange="filterJournalYear(this.value)" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:6px;font-size:12px">
-            <option value="">كل السنوات</option>
-            ${[...new Set(entries.map(e=>e.year||new Date(e.entryDate||'').getFullYear()))].sort((a,b)=>b-a).map(y=>`<option value="${y}">${y}</option>`).join('')}
-          </select>
-          <select onchange="filterJournalType(this.value)" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:6px;font-size:12px">
-            <option value="">كل الأنواع</option>
-            <option value="payment">دفع/سداد</option>
-            <option value="receipt">استلام/قبض</option>
-            <option value="purchase">مشتريات</option>
-            <option value="sale">مبيعات</option>
-            <option value="salary">رواتب</option>
-            <option value="depreciation">إهلاك</option>
-            <option value="partner">جاري شركاء</option>
-          </select>
-        </div>
-      </div>
-      <div id="journal-table-wrap">
-        ${buildJournalTable(entries)}
-      </div>
-    </div>`
-  );
-};
+;
 
 function filterJournalType(type){
   const all = getAll('journalEntries')
@@ -14609,8 +14464,6 @@ const ORDER_STATUSES = {
 };
 
 
-
-
 // ── فواتير المبيعات ───────────────────────────────────
 
 ;
@@ -14683,82 +14536,14 @@ function confirmDelivery(id){
 
 // ── دليل الحسابات — Chart of Accounts ────────────────
 
-const DEFAULT_COA = [
-  {code:'1100',name:'النقدية وما يعادلها',type:'asset',      category:'current'},
-  {code:'1200',name:'ذمم مدينة - عملاء',  type:'asset',      category:'current'},
-  {code:'1300',name:'المخزون',             type:'asset',      category:'current'},
-  {code:'1400',name:'مدفوعات مقدمة',      type:'asset',      category:'current'},
-  {code:'1500',name:'أصول ثابتة — صافي',  type:'asset',      category:'fixed'},
-  {code:'2100',name:'ذمم دائنة — موردون', type:'liability',   category:'current'},
-  {code:'2200',name:'ضريبة القيمة المضافة مستحقة',type:'liability',category:'current'},
-  {code:'2300',name:'رواتب مستحقة',       type:'liability',   category:'current'},
-  {code:'2400',name:'قروض بنكية',         type:'liability',   category:'long_term'},
-  {code:'3100',name:'رأس المال',           type:'equity',      category:'capital'},
-  {code:'3200',name:'الأرباح المحتجزة',    type:'equity',      category:'capital'},
-  {code:'4100',name:'إيرادات المبيعات',   type:'revenue',     category:'operating'},
-  {code:'4200',name:'إيرادات أخرى',       type:'revenue',     category:'other'},
-  {code:'5100',name:'تكلفة البضاعة المباعة',type:'expense',   category:'cogs'},
-  {code:'5200',name:'تكاليف تصنيع',       type:'expense',     category:'manufacturing'},
-  {code:'5300',name:'رواتب وأجور',        type:'expense',     category:'operating'},
-  {code:'5400',name:'إيجار ومرافق',       type:'expense',     category:'operating'},
-  {code:'5500',name:'مصاريف بحث وتطوير',  type:'expense',     category:'operating'},
-  {code:'5600',name:'مصاريف تسويق',       type:'expense',     category:'operating'},
-  {code:'5700',name:'استهلاك أصول',       type:'expense',     category:'operating'},
-  {code:'5800',name:'مصاريف مالية',       type:'expense',     category:'financial'},
-];
 
 // Initialize COA if empty
-function initCOA(){
-  const accs = getAll('accounts')||[];
-  if(accs.length > 0) return;
-  DEFAULT_COA.forEach(a=>insert('accounts',a));
-}
 
 // ── صفحة دليل الحسابات ───────────────────────────────
 
-PAGES.accounts = function(){
-  initCOA();
-  const accs = getAll('accounts')||[];
-  const typeMap = {asset:'أصول',liability:'التزامات',equity:'حقوق ملكية',revenue:'إيرادات',expense:'مصاريف'};
-  const typeCls = {asset:'b-blue',liability:'b-red',equity:'b-purple',revenue:'b-green',expense:'b-amber'};
+;
 
-  setPage('📚 دليل الحسابات — Chart of Accounts','الإطار المحاسبي الكامل',
-    `<button class="btn btn-green" onclick="addAccount()">+ حساب جديد</button>`,
-    `<div class="stats-grid g5" style="margin-bottom:16px">
-      ${Object.entries(typeMap).map(([t,l])=>`<div class="stat-card"><div class="lbl">${l}</div><div class="val">${accs.filter(a=>a.type===t).length}</div></div>`).join('')}
-    </div>
-    <div class="card">${tbl(
-      ['كود الحساب','اسم الحساب','النوع','التصنيف','الرصيد','إجراء'],
-      accs.sort((a,b)=>a.code>b.code?1:-1).map(a=>{
-        const bal = calcAccountBalance(a.code);
-        return tr(
-          `<code>${a.code}</code>`,
-          escapeHtml(a.name||'—'),
-          `<span class="badge ${typeCls[a.type]||'b-gray'}">${typeMap[a.type]||a.type}</span>`,
-          a.category||'—',
-          `<span class="${bal>=0?'text-green':'text-red'} fw7">${fmtC(Math.abs(bal))}</span>`,
-          `<div class="action-bar">
-            <button class="icon-btn edit" onclick="editAccount(${a.id})">${ic.edit}</button>
-            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('accounts',${a.id});go('accounts')}">${ic.del}</button>
-          </div>`
-        );
-      })
-    ,'tbl_coa')}</div>`
-  );
-};
 
-function calcAccountBalance(code){
-  const entries = getAll('journalEntries')||[];
-  let balance = 0;
-  entries.forEach(e=>{
-    (e.lines||[]).forEach(l=>{
-      if(l.accountCode===code) balance += Number(l.debit||0) - Number(l.credit||0);
-    });
-  });
-  return balance;
-}
-
-function addAccount(){ showAccountForm(); }
 function editAccount(id){ showAccountForm(getById('accounts',id)||{}); }
 function showAccountForm(a={}){
   showModal(modal(a.id?'تعديل حساب':'+ حساب محاسبي جديد',`
@@ -14774,13 +14559,6 @@ function showAccountForm(a={}){
       <button class="btn btn-green" onclick="saveAccount(${a.id||''})">💾 حفظ</button>
       <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
     </div>`));
-}
-function saveAccount(id){
-  const code=val('acc-code'),name=val('acc-name');
-  if(!code||!name) return alert('الكود والاسم إلزاميان');
-  const d={code,name,type:document.getElementById('acc-type')?.value||'asset',category:val('acc-cat')||null};
-  id?update('accounts',id,d):insert('accounts',d);
-  closeModal(); go('accounts');
 }
 
 
@@ -14812,72 +14590,6 @@ PAGES.journal = function(){
   );
 };
 
-function addJournalEntry(){ showJEForm(); }
-function showJEForm(je={}){
-  initCOA();
-  const accs = getAll('accounts')||[];
-  const lines = je.lines||[{accountCode:'',accountName:'',debit:0,credit:0},{accountCode:'',accountName:'',debit:0,credit:0}];
-  const accOpts = accs.map(a=>`<option value="${a.code}">${a.code} — ${escapeHtml(a.name)}</option>`).join('');
-  const lineHtml = lines.map((l,i)=>`
-    <div class="form-row" id="je-line-${i}" style="align-items:center">
-      <div class="fg" style="flex:2">
-        ${i===0?'<label>الحساب</label>':''}
-        <select id="je-acc-${i}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;color:var(--text)">
-          <option value="">اختر حساب...</option>${accOpts}
-        </select>
-      </div>
-      ${i===0?'<label style="font-size:12px;white-space:nowrap">مدين</label>':''}<input type="number" id="je-dr-${i}" value="${l.debit||0}" min="0" style="width:100px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;color:var(--text)">
-      ${i===0?'<label style="font-size:12px;white-space:nowrap">دائن</label>':''}<input type="number" id="je-cr-${i}" value="${l.credit||0}" min="0" style="width:100px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;color:var(--text)">
-      <button onclick="document.getElementById('je-line-${i}').remove()" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer">✕</button>
-    </div>`).join('');
-
-  showModal(modal('📒 قيد يومية جديد',`
-    <div class="form-row">
-      ${fg('تاريخ القيد', inp('je-date','date',je.entryDate||today()))}
-      ${fg('المرجع', inp('je-ref','text',je.reference||'',''))}
-    </div>
-    ${fg('وصف القيد *', inp('je-desc','text',je.description||'',''))}
-    <div id="je-lines" style="margin:12px 0">${lineHtml}</div>
-    <button class="btn btn-white btn-sm" onclick="addJELine()">+ بند</button>
-    <div id="je-balance-check" style="margin-top:8px;padding:8px;border-radius:6px;font-size:12px"></div>
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="saveJournalEntry(${je.id||''})">💾 ترحيل القيد</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>`,null,'700px'));
-
-  setTimeout(()=>{
-    // Set selected values
-    lines.forEach((l,i)=>{
-      const sel = document.getElementById(`je-acc-${i}`);
-      if(sel&&l.accountCode) sel.value=l.accountCode;
-    });
-    // Balance check
-    document.getElementById('je-lines')?.addEventListener('input', checkJEBalance);
-    checkJEBalance();
-    // Auto-add JE line counter
-    window._jeLineCount = lines.length;
-  },100);
-}
-
-let _jeLineCount=2;
-function addJELine(){
-  const i=_jeLineCount++;
-  const accs=getAll('accounts')||[];
-  const accOpts=accs.map(a=>`<option value="${a.code}">${a.code} — ${escapeHtml(a.name)}</option>`).join('');
-  const div=document.createElement('div');
-  div.className='form-row'; div.id=`je-line-${i}`; div.style.alignItems='center';
-  div.innerHTML=`
-    <div class="fg" style="flex:2">
-      <select id="je-acc-${i}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;color:var(--text)">
-        <option value="">اختر حساب...</option>${accOpts}
-      </select>
-    </div>
-    <input type="number" id="je-dr-${i}" value="0" min="0" style="width:100px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;color:var(--text)">
-    <input type="number" id="je-cr-${i}" value="0" min="0" style="width:100px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;color:var(--text)">
-    <button onclick="this.parentElement.remove();checkJEBalance()" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer">✕</button>`;
-  document.getElementById('je-lines')?.appendChild(div);
-  div.addEventListener('input',checkJEBalance);
-}
 
 function checkJEBalance(){
   let dr=0, cr=0;
@@ -14890,150 +14602,15 @@ function checkJEBalance(){
   el.innerHTML=`${ok?'✅ القيد متوازن':'⚠️ القيد غير متوازن'} — مدين: ${fmtC(dr)} | دائن: ${fmtC(cr)} | الفرق: ${fmtC(Math.abs(dr-cr))}`;
 }
 
-function saveJournalEntry(id){
-  const desc=val('je-desc'); if(!desc) return alert('وصف القيد إلزامي');
-  const lines=[]; let dr=0,cr=0;
-  document.querySelectorAll('[id^="je-acc-"]').forEach(el=>{
-    const i=el.id.split('-')[2];
-    const code=el.value; if(!code) return;
-    const acc=getAll('accounts').find(a=>a.code===code);
-    const debit=Number(document.getElementById(`je-dr-${i}`)?.value||0);
-    const credit=Number(document.getElementById(`je-cr-${i}`)?.value||0);
-    if(debit===0&&credit===0) return;
-    lines.push({accountCode:code,accountName:acc?.name||'',debit,credit});
-    dr+=debit; cr+=credit;
-  });
-  if(!lines.length) return alert('أضف بنوداً للقيد');
-  if(Math.abs(dr-cr)>0.01) return alert(`القيد غير متوازن — الفرق: ${fmtC(Math.abs(dr-cr))}`);
-  const d={
-    entryDate:document.getElementById('je-date')?.value||today(),
-    reference:val('je-ref')||null, description:desc,
-    lines, totalDebit:dr, totalCredit:cr,
-    postedBy:_authUser?.name||'—', postedAt:new Date().toISOString(),
-  };
-  id?update('journalEntries',id,d):insert('journalEntries',d);
-  closeModal(); go('journal');
-}
-
-function viewJE(id){
-  const e=getById('journalEntries',id); if(!e) return;
-  showModal(modal(`قيد JE-${String(e.id).padStart(6,'0')}`,`
-    <div style="font-size:13px;margin-bottom:12px">
-      <div>التاريخ: <strong>${e.entryDate||'—'}</strong> | الوصف: <strong>${escapeHtml(e.description||'—')}</strong></div>
-      <div>رحّله: ${escapeHtml(e.postedBy||'—')}</div>
-    </div>
-    ${tbl(['الحساب','الكود','مدين','دائن'],
-      (e.lines||[]).map(l=>tr(escapeHtml(l.accountName||l.accountCode||'—'),`<code>${l.accountCode||'—'}</code>`,l.debit?fmtC(l.debit):'—',l.credit?fmtC(l.credit):'—'))
-    ,'tbl_je_view')}
-    <div style="text-align:left;font-weight:700;margin-top:8px">
-      إجمالي مدين: ${fmtC(e.totalDebit||0)} | إجمالي دائن: ${fmtC(e.totalCredit||0)}
-    </div>
-    <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">إغلاق</button></div>`));
-}
-
 
 // ── الميزانية العمومية — Balance Sheet ────────────────
 
-PAGES.balancesheet = function(){
-  initCOA();
-  const accs = getAll('accounts')||[];
-  const getTypeTotal = (type)=>accs.filter(a=>a.type===type).reduce((s,a)=>s+calcAccountBalance(a.code),0);
-  const assets = getTypeTotal('asset');
-  const liab   = getTypeTotal('liability');
-  const equity = getTypeTotal('equity');
-  const revenue= getTypeTotal('revenue');
-  const expense= getTypeTotal('expense');
-  const netIncome = revenue - expense;
-
-  setPage('📊 الميزانية العمومية','Balance Sheet — القوائم المالية',
-    `<button class="btn btn-white" onclick="go('journal')">← اليومية</button>`,
-    `<div class="stats-grid g4" style="margin-bottom:16px">
-      <div class="stat-card"><div class="lbl">إجمالي الأصول</div><div class="val text-blue">${fmtC(assets)}</div></div>
-      <div class="stat-card"><div class="lbl">إجمالي الالتزامات</div><div class="val text-red">${fmtC(liab)}</div></div>
-      <div class="stat-card"><div class="lbl">حقوق الملكية</div><div class="val text-purple">${fmtC(equity)}</div></div>
-      <div class="stat-card"><div class="lbl ${netIncome>=0?'text-green':'text-red'}">صافي الدخل ${netIncome>=0?'✅':'❌'}</div><div class="val ${netIncome>=0?'text-green':'text-red'}">${fmtC(netIncome)}</div></div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-      <div class="card">
-        <h3 style="margin:0 0 12px;font-size:14px">💰 الأصول</h3>
-        ${accs.filter(a=>a.type==='asset').map(a=>{const b=calcAccountBalance(a.code);return `
-          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
-            <span><code style="font-size:10px">${a.code}</code> ${escapeHtml(a.name)}</span>
-            <strong class="${b>=0?'text-green':'text-red'}">${fmtC(b)}</strong>
-          </div>`}).join('')}
-        <div style="display:flex;justify-content:space-between;font-weight:700;margin-top:8px;color:var(--blue)"><span>إجمالي الأصول</span><span>${fmtC(assets)}</span></div>
-      </div>
-      <div class="card">
-        <h3 style="margin:0 0 12px;font-size:14px">🔴 الالتزامات وحقوق الملكية</h3>
-        ${accs.filter(a=>a.type==='liability').map(a=>{const b=calcAccountBalance(a.code);return `
-          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
-            <span><code style="font-size:10px">${a.code}</code> ${escapeHtml(a.name)}</span>
-            <strong>${fmtC(Math.abs(b))}</strong>
-          </div>`}).join('')}
-        <div style="display:flex;justify-content:space-between;font-weight:700;margin-top:4px;color:var(--red)"><span>إجمالي الالتزامات</span><span>${fmtC(liab)}</span></div>
-        ${accs.filter(a=>a.type==='equity').map(a=>{const b=calcAccountBalance(a.code);return `
-          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
-            <span><code style="font-size:10px">${a.code}</code> ${escapeHtml(a.name)}</span>
-            <strong>${fmtC(Math.abs(b))}</strong>
-          </div>`}).join('')}
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
-          <span>صافي الدخل لهذه الفترة</span>
-          <strong class="${netIncome>=0?'text-green':'text-red'}">${fmtC(netIncome)}</strong>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-weight:700;margin-top:4px;color:var(--purple)"><span>إجمالي حقوق الملكية</span><span>${fmtC(equity+netIncome)}</span></div>
-      </div>
-    </div>`
-  );
-};
+;
 
 
 // ── تكاليف التصنيع ────────────────────────────────────
 
-PAGES.manufacturingcost = function(){
-  const orders = (getAll('productionOrders')||[]).filter(o=>o.status==='released'||o.status==='completed');
-  const invs   = getAll('inventory')||[];
-  setPage('⚙️ تكاليف التصنيع','Manufacturing Cost Analysis',
-    `<button class="btn btn-white" onclick="go('journal')">📒 اليومية</button>`,
-    `<div class="card">${tbl(
-      ['رقم التشغيلة','المنتج','الكمية','تكلفة مواد','تكلفة CMO','الإجمالي','تكلفة الوحدة','إجراء'],
-      orders.map(o=>{
-        const prod = getById('products',o.productId);
-        const matCost = Number(o.materialCost||o.estimatedCost||0);
-        const cmoCost = Number(o.cmoAmount||0);
-        const total   = matCost + cmoCost;
-        const unitCost= o.batchSize>0 ? total/Number(o.batchSize) : 0;
-        return tr(
-          `<code>${escapeHtml(o.batchNumber||'—')}</code>`,
-          escapeHtml(prod?.name||'—'),
-          fmtN(o.batchSize||0),
-          fmtC(matCost), fmtC(cmoCost),
-          `<strong>${fmtC(total)}</strong>`,
-          fmtC(unitCost),
-          `<button class="btn btn-white btn-sm" onclick="postManufacturingCost(${o.id})">📒 ترحيل</button>`
-        );
-      })
-    ,'tbl_mfgcost')}</div>`
-  );
-};
-
-function postManufacturingCost(orderId){
-  initCOA();
-  const o=getById('productionOrders',orderId); if(!o) return;
-  const prod=getById('products',o.productId);
-  const total=(Number(o.materialCost||o.estimatedCost||0)+Number(o.cmoAmount||0));
-  if(!total){return alert('لا توجد تكاليف لترحيلها');}
-  insert('journalEntries',{
-    entryDate:today(), description:`تكلفة تصنيع — ${prod?.name||'—'} — ${o.batchNumber||''}`,
-    lines:[
-      {accountCode:'1300',accountName:'المخزون',debit:total,credit:0},
-      {accountCode:'5200',accountName:'تكاليف تصنيع',debit:0,credit:total},
-    ],
-    totalDebit:total, totalCredit:total,
-    reference:`PO-${orderId}`, postedBy:_authUser?.name||'—', postedAt:new Date().toISOString(),
-  });
-  showNotif&&showNotif(`✅ تم ترحيل تكلفة ${fmtC(total)} للمخزون`,'success');
-  go('manufacturingcost');
-}
+;
 
 
 // ═══════════════════════════════════════════════════════
@@ -17442,6 +17019,1465 @@ function saveTarget(){
   });
   closeModal(); go('salesvstarget');
 }
+
+// ══════════════════════════════════════════════════════════════════
+// 💰 دليل الحسابات — 140+ حساب هرمي
+// معايير المحاسبة المصرية (EAS) + دليل مصلحة الضرائب
+// قانون 91/2005 (ضريبة الدخل) + قانون 127/1981 (المحاسبة)
+// ══════════════════════════════════════════════════════════════════
+
+const EGY_CORP_TAX   = 0.225; // 22.5% — قانون 91/2005
+const EGY_WITHHOLD   = 0.10;  // 10% استقطاع على مقاولين
+const EGY_LEGAL_RES  = 0.05;  // 5% احتياطي قانوني — قانون شركات
+
+// ── الدليل الموحد — 140 حساب هرمي ────────────────────────────────
+const EGY_COA = [
+  // ══ الفئة 1 — الأصول ══
+  // 11: أصول متداولة — نقدية
+  {code:'1101',name:'الخزينة — النقدية',           type:'asset', cat:'current', group:'11', lvl:2},
+  {code:'1102',name:'البنك الرئيسي',                type:'asset', cat:'current', group:'11', lvl:2},
+  {code:'1103',name:'بنك احتياطي',                  type:'asset', cat:'current', group:'11', lvl:2},
+  {code:'1104',name:'حساب بنكي دوار (Current A/C)', type:'asset', cat:'current', group:'11', lvl:2},
+  {code:'1110',name:'النقد وما يعادله (إجمالي)',    type:'asset', cat:'current', group:'11', lvl:1, summary:true},
+  // 12: ذمم مدينة
+  {code:'1201',name:'ذمم مدينة — عملاء',            type:'asset', cat:'current', group:'12', lvl:2},
+  {code:'1202',name:'أوراق قبض',                    type:'asset', cat:'current', group:'12', lvl:2},
+  {code:'1203',name:'مدينون متنوعون',               type:'asset', cat:'current', group:'12', lvl:2},
+  {code:'1204',name:'موظفون مدينون',                type:'asset', cat:'current', group:'12', lvl:2},
+  {code:'1210',name:'الذمم المدينة (إجمالي)',        type:'asset', cat:'current', group:'12', lvl:1, summary:true},
+  // 13: المخزون الدوائي
+  {code:'1301',name:'مخزون مواد خام (APIs)',         type:'asset', cat:'current', group:'13', lvl:2},
+  {code:'1302',name:'مخزون مواد تغليف',              type:'asset', cat:'current', group:'13', lvl:2},
+  {code:'1303',name:'إنتاج تحت التشغيل (WIP)',       type:'asset', cat:'current', group:'13', lvl:2},
+  {code:'1304',name:'مخزون منتج تام',                type:'asset', cat:'current', group:'13', lvl:2},
+  {code:'1305',name:'مخزون معزول (Quarantine)',      type:'asset', cat:'current', group:'13', lvl:2},
+  {code:'1306',name:'مخزون بضاعة قيد الطريق',       type:'asset', cat:'current', group:'13', lvl:2},
+  {code:'1310',name:'المخزون الدوائي (إجمالي)',      type:'asset', cat:'current', group:'13', lvl:1, summary:true},
+  // 14: أصول متداولة أخرى
+  {code:'1401',name:'مصروفات مقدمة',                type:'asset', cat:'current', group:'14', lvl:2},
+  {code:'1402',name:'ضريبة قيمة مضافة — مستردة',   type:'asset', cat:'current', group:'14', lvl:2},
+  {code:'1403',name:'دفعات مقدمة للموردين',         type:'asset', cat:'current', group:'14', lvl:2},
+  {code:'1404',name:'ضريبة دخل — مدفوعة مقدماً',   type:'asset', cat:'current', group:'14', lvl:2},
+  // 15: الأصول الثابتة
+  {code:'1501',name:'الأراضي',                       type:'asset', cat:'fixed', group:'15', lvl:2, noDepr:true},
+  {code:'1502',name:'المباني والإنشاءات',            type:'asset', cat:'fixed', group:'15', lvl:2, deprRate:0.05},
+  {code:'1503',name:'خطوط الإنتاج والمعدات',         type:'asset', cat:'fixed', group:'15', lvl:2, deprRate:0.10},
+  {code:'1504',name:'أجهزة مختبرات QC/QA',          type:'asset', cat:'fixed', group:'15', lvl:2, deprRate:0.20},
+  {code:'1505',name:'سيارات وأسطول توزيع',           type:'asset', cat:'fixed', group:'15', lvl:2, deprRate:0.25},
+  {code:'1506',name:'معدات حاسب آلي وبرامج',        type:'asset', cat:'fixed', group:'15', lvl:2, deprRate:0.33},
+  {code:'1507',name:'تجهيزات مكاتب وأثاث',          type:'asset', cat:'fixed', group:'15', lvl:2, deprRate:0.10},
+  {code:'1508',name:'أصول غير ملموسة (ترخيص EDA)', type:'asset', cat:'fixed', group:'15', lvl:2, deprRate:0.20},
+  {code:'1551',name:'م.خ مجمع — مباني',             type:'asset', cat:'fixed', group:'15', lvl:2, contra:true},
+  {code:'1552',name:'م.خ مجمع — خطوط إنتاج',       type:'asset', cat:'fixed', group:'15', lvl:2, contra:true},
+  {code:'1553',name:'م.خ مجمع — أجهزة مختبر',      type:'asset', cat:'fixed', group:'15', lvl:2, contra:true},
+  {code:'1554',name:'م.خ مجمع — سيارات',            type:'asset', cat:'fixed', group:'15', lvl:2, contra:true},
+  {code:'1555',name:'م.خ مجمع — حاسب آلي',         type:'asset', cat:'fixed', group:'15', lvl:2, contra:true},
+  {code:'1556',name:'م.خ مجمع — تجهيزات',          type:'asset', cat:'fixed', group:'15', lvl:2, contra:true},
+  {code:'1560',name:'صافي الأصول الثابتة',          type:'asset', cat:'fixed', group:'15', lvl:1, summary:true},
+  // 16: أصول أخرى
+  {code:'1601',name:'استثمارات طويلة الأجل',        type:'asset', cat:'longterm', group:'16', lvl:2},
+  {code:'1602',name:'شهرة المحل (Goodwill)',         type:'asset', cat:'longterm', group:'16', lvl:2},
+  {code:'1603',name:'تأمينات مدفوعة',               type:'asset', cat:'longterm', group:'16', lvl:2},
+
+  // ══ الفئة 2 — الالتزامات ══
+  // 21: التزامات متداولة
+  {code:'2101',name:'ذمم دائنة — موردو مواد',       type:'liability', cat:'current', group:'21', lvl:2},
+  {code:'2102',name:'ذمم دائنة — CMO/مصانع',       type:'liability', cat:'current', group:'21', lvl:2},
+  {code:'2103',name:'أوراق دفع',                    type:'liability', cat:'current', group:'21', lvl:2},
+  {code:'2104',name:'دائنون متنوعون',               type:'liability', cat:'current', group:'21', lvl:2},
+  {code:'2110',name:'الذمم الدائنة (إجمالي)',       type:'liability', cat:'current', group:'21', lvl:1, summary:true},
+  // 22: ضرائب مستحقة
+  {code:'2201',name:'ضريبة القيمة المضافة — مستحقة',type:'liability', cat:'current', group:'22', lvl:2},
+  {code:'2202',name:'ضريبة الدخل — مستحقة',        type:'liability', cat:'current', group:'22', lvl:2},
+  {code:'2203',name:'ضريبة الدمغة — مستحقة',       type:'liability', cat:'current', group:'22', lvl:2},
+  {code:'2204',name:'ضريبة استقطاع — مستحقة',      type:'liability', cat:'current', group:'22', lvl:2},
+  {code:'2210',name:'الضرائب المستحقة (إجمالي)',    type:'liability', cat:'current', group:'22', lvl:1, summary:true},
+  // 23: مستحقات موظفين
+  {code:'2301',name:'رواتب وأجور مستحقة',           type:'liability', cat:'current', group:'23', lvl:2},
+  {code:'2302',name:'مكافآت وحوافز مستحقة',         type:'liability', cat:'current', group:'23', lvl:2},
+  {code:'2303',name:'بدل إجازات مستحق',             type:'liability', cat:'current', group:'23', lvl:2},
+  {code:'2304',name:'تأمينات اجتماعية مستحقة',      type:'liability', cat:'current', group:'23', lvl:2},
+  {code:'2310',name:'مستحقات الموظفين (إجمالي)',    type:'liability', cat:'current', group:'23', lvl:1, summary:true},
+  // 24: مخصصات
+  {code:'2401',name:'مخصص ضمان المنتج',             type:'liability', cat:'current', group:'24', lvl:2},
+  {code:'2402',name:'مخصص مرتجعات',                 type:'liability', cat:'current', group:'24', lvl:2},
+  {code:'2403',name:'مخصص خسائر مخزون منتهي',      type:'liability', cat:'current', group:'24', lvl:2},
+  // 25: التزامات طويلة الأجل
+  {code:'2501',name:'قروض بنكية طويلة الأجل',       type:'liability', cat:'longterm', group:'25', lvl:2},
+  {code:'2502',name:'قروض من مساهمين',              type:'liability', cat:'longterm', group:'25', lvl:2},
+  {code:'2503',name:'قروض متوسطة الأجل',            type:'liability', cat:'longterm', group:'25', lvl:2},
+  {code:'2601',name:'مخصص نهاية الخدمة',            type:'liability', cat:'longterm', group:'26', lvl:2},
+
+  // ══ الفئة 3 — حقوق الملكية ══
+  {code:'3101',name:'رأس المال المدفوع',             type:'equity', cat:'capital', group:'31', lvl:2},
+  {code:'3102',name:'احتياطي قانوني (5%)',           type:'equity', cat:'capital', group:'31', lvl:2},
+  {code:'3103',name:'احتياطي اختياري',               type:'equity', cat:'capital', group:'31', lvl:2},
+  {code:'3104',name:'علاوة إصدار',                   type:'equity', cat:'capital', group:'31', lvl:2},
+  {code:'3201',name:'أرباح محتجزة',                  type:'equity', cat:'retained', group:'32', lvl:2},
+  {code:'3202',name:'خسائر مرحّلة',                  type:'equity', cat:'retained', group:'32', lvl:2},
+  {code:'3301',name:'صافي الربح/الخسارة — السنة',   type:'equity', cat:'current', group:'33', lvl:2},
+
+  // ══ الفئة 4 — الإيرادات ══
+  {code:'4101',name:'مبيعات — صيدليات',              type:'revenue', cat:'operating', group:'41', lvl:2},
+  {code:'4102',name:'مبيعات — مستشفيات',            type:'revenue', cat:'operating', group:'41', lvl:2},
+  {code:'4103',name:'مبيعات — موزعون جملة',         type:'revenue', cat:'operating', group:'41', lvl:2},
+  {code:'4104',name:'مبيعات — تصدير',               type:'revenue', cat:'operating', group:'41', lvl:2},
+  {code:'4105',name:'مبيعات — قطاع حكومي',         type:'revenue', cat:'operating', group:'41', lvl:2},
+  {code:'4110',name:'إجمالي المبيعات',              type:'revenue', cat:'operating', group:'41', lvl:1, summary:true},
+  {code:'4201',name:'مردودات ومسموحات المبيعات',    type:'revenue', cat:'operating', group:'42', lvl:2},
+  {code:'4202',name:'خصومات المبيعات',              type:'revenue', cat:'operating', group:'42', lvl:2},
+  {code:'4210',name:'صافي المبيعات',                type:'revenue', cat:'operating', group:'42', lvl:1, summary:true},
+  {code:'4301',name:'إيرادات خدمات تصنيع (Toll)',   type:'revenue', cat:'operating', group:'43', lvl:2},
+  {code:'4302',name:'إيرادات بيع مواد خام فائضة',  type:'revenue', cat:'operating', group:'43', lvl:2},
+  {code:'4401',name:'إيرادات مالية — فوائد',        type:'revenue', cat:'nonoperating', group:'44', lvl:2},
+  {code:'4402',name:'أرباح بيع أصول',               type:'revenue', cat:'nonoperating', group:'44', lvl:2},
+  {code:'4403',name:'إيرادات متنوعة',               type:'revenue', cat:'nonoperating', group:'44', lvl:2},
+
+  // ══ الفئة 5 — المصروفات ══
+  // 51: تكلفة المبيعات (COGS)
+  {code:'5101',name:'مواد خام مباشرة (APIs)',        type:'expense', cat:'cogs', group:'51', lvl:2},
+  {code:'5102',name:'مواد تغليف مباشرة',             type:'expense', cat:'cogs', group:'51', lvl:2},
+  {code:'5103',name:'أجور عمال إنتاج مباشرة',        type:'expense', cat:'cogs', group:'51', lvl:2},
+  {code:'5104',name:'تعاقد إنتاج (CMO / Toll)',      type:'expense', cat:'cogs', group:'51', lvl:2},
+  {code:'5105',name:'تكاليف تشغيل مباشرة أخرى',     type:'expense', cat:'cogs', group:'51', lvl:2},
+  {code:'5110',name:'تكلفة البضاعة المباعة COGS',   type:'expense', cat:'cogs', group:'51', lvl:1, summary:true},
+  // 52: مصروفات تصنيع (overhead)
+  {code:'5201',name:'إيجار المصنع',                  type:'expense', cat:'manufacturing', group:'52', lvl:2},
+  {code:'5202',name:'كهرباء ومياه — المصنع',        type:'expense', cat:'manufacturing', group:'52', lvl:2},
+  {code:'5203',name:'صيانة معدات الإنتاج',           type:'expense', cat:'manufacturing', group:'52', lvl:2},
+  {code:'5204',name:'استهلاك آلات الإنتاج',          type:'expense', cat:'manufacturing', group:'52', lvl:2},
+  {code:'5205',name:'تأمين المصنع والمخزون',         type:'expense', cat:'manufacturing', group:'52', lvl:2},
+  {code:'5206',name:'مصروفات النظافة والمطهرات',    type:'expense', cat:'manufacturing', group:'52', lvl:2},
+  {code:'5210',name:'المصروفات الصناعية (إجمالي)',  type:'expense', cat:'manufacturing', group:'52', lvl:1, summary:true},
+  // 53: مصروفات الجودة
+  {code:'5301',name:'رواتب فريق QA/QC',             type:'expense', cat:'quality', group:'53', lvl:2},
+  {code:'5302',name:'كيماويات وكواشف المختبر',      type:'expense', cat:'quality', group:'53', lvl:2},
+  {code:'5303',name:'معايرة الأجهزة والشهادات',     type:'expense', cat:'quality', group:'53', lvl:2},
+  {code:'5304',name:'رسوم هيئة الدواء EDA',          type:'expense', cat:'quality', group:'53', lvl:2},
+  {code:'5305',name:'دراسات الثبات (Stability)',     type:'expense', cat:'quality', group:'53', lvl:2},
+  {code:'5306',name:'مصروفات التسجيل والترخيص',    type:'expense', cat:'quality', group:'53', lvl:2},
+  {code:'5310',name:'مصروفات الجودة (إجمالي)',      type:'expense', cat:'quality', group:'53', lvl:1, summary:true},
+  // 54: بيع وتوزيع
+  {code:'5401',name:'رواتب فريق المبيعات',           type:'expense', cat:'selling', group:'54', lvl:2},
+  {code:'5402',name:'عمولات البيع',                  type:'expense', cat:'selling', group:'54', lvl:2},
+  {code:'5403',name:'نقل وتوصيل للعملاء',           type:'expense', cat:'selling', group:'54', lvl:2},
+  {code:'5404',name:'مصروفات المرتجعات والإتلاف',   type:'expense', cat:'selling', group:'54', lvl:2},
+  {code:'5405',name:'ترويج وتسويق دوائي',           type:'expense', cat:'selling', group:'54', lvl:2},
+  {code:'5406',name:'مصروفات موزعين ووكلاء',        type:'expense', cat:'selling', group:'54', lvl:2},
+  {code:'5407',name:'معارض وندوات علمية',           type:'expense', cat:'selling', group:'54', lvl:2},
+  {code:'5410',name:'مصروفات البيع والتوزيع (إجمالي)',type:'expense', cat:'selling', group:'54', lvl:1, summary:true},
+  // 55: إدارية عامة
+  {code:'5501',name:'رواتب الإدارة العليا',          type:'expense', cat:'general', group:'55', lvl:2},
+  {code:'5502',name:'رواتب الموظفين الإداريين',      type:'expense', cat:'general', group:'55', lvl:2},
+  {code:'5503',name:'إيجار المكاتب الإدارية',       type:'expense', cat:'general', group:'55', lvl:2},
+  {code:'5504',name:'كهرباء وخدمات المكاتب',        type:'expense', cat:'general', group:'55', lvl:2},
+  {code:'5505',name:'اتصالات وإنترنت',               type:'expense', cat:'general', group:'55', lvl:2},
+  {code:'5506',name:'قرطاسية ومستلزمات مكتبية',    type:'expense', cat:'general', group:'55', lvl:2},
+  {code:'5507',name:'استهلاك أصول إدارية',           type:'expense', cat:'general', group:'55', lvl:2},
+  {code:'5508',name:'مصروفات قانونية ومحاسبية',     type:'expense', cat:'general', group:'55', lvl:2},
+  {code:'5509',name:'تأمينات متنوعة',               type:'expense', cat:'general', group:'55', lvl:2},
+  {code:'5510',name:'المصروفات الإدارية (إجمالي)',  type:'expense', cat:'general', group:'55', lvl:1, summary:true},
+  // 56: مالية
+  {code:'5601',name:'فوائد قروض بنكية',             type:'expense', cat:'financial', group:'56', lvl:2},
+  {code:'5602',name:'عمولات بنكية ومصروفات',        type:'expense', cat:'financial', group:'56', lvl:2},
+  {code:'5603',name:'فروق عملة أجنبية',             type:'expense', cat:'financial', group:'56', lvl:2},
+  {code:'5610',name:'المصروفات المالية (إجمالي)',    type:'expense', cat:'financial', group:'56', lvl:1, summary:true},
+  // 57: ضرائب
+  {code:'5701',name:'ضريبة دخل الشركة (22.5%)',     type:'expense', cat:'tax', group:'57', lvl:2},
+  {code:'5702',name:'ضريبة القيمة المضافة — صافي',  type:'expense', cat:'tax', group:'57', lvl:2},
+  {code:'5703',name:'ضريبة الدمغة',                  type:'expense', cat:'tax', group:'57', lvl:2},
+];
+
+// ── تهيئة دليل الحسابات ───────────────────────────────────────────
+function initCOA(){
+  let accs = getAll('accounts')||[];
+  if(accs.length >= 100) return; // already full
+  // Migrate: clear old 21-account COA and replace with full 140
+  if(accs.length > 0 && accs.length < 50){
+    accs.forEach(a=>remove('accounts',a.id));
+    accs = [];
+  }
+  if(accs.length === 0){
+    EGY_COA.forEach(a=>insert('accounts',{...a}));
+    // Seed opening balances year if none
+    if((getAll('historicalBalances')||[]).length===0){
+      const year = new Date().getFullYear();
+      insert('historicalBalances',{year, balances:{}, notes:'رصيد افتتاحي', createdAt:new Date().toISOString()});
+    }
+  }
+}
+
+// ── حساب رصيد حساب واحد (مع الموازين الافتتاحية) ────────────────
+function calcAccountBalance(code, includeOpening=true){
+  const entries = getAll('journalEntries')||[];
+  let balance = 0;
+  entries.forEach(e=>{
+    (e.lines||[]).forEach(l=>{
+      if(l.accountCode===code){
+        balance += Number(l.debit||0) - Number(l.credit||0);
+      }
+    });
+  });
+  // Add opening balance (historicalBalances)
+  if(includeOpening){
+    const year = new Date().getFullYear();
+    const hb   = (getAll('historicalBalances')||[]).find(h=>h.year===year-1||h.year===year);
+    if(hb?.balances?.[code]) balance += Number(hb.balances[code]||0);
+  }
+  return balance;
+}
+
+// ── ترحيل قيد محاسبي تلقائي ─────────────────────────────────────
+// يُستدعى من أي وحدة في النظام
+function autoJournalEntry(description, lines, ref, source){
+  initCOA();
+  const totalDr = lines.reduce((s,l)=>s+Number(l.debit||0),0);
+  const totalCr = lines.reduce((s,l)=>s+Number(l.credit||0),0);
+  if(Math.abs(totalDr-totalCr) > 0.01){
+    console.error('Unbalanced auto JE:', description, totalDr, totalCr);
+    return null;
+  }
+  const accMap = {};
+  (getAll('accounts')||[]).forEach(a=>accMap[a.code]=a.name);
+  const enriched = lines.map(l=>({
+    ...l,
+    accountName: l.accountName || accMap[l.accountCode] || l.accountCode,
+  }));
+  return insert('journalEntries',{
+    entryDate: today(),
+    description,
+    reference: ref||null,
+    source: source||'manual', // 'production','sales','purchase','payroll','return','depreciation','manual'
+    lines: enriched,
+    totalDebit: totalDr,
+    totalCredit: totalCr,
+    autoGenerated: source!=='manual',
+    postedBy: _authUser?.name||'النظام',
+    postedAt: new Date().toISOString(),
+  });
+}
+
+// ── القيود التلقائية من الوحدات الأخرى ──────────────────────────
+
+// 1. إنتاج: صرف مواد → WIP
+function jeProductionIssue(productionOrderId, materialCost, laborCost){
+  if(!materialCost && !laborCost) return;
+  const lines = [];
+  if(materialCost>0){
+    lines.push({accountCode:'1303',debit:materialCost,credit:0});    // WIP
+    lines.push({accountCode:'1301',debit:0,credit:materialCost});    // مخزون مواد خام
+  }
+  if(laborCost>0){
+    lines.push({accountCode:'5103',debit:laborCost,credit:0});       // أجور مباشرة
+    lines.push({accountCode:'2301',debit:0,credit:laborCost});       // رواتب مستحقة
+  }
+  return autoJournalEntry(`صرف مواد إنتاج — أمر ${productionOrderId}`, lines, 'PO-'+productionOrderId, 'production');
+}
+
+// 2. إنتاج: إتمام الإنتاج → منتج تام
+function jeProductionComplete(productionOrderId, totalCost){
+  if(!totalCost) return;
+  return autoJournalEntry(`إتمام إنتاج — أمر ${productionOrderId}`,
+    [{accountCode:'1304',debit:totalCost,credit:0},    // منتج تام
+     {accountCode:'1303',debit:0,credit:totalCost}],   // WIP
+    'PO-'+productionOrderId, 'production');
+}
+
+// 3. مبيعات: فاتورة
+function jeSalesInvoice(invoiceId, salesAmount, vatAmount, distType){
+  if(!salesAmount) return;
+  const revenueCode = {'pharmacy_chain':'4101','hospital':'4102','wholesale':'4103',
+    'export':'4104','government':'4105','retail':'4101'}[distType]||'4110';
+  const lines = [
+    {accountCode:'1201',debit:salesAmount+vatAmount,credit:0},  // ذمم مدينة
+    {accountCode:revenueCode,debit:0,credit:salesAmount},        // إيرادات
+    {accountCode:'2201',debit:0,credit:vatAmount},               // VAT مستحق
+  ];
+  return autoJournalEntry(`مبيعات — فاتورة INV-${invoiceId}`, lines, 'INV-'+invoiceId, 'sales');
+}
+
+// 4. مبيعات: COGS عند الشحن
+function jeSalesCOGS(invoiceId, cogsCost){
+  if(!cogsCost) return;
+  return autoJournalEntry(`تكلفة مبيعات — INV-${invoiceId}`,
+    [{accountCode:'5110',debit:cogsCost,credit:0},    // COGS
+     {accountCode:'1304',debit:0,credit:cogsCost}],   // منتج تام
+    'INV-'+invoiceId, 'sales');
+}
+
+// 5. مشتريات: استلام مواد
+function jePurchaseReceipt(poId, matCost, vatAmount){
+  if(!matCost) return;
+  const lines = [
+    {accountCode:'1301',debit:matCost,credit:0},         // مخزون مواد
+    {accountCode:'1402',debit:vatAmount||0,credit:0},    // VAT مدخلات
+    {accountCode:'2101',debit:0,credit:matCost+(vatAmount||0)}, // ذمم دائنة
+  ];
+  return autoJournalEntry(`استلام مشتريات — PO-${poId}`, lines, 'PO-'+poId, 'purchase');
+}
+
+// 6. رواتب
+function jePayroll(period, salaries, taxes, dept){
+  if(!salaries) return;
+  const expCode = {QC:'5301',sales:'5401',admin:'5501',production:'5103'}[dept]||'5501';
+  const lines = [
+    {accountCode:expCode,debit:salaries,credit:0},        // مصروف رواتب
+    {accountCode:'2301',debit:0,credit:salaries-taxes},   // صافي للموظفين
+    {accountCode:'2204',debit:0,credit:taxes},             // ضريبة استقطاع
+  ];
+  return autoJournalEntry(`رواتب ${dept||'إدارية'} — ${period}`, lines, 'PAY-'+period, 'payroll');
+}
+
+// 7. سداد ذمم دائنة (دفع للمورد)
+function jePaySupplier(supplierId, amount, bankCode){
+  return autoJournalEntry(`سداد مورد — ${supplierId}`,
+    [{accountCode:'2101',debit:amount,credit:0},
+     {accountCode:bankCode||'1102',debit:0,credit:amount}],
+    'PMT-'+supplierId, 'payment');
+}
+
+// 8. تحصيل ذمم مدينة (استلام من عميل)
+function jeCollectReceivable(invoiceId, amount){
+  return autoJournalEntry(`تحصيل — INV-${invoiceId}`,
+    [{accountCode:'1102',debit:amount,credit:0},          // بنك
+     {accountCode:'1201',debit:0,credit:amount}],         // ذمم مدينة
+    'REC-'+invoiceId, 'collection');
+}
+
+// 9. مرتجعات
+function jeReturn(returnId, amount, vatAmount){
+  if(!amount) return;
+  return autoJournalEntry(`مرتجع — RA-${returnId}`,
+    [{accountCode:'4201',debit:amount,credit:0},           // مردودات
+     {accountCode:'2201',debit:vatAmount||0,credit:0},     // رد VAT
+     {accountCode:'1201',debit:0,credit:amount+(vatAmount||0)}], // ذمم مدينة
+    'RA-'+returnId, 'return');
+}
+
+// 10. إهلاك تلقائي — EAS 16
+function jeDepreciation(assetId, assetName, amount, accumCode){
+  if(!amount) return;
+  const deprExpCode = accumCode?.startsWith('1552')?'5204':
+                      accumCode?.startsWith('1551')?'5507':
+                      accumCode?.startsWith('1554')?'5403':'5507';
+  return autoJournalEntry(`إهلاك — ${assetName}`,
+    [{accountCode:deprExpCode,debit:amount,credit:0},
+     {accountCode:accumCode||'1555',debit:0,credit:amount}],
+    'DEP-'+assetId, 'depreciation');
+}
+
+// 11. مصروف عام (من أي صفحة)
+function addQuickExpense(description, amount, expenseCode, creditCode){
+  if(!amount||!description) return;
+  return autoJournalEntry(description,
+    [{accountCode:expenseCode||'5509',debit:amount,credit:0},
+     {accountCode:creditCode||'1102',debit:0,credit:amount}],
+    null, 'manual');
+}
+
+// ── postManufacturingCost المحسّن ─────────────────────────────────
+function postManufacturingCost(orderId){
+  initCOA();
+  const o = getById('productionOrders',orderId);
+  if(!o) return;
+  const prod = getById('products',o.productId);
+  const matCost  = Number(o.materialCost||o.estimatedCost||0);
+  const cmoCost  = Number(o.cmoAmount||0);
+  const total    = matCost + cmoCost;
+  if(!total){ alert('لا توجد تكاليف لترحيلها'); return; }
+  const je = jeProductionComplete(orderId, total);
+  if(je){
+    showNotif&&showNotif(`✅ ترحيل ${fmtC(total)} — قيد JE-${String(je.id).padStart(6,'0')}`, 'success');
+    go('journal');
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// 💰 القوائم المالية والتقارير — Finance Pages
+// EAS 1 (عرض القوائم) + EAS 4 (تدفقات نقدية) + EAS 16 (إهلاك)
+// ══════════════════════════════════════════════════════════════════
+
+// ── A. دليل الحسابات الهرمي ───────────────────────────────────────
+
+PAGES.accounts = function(){
+  initCOA();
+  const accs = getAll('accounts')||[];
+  const typeLabels = {asset:'أصول',liability:'التزامات',equity:'حقوق ملكية',revenue:'إيرادات',expense:'مصاريف'};
+  const typeCls    = {asset:'b-blue',liability:'b-red',equity:'b-purple',revenue:'b-green',expense:'b-amber'};
+  const activeFilter = window._accsFilter||'all';
+
+  // Group hierarchically
+  const grouped = {};
+  accs.sort((a,b)=>a.code>b.code?1:-1).forEach(a=>{
+    const g = a.group||a.code.slice(0,2);
+    if(!grouped[g]) grouped[g]=[];
+    grouped[g].push(a);
+  });
+
+  const filtered = activeFilter==='all' ? accs : accs.filter(a=>a.type===activeFilter);
+
+  setPage('📚 دليل الحسابات','Chart of Accounts — 140 حساب هرمي (دليل مصلحة الضرائب)',
+    `<div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-green" onclick="addAccount()">+ حساب جديد</button>
+      <button class="btn btn-white" onclick="go('trialbalance')">⚖️ ميزان المراجعة</button>
+    </div>`,
+    `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+      ${['all','asset','liability','equity','revenue','expense'].map(t=>`
+      <button class="btn btn-sm ${activeFilter===t?'btn-green':'btn-white'}" onclick="window._accsFilter='${t}';go('accounts')">
+        ${t==='all'?'الكل ('+accs.length+')':typeLabels[t]+' ('+accs.filter(a=>a.type===t).length+')'}
+      </button>`).join('')}
+    </div>
+    <div class="stats-grid g5" style="margin-bottom:14px">
+      ${Object.entries(typeLabels).map(([t,l])=>{
+        const total = accs.filter(a=>a.type===t).reduce((s,a)=>{
+          const bal=calcAccountBalance(a.code);
+          return s + (isNaN(bal)?0:Math.abs(bal));
+        },0);
+        return `<div class="stat-card"><div class="lbl">${l}</div><div class="val" style="font-size:14px">${fmtC(total)}</div></div>`;
+      }).join('')}
+    </div>
+    <div class="card">${tbl(
+      ['كود','اسم الحساب','النوع','الفئة','الرصيد','إجراء'],
+      filtered.map(a=>{
+        const bal = calcAccountBalance(a.code);
+        const isSum = a.summary;
+        return `<tr style="${isSum?'background:rgba(56,139,253,.04);font-weight:700':a.contra?'opacity:.7':''}">
+          <td><code style="font-size:${isSum?'13px':'11px'}">${a.code}</code></td>
+          <td>${a.lvl>1?'&nbsp;&nbsp;':''}<span>${escapeHtml(a.name)}</span>${a.contra?'<span style="font-size:10px;color:var(--muted)"> (م.خ)</span>':''}</td>
+          <td><span class="badge ${typeCls[a.type]||'b-gray'}" style="font-size:10px">${typeLabels[a.type]||a.type}</span></td>
+          <td style="font-size:11px;color:var(--muted)">${escapeHtml(a.cat||'')}</td>
+          <td style="font-weight:${isSum?'700':'400'};color:${bal>=0?'inherit':'var(--red)'}">${fmtC(Math.abs(bal))}${bal<0?' (د)':bal>0?' (م)':''}</td>
+          <td><div class="action-bar" style="gap:3px">
+            <button class="icon-btn edit" onclick="editAccount(${a.id})">${ic.edit}</button>
+            ${!isSum?`<button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('accounts',${a.id});go('accounts')}">${ic.del}</button>`:''}
+          </div></td>
+        </tr>`;
+      }).join('')
+    ,'tbl_coa').replace(/<tr><td>/g,'').replace(/<\/td><\/tr>/g,'')}
+    </div>`
+  );
+};
+
+function addAccount(){ showAccForm(); }
+function editAccount(id){ showAccForm(getById('accounts',id)||{}); }
+function showAccForm(a={}){
+  showModal(modal(a.id?'تعديل حساب':'+ حساب جديد',`
+    <div class="form-row">
+      ${fg('كود الحساب *', inp('acc-code','text',a.code||'','مثال: 5509'))}
+      ${fg('اسم الحساب *', inp('acc-name','text',a.name||'',''))}
+    </div>
+    <div class="form-row">
+      ${fg('النوع *', `<select id="acc-type" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        <option value="asset" ${(a.type||'expense')==='asset'?'selected':''}>أصول</option>
+        <option value="liability" ${a.type==='liability'?'selected':''}>التزامات</option>
+        <option value="equity" ${a.type==='equity'?'selected':''}>حقوق ملكية</option>
+        <option value="revenue" ${a.type==='revenue'?'selected':''}>إيرادات</option>
+        <option value="expense" ${a.type==='expense'?'selected':''}>مصاريف</option>
+      </select>`)}
+      ${fg('الفئة', inp('acc-cat','text',a.cat||'','current/fixed/cogs/operating...'))}
+    </div>
+    ${fg('ملاحظة', inp('acc-note','text',a.notes||'',''))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveAccount(${a.id||''})">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+function saveAccount(id){
+  const code=val('acc-code'), name=val('acc-name');
+  if(!code||!name) return alert('الكود والاسم إلزاميان');
+  const d={code,name,type:document.getElementById('acc-type')?.value||'expense',
+    cat:val('acc-cat')||null, notes:val('acc-note')||null};
+  id?update('accounts',id,d):insert('accounts',d);
+  closeModal(); go('accounts');
+}
+
+// ── B. اليومية الأمريكية المحسّنة + استيراد CSV ─────────────────
+
+PAGES.journal = function(){
+  const entries = (getAll('journalEntries')||[]).sort((a,b)=>(b.entryDate||'')>(a.entryDate||'')?1:-1);
+  const totalDr = entries.reduce((s,e)=>s+Number(e.totalDebit||0),0);
+  const totalCr = entries.reduce((s,e)=>s+Number(e.totalCredit||0),0);
+  const unbalanced = entries.filter(e=>Math.abs(Number(e.totalDebit||0)-Number(e.totalCredit||0))>0.01);
+
+  setPage('📒 اليومية الأمريكية — General Journal',
+    'قيود مزدوجة — قانون المحاسبة 127/1981',
+    `<div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-green" onclick="addJournalEntry()">+ قيد يدوي</button>
+      <button class="btn btn-white" onclick="showBankImport()">📊 استيراد كشف بنكي CSV</button>
+      <button class="btn btn-white" onclick="go('trialbalance')">⚖️ ميزان المراجعة</button>
+      <button class="btn btn-white" onclick="showQuickExpense()">💸 مصروف سريع</button>
+    </div>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">عدد القيود</div><div class="val">${entries.length}</div></div>
+      <div class="stat-card"><div class="lbl">إجمالي المدين</div><div class="val">${fmtC(totalDr)}</div></div>
+      <div class="stat-card"><div class="lbl">إجمالي الدائن</div><div class="val">${fmtC(totalCr)}</div></div>
+      <div class="stat-card"><div class="lbl ${unbalanced.length?'text-red':'text-green'}">حالة الموازنة</div>
+        <div class="val ${unbalanced.length?'text-red':'text-green'}">${unbalanced.length?unbalanced.length+' غير متوازن':'✅ متوازن'}</div>
+      </div>
+    </div>
+    <div class="card">${tbl(
+      ['#','التاريخ','الوصف','المصدر','المدين','الدائن','الحالة','إجراء'],
+      entries.map(e=>{
+        const balanced = Math.abs(Number(e.totalDebit||0)-Number(e.totalCredit||0))<0.01;
+        const srcLabels = {production:'🏭 إنتاج',sales:'🚚 مبيعات',purchase:'📦 مشتريات',
+          payroll:'👥 رواتب',return:'🔄 مرتجع',depreciation:'📉 إهلاك',manual:'✏️ يدوي',
+          collection:'💰 تحصيل',payment:'💳 دفع'};
+        return tr(
+          `<code style="font-size:10px">JE-${String(e.id).padStart(6,'0')}</code>`,
+          e.entryDate||'—',
+          `<span style="font-size:12px">${escapeHtml((e.description||'').slice(0,40))}</span>`,
+          `<span style="font-size:11px">${srcLabels[e.source||'manual']||e.source||'—'}</span>`,
+          fmtC(e.totalDebit||0),
+          fmtC(e.totalCredit||0),
+          `<span class="badge ${balanced?'b-green':'b-red'}">${balanced?'✅':'❌'}</span>`,
+          `<div class="action-bar" style="gap:3px">
+            <button class="btn btn-white btn-sm" style="font-size:10px" onclick="viewJE(${e.id})">عرض</button>
+            ${!e.autoGenerated?`<button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('journalEntries',${e.id});go('journal')}">${ic.del}</button>`:''}
+          </div>`
+        );
+      })
+    ,'tbl_journal')}</div>`
+  );
+};
+
+function addJournalEntry(){ showJEForm(); }
+function showJEForm(je={}){
+  initCOA();
+  const accs = (getAll('accounts')||[]).sort((a,b)=>a.code>b.code?1:-1);
+  const accsOpts = accs.map(a=>`<option value="${a.code}">${a.code} — ${escapeHtml(a.name)}</option>`).join('');
+  const lines = je.lines||[{},{},{}];
+
+  showModal(modal(je.id?'تعديل قيد':'📒 قيد يومية جديد',`
+    <div style="max-height:80vh;overflow-y:auto">
+    <div class="form-row">
+      ${fg('تاريخ القيد *', inp('je-date','date',je.entryDate||today()))}
+      ${fg('الوصف *', inp('je-desc','text',je.description||'','وصف العملية'))}
+    </div>
+    <div class="form-row">
+      ${fg('المرجع', inp('je-ref','text',je.reference||'','فاتورة / عقد / أمر إنتاج'))}
+      ${fg('المصدر', `<select id="je-src" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        <option value="manual">✏️ يدوي</option>
+        <option value="production">🏭 إنتاج</option>
+        <option value="sales">🚚 مبيعات</option>
+        <option value="purchase">📦 مشتريات</option>
+        <option value="payroll">👥 رواتب</option>
+      </select>`)}
+    </div>
+
+    <div style="margin:12px 0">
+      <div style="display:grid;grid-template-columns:3fr 1fr 1fr auto;gap:6px;font-size:11px;font-weight:700;color:var(--muted);padding:0 4px;margin-bottom:4px">
+        <span>الحساب</span><span>مدين</span><span>دائن</span><span></span>
+      </div>
+      <div id="je-lines">
+        ${lines.map((_,i)=>`
+        <div class="je-line-row" id="je-line-${i}" style="display:grid;grid-template-columns:3fr 1fr 1fr auto;gap:6px;margin-bottom:4px;align-items:center">
+          <select id="je-acc-${i}" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px;font-size:12px;color:var(--text)">
+            <option value="">اختر حساب...</option>${accsOpts}
+          </select>
+          <input type="number" id="je-dr-${i}" value="0" min="0" oninput="syncJEBalance()"
+            style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px;font-size:12px;color:var(--text)">
+          <input type="number" id="je-cr-${i}" value="0" min="0" oninput="syncJEBalance()"
+            style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px;font-size:12px;color:var(--text)">
+          <button onclick="document.getElementById('je-line-${i}').remove();syncJEBalance()"
+            style="background:none;border:none;color:var(--red);cursor:pointer;padding:0 4px;font-size:18px">✕</button>
+        </div>`).join('')}
+      </div>
+      <button class="btn btn-white btn-sm" onclick="addJELine()" style="margin-top:4px">+ بند</button>
+      <div id="je-balance-check" style="margin-top:8px;padding:8px;border-radius:6px;font-size:12px"></div>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveJournalEntry(${je.id||''})">💾 ترحيل القيد</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>
+    </div>`,null,'720px'));
+
+  setTimeout(()=>{
+    window._jeLineCount = lines.length;
+    // Set existing values
+    (je.lines||[]).forEach((l,i)=>{
+      const sel = document.getElementById(`je-acc-${i}`);
+      if(sel&&l.accountCode) sel.value=l.accountCode;
+      const dr = document.getElementById(`je-dr-${i}`);
+      if(dr) dr.value = l.debit||0;
+      const cr = document.getElementById(`je-cr-${i}`);
+      if(cr) cr.value = l.credit||0;
+    });
+    document.getElementById('je-src')&&(document.getElementById('je-src').value=je.source||'manual');
+    syncJEBalance();
+  },100);
+}
+
+function syncJEBalance(){
+  let dr=0,cr=0;
+  document.querySelectorAll('[id^="je-dr-"]').forEach(el=>dr+=Number(el.value||0));
+  document.querySelectorAll('[id^="je-cr-"]').forEach(el=>cr+=Number(el.value||0));
+  const el=document.getElementById('je-balance-check'); if(!el) return;
+  const ok=Math.abs(dr-cr)<0.01;
+  el.style.background=ok?'rgba(46,160,67,.08)':'rgba(248,81,73,.08)';
+  el.style.border=`1px solid rgba(${ok?'46,160,67':'248,81,73'},.25)`;
+  el.innerHTML=`${ok?'✅ قيد متوازن':'⚠️ غير متوازن'} — مدين: ${fmtC(dr)} | دائن: ${fmtC(cr)} | فرق: ${fmtC(Math.abs(dr-cr))}`;
+}
+
+let _jeLineCount = 3;
+function addJELine(){
+  const i = window._jeLineCount++;
+  const accs = (getAll('accounts')||[]).sort((a,b)=>a.code>b.code?1:-1);
+  const accsOpts = accs.map(a=>`<option value="${a.code}">${a.code} — ${escapeHtml(a.name)}</option>`).join('');
+  const div = document.createElement('div');
+  div.id = `je-line-${i}`; div.className='je-line-row';
+  div.style.cssText='display:grid;grid-template-columns:3fr 1fr 1fr auto;gap:6px;margin-bottom:4px;align-items:center';
+  div.innerHTML=`
+    <select id="je-acc-${i}" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px;font-size:12px;color:var(--text)">
+      <option value="">اختر حساب...</option>${accsOpts}
+    </select>
+    <input type="number" id="je-dr-${i}" value="0" min="0" oninput="syncJEBalance()"
+      style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px;font-size:12px;color:var(--text)">
+    <input type="number" id="je-cr-${i}" value="0" min="0" oninput="syncJEBalance()"
+      style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px;font-size:12px;color:var(--text)">
+    <button onclick="this.parentElement.remove();syncJEBalance()"
+      style="background:none;border:none;color:var(--red);cursor:pointer;padding:0 4px;font-size:18px">✕</button>`;
+  document.getElementById('je-lines')?.appendChild(div);
+  div.querySelector('input')?.focus();
+}
+
+function saveJournalEntry(id){
+  const desc = val('je-desc'); if(!desc) return alert('وصف القيد إلزامي');
+  const accs = {};
+  (getAll('accounts')||[]).forEach(a=>accs[a.code]=a.name);
+  const lines=[]; let dr=0,cr=0;
+  document.querySelectorAll('[id^="je-acc-"]').forEach(el=>{
+    const i=el.id.split('-')[2];
+    const code=el.value; if(!code) return;
+    const debit  = Number(document.getElementById(`je-dr-${i}`)?.value||0);
+    const credit = Number(document.getElementById(`je-cr-${i}`)?.value||0);
+    if(!debit&&!credit) return;
+    lines.push({accountCode:code, accountName:accs[code]||code, debit, credit});
+    dr+=debit; cr+=credit;
+  });
+  if(!lines.length) return alert('أضف بنوداً للقيد');
+  if(Math.abs(dr-cr)>0.01) return alert(`القيد غير متوازن — فرق: ${fmtC(Math.abs(dr-cr))}`);
+  const d={entryDate:document.getElementById('je-date')?.value||today(), description:desc,
+    reference:val('je-ref')||null, source:document.getElementById('je-src')?.value||'manual',
+    lines, totalDebit:dr, totalCredit:cr, autoGenerated:false,
+    postedBy:_authUser?.name||'—', postedAt:new Date().toISOString()};
+  id?update('journalEntries',id,d):insert('journalEntries',d);
+  closeModal(); go('journal');
+}
+
+function viewJE(id){
+  const e=getById('journalEntries',id); if(!e) return;
+  showModal(modal(`قيد JE-${String(e.id).padStart(6,'0')}`,`
+    <div style="font-size:13px;margin-bottom:12px">
+      <div>التاريخ: <strong>${e.entryDate||'—'}</strong> | الوصف: <strong>${escapeHtml(e.description||'—')}</strong></div>
+      <div>المرجع: ${escapeHtml(e.reference||'—')} | المصدر: ${e.source||'—'} | رُحّل بواسطة: ${escapeHtml(e.postedBy||'—')}</div>
+    </div>
+    ${tbl(['الحساب','الكود','مدين','دائن'],
+      (e.lines||[]).map(l=>tr(escapeHtml(l.accountName||l.accountCode||'—'),
+        `<code>${l.accountCode||'—'}</code>`,
+        l.debit?fmtC(l.debit):'—', l.credit?fmtC(l.credit):'—'))
+    ,'tbl_je_v')}
+    <div style="text-align:left;font-weight:700;margin-top:8px">
+      مدين: ${fmtC(e.totalDebit||0)} | دائن: ${fmtC(e.totalCredit||0)}
+    </div>
+    <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">إغلاق</button></div>`));
+}
+
+// ── استيراد كشف بنكي CSV ─────────────────────────────────────────
+function showBankImport(){
+  showModal(modal('📊 استيراد كشف بنكي CSV',`
+    <div style="padding:10px;background:rgba(56,139,253,.06);border-radius:8px;margin-bottom:12px;font-size:12px">
+      📋 الصيغة المطلوبة: <code>تاريخ, وصف, مدين, دائن</code> (أو حسب صيغة البنك المصري)
+      <br>يدعم: CIB, NBE, QNB, HSBC Egypt, Banque Misr CSV formats
+    </div>
+    <div style="margin-bottom:10px">
+      ${fg('اختر ملف CSV', `<input type="file" id="csv-file" accept=".csv,.txt"
+        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">`)}
+    </div>
+    <div class="form-row">
+      ${fg('حساب البنك', `<select id="csv-bank-acc" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        ${(getAll('accounts')||[]).filter(a=>a.code.startsWith('11')).map(a=>`<option value="${a.code}">${a.code} — ${escapeHtml(a.name)}</option>`).join('')}
+      </select>`)}
+      ${fg('الحساب المقابل (افتراضي)', `<select id="csv-contra-acc" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        <option value="1201">1201 — ذمم مدينة</option>
+        <option value="2101">2101 — ذمم دائنة</option>
+        <option value="5509">5509 — مصروفات متنوعة</option>
+      </select>`)}
+    </div>
+    <div id="csv-preview" style="margin-top:10px"></div>
+    <div class="form-actions">
+      <button class="btn btn-white" onclick="previewCSV()">🔍 معاينة</button>
+      <button class="btn btn-green" onclick="importCSV()">📥 استيراد وترحيل</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>
+    <script>
+    document.getElementById('csv-file')?.addEventListener('change',previewCSV);
+    </\x73cript>`));
+}
+
+window._csvParsed = [];
+function previewCSV(){
+  const file = document.getElementById('csv-file')?.files?.[0];
+  if(!file){ alert('اختر ملف CSV أولاً'); return; }
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const text = e.target.result;
+    const rows = text.split('\n').filter(r=>r.trim());
+    const parsed = [];
+    rows.slice(1).forEach(row=>{
+      const cols = row.split(',').map(c=>c.trim().replace(/^"|"$/g,''));
+      if(cols.length < 3) return;
+      const date   = cols[0];
+      const desc   = cols[1];
+      const debit  = parseFloat(cols[2]?.replace(/,/g,''))||0;
+      const credit = parseFloat(cols[3]?.replace(/,/g,''))||0;
+      if(!debit && !credit) return;
+      parsed.push({date, desc, debit, credit});
+    });
+    window._csvParsed = parsed;
+    const prev = document.getElementById('csv-preview');
+    if(!prev) return;
+    prev.innerHTML = `<div style="font-size:12px;margin-bottom:6px"><strong>${parsed.length} حركة</strong> — معاينة أول 5:</div>`+
+      `<div style="max-height:200px;overflow-y:auto;font-size:11px">
+      ${parsed.slice(0,5).map(r=>`<div style="padding:4px 6px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between">
+        <span>${r.date} | ${escapeHtml(r.desc.slice(0,30))}</span>
+        <span>${r.debit?'مدين: '+fmtC(r.debit):''} ${r.credit?'دائن: '+fmtC(r.credit):''}</span>
+      </div>`).join('')}</div>`;
+  };
+  reader.readAsText(file,'UTF-8');
+}
+
+function importCSV(){
+  const bankCode   = document.getElementById('csv-bank-acc')?.value||'1102';
+  const contraCode = document.getElementById('csv-contra-acc')?.value||'5509';
+  const parsed     = window._csvParsed||[];
+  if(!parsed.length){ alert('لا توجد بيانات — اضغط معاينة أولاً'); return; }
+  let count = 0;
+  parsed.forEach(r=>{
+    const lines = r.debit > 0
+      ? [{accountCode:bankCode,debit:r.debit,credit:0},{accountCode:contraCode,debit:0,credit:r.debit}]
+      : [{accountCode:contraCode,debit:r.credit,credit:0},{accountCode:bankCode,debit:0,credit:r.credit}];
+    autoJournalEntry(r.desc||'استيراد بنكي', lines, 'BANK-'+r.date, 'bank_import');
+    count++;
+  });
+  closeModal();
+  showNotif&&showNotif(`✅ تم استيراد ${count} حركة بنكية وترحيلها في اليومية`, 'success');
+  go('journal');
+}
+
+// ── مصروف سريع من أي صفحة ────────────────────────────────────────
+function showQuickExpense(){
+  initCOA();
+  const expAccs = (getAll('accounts')||[]).filter(a=>a.type==='expense'&&!a.summary);
+  const bankAccs= (getAll('accounts')||[]).filter(a=>a.code.startsWith('11'));
+  showModal(modal('💸 إضافة مصروف سريع',`
+    <div style="padding:10px;background:rgba(240,136,0,.06);border:1px solid rgba(240,136,0,.2);border-radius:8px;margin-bottom:12px;font-size:11px">
+      ⚡ يقيد المصروف تلقائياً في اليومية بقيد مزدوج
+    </div>
+    ${fg('وصف المصروف *', inp('qe-desc','text','','مثال: فاتورة كهرباء المصنع يناير 2024'))}
+    <div class="form-row">
+      ${fg('المبلغ *', inp('qe-amount','number','',''))}
+      ${fg('التاريخ', inp('qe-date','date',today()))}
+    </div>
+    <div class="form-row">
+      ${fg('حساب المصروف *', `<select id="qe-exp-acc" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:12px;color:var(--text)">
+        ${expAccs.map(a=>`<option value="${a.code}">${a.code} — ${escapeHtml(a.name)}</option>`).join('')}
+      </select>`)}
+      ${fg('يُدفع من', `<select id="qe-bank-acc" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:12px;color:var(--text)">
+        ${bankAccs.map(a=>`<option value="${a.code}">${a.code} — ${escapeHtml(a.name)}</option>`).join('')}
+        <option value="2101">2101 — ذمم دائنة (على الحساب)</option>
+      </select>`)}
+    </div>
+    ${fg('المرجع (فاتورة/عقد)', inp('qe-ref','text','',''))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveQuickExpense()">💾 تسجيل وترحيل</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+function saveQuickExpense(){
+  const desc   = val('qe-desc');
+  const amount = numVal('qe-amount');
+  const expAcc = document.getElementById('qe-exp-acc')?.value;
+  const bankAcc= document.getElementById('qe-bank-acc')?.value;
+  if(!desc||!amount||!expAcc) return alert('وصف المبلغ والحساب إلزاميان');
+  const je = autoJournalEntry(desc,
+    [{accountCode:expAcc,debit:amount,credit:0},
+     {accountCode:bankAcc||'1102',debit:0,credit:amount}],
+    val('qe-ref')||null, 'manual');
+  closeModal();
+  if(je) showNotif&&showNotif(`✅ تم ترحيل المصروف: ${fmtC(amount)}`, 'success');
+}
+
+// ── C. ميزان المراجعة — Trial Balance ────────────────────────────
+
+PAGES.trialbalance = function(){
+  initCOA();
+  const accs    = (getAll('accounts')||[]).filter(a=>!a.summary);
+  const entries = getAll('journalEntries')||[];
+
+  let totalDr=0, totalCr=0;
+  const rows = accs.map(a=>{
+    const bal = calcAccountBalance(a.code, false); // without opening for display
+    const movDr = entries.reduce((s,e)=>(e.lines||[]).filter(l=>l.accountCode===a.code).reduce((ss,l)=>ss+Number(l.debit||0),s),0);
+    const movCr = entries.reduce((s,e)=>(e.lines||[]).filter(l=>l.accountCode===a.code).reduce((ss,l)=>ss+Number(l.credit||0),s),0);
+    if(!movDr && !movCr) return null;
+    totalDr += movDr; totalCr += movCr;
+    return {a, movDr, movCr};
+  }).filter(Boolean);
+
+  const balanced = Math.abs(totalDr-totalCr)<0.01;
+
+  setPage('⚖️ ميزان المراجعة — Trial Balance',
+    `${balanced?'✅ متوازن':'❌ غير متوازن'} — قانون 127/1981`,
+    `<button class="btn btn-white" onclick="go('journal')">← اليومية</button>`,
+    `<div class="stats-grid g3" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي المدين</div><div class="val">${fmtC(totalDr)}</div></div>
+      <div class="stat-card"><div class="lbl">إجمالي الدائن</div><div class="val">${fmtC(totalCr)}</div></div>
+      <div class="stat-card"><div class="lbl ${balanced?'text-green':'text-red'}">الفرق</div>
+        <div class="val ${balanced?'text-green':'text-red'}">${fmtC(Math.abs(totalDr-totalCr))}</div>
+      </div>
+    </div>
+    <div class="card">${tbl(
+      ['كود الحساب','اسم الحساب','النوع','حركة مدين','حركة دائن'],
+      rows.map(({a,movDr,movCr})=>tr(
+        `<code>${a.code}</code>`,
+        escapeHtml(a.name),
+        `<span class="badge b-gray" style="font-size:10px">${a.type||'—'}</span>`,
+        movDr ? `<span style="color:var(--blue);font-weight:700">${fmtC(movDr)}</span>` : '—',
+        movCr ? `<span style="color:var(--red)">${fmtC(movCr)}</span>` : '—'
+      ))
+    ,'tbl_tb')}
+    <tr style="background:rgba(56,139,253,.06);font-weight:700">
+      <td colspan="3">الإجمالي</td>
+      <td>${fmtC(totalDr)}</td>
+      <td>${fmtC(totalCr)}</td>
+    </tr>
+    </div>`
+  );
+};
+
+// ── D. قائمة الدخل — P&L ─────────────────────────────────────────
+
+PAGES.incomestatement = function(){
+  initCOA();
+  const accs = getAll('accounts')||[];
+  const entries= getAll('journalEntries')||[];
+
+  function netBal(code){ return calcAccountBalance(code, true); }
+  function groupBal(prefix){
+    return accs.filter(a=>a.code.startsWith(prefix)&&!a.summary&&a.code.length===4)
+      .reduce((s,a)=>s+Math.abs(netBal(a.code)),0);
+  }
+
+  const grossSales   = groupBal('410') + groupBal('411') + groupBal('412') + groupBal('413') + groupBal('414') + groupBal('415');
+  const returns      = groupBal('420') + groupBal('421') + groupBal('422');
+  const netSales     = grossSales - returns;
+  const cogs         = groupBal('510') + groupBal('511') + groupBal('512') + groupBal('513') + groupBal('514') + groupBal('515');
+  const grossProfit  = netSales - cogs;
+  const mfgOH        = groupBal('520') + groupBal('521') + groupBal('522') + groupBal('523') + groupBal('524') + groupBal('525');
+  const qcExp        = groupBal('530') + groupBal('531') + groupBal('532') + groupBal('533') + groupBal('534') + groupBal('535');
+  const sellExp      = groupBal('540') + groupBal('541') + groupBal('542') + groupBal('543') + groupBal('544') + groupBal('545');
+  const adminExp     = groupBal('550') + groupBal('551') + groupBal('552') + groupBal('553') + groupBal('554') + groupBal('555');
+  const totalOpExp   = mfgOH + qcExp + sellExp + adminExp;
+  const ebit         = grossProfit - totalOpExp;
+  const finExp       = groupBal('560') + groupBal('561') + groupBal('562') + groupBal('563');
+  const otherIncome  = groupBal('440') + groupBal('441') + groupBal('442') + groupBal('443');
+  const ebt          = ebit - finExp + otherIncome;
+  const taxExp       = ebt > 0 ? ebt * EGY_CORP_TAX : 0;
+  const netIncome    = ebt - taxExp;
+  const gpm = netSales>0 ? (grossProfit/netSales)*100 : 0;
+  const npm = netSales>0 ? (netIncome/netSales)*100   : 0;
+
+  const plRow = (label,val,cls='',indent=0,bold=false)=>`
+    <div style="display:flex;justify-content:space-between;padding:5px ${indent?16:8}px;${bold?'font-weight:700;background:rgba(56,139,253,.04)':''}border-bottom:1px solid var(--border);font-size:13px">
+      <span class="${cls}">${label}</span>
+      <span class="${cls}" style="font-feature-settings:'tnum';direction:ltr">${fmtC(val)}</span>
+    </div>`;
+
+  setPage('📊 قائمة الدخل — P&L','Income Statement — EAS 1',
+    `<button class="btn btn-white" onclick="go('balancesheet')">الميزانية</button>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">صافي المبيعات</div><div class="val">${fmtC(netSales)}</div></div>
+      <div class="stat-card"><div class="lbl ${grossProfit>=0?'text-green':'text-red'}">مجمل الربح</div><div class="val ${grossProfit>=0?'text-green':'text-red'}">${fmtC(grossProfit)}</div></div>
+      <div class="stat-card"><div class="lbl">هامش مجمل</div><div class="val">${gpm.toFixed(1)}%</div></div>
+      <div class="stat-card"><div class="lbl ${netIncome>=0?'text-green':'text-red'}">صافي الربح</div><div class="val ${netIncome>=0?'text-green':'text-red'}">${fmtC(netIncome)}</div></div>
+    </div>
+    <div class="card">
+      ${plRow('إجمالي المبيعات',grossSales,'',0,false)}
+      ${plRow('( مردودات ومسموحات )',returns,'text-red',1)}
+      ${plRow('صافي المبيعات',netSales,'',0,true)}
+      ${plRow('( تكلفة البضاعة المباعة COGS )',cogs,'text-red',1)}
+      ${plRow('مجمل الربح',grossProfit,grossProfit>=0?'text-green':'text-red',0,true)}
+      <div style="height:8px"></div>
+      ${plRow('( مصروفات تصنيع — overhead )',mfgOH,'',1)}
+      ${plRow('( مصروفات الجودة QC/QA )',qcExp,'',1)}
+      ${plRow('( مصروفات البيع والتوزيع )',sellExp,'',1)}
+      ${plRow('( مصروفات إدارية عامة )',adminExp,'',1)}
+      ${plRow('إجمالي المصروفات التشغيلية',totalOpExp,'text-amber',0,true)}
+      ${plRow('ربح التشغيل EBIT',ebit,ebit>=0?'text-green':'text-red',0,true)}
+      <div style="height:8px"></div>
+      ${plRow('+ إيرادات أخرى',otherIncome,'text-green',1)}
+      ${plRow('( مصروفات مالية )',finExp,'text-red',1)}
+      ${plRow('الربح قبل الضريبة EBT',ebt,ebt>=0?'text-green':'text-red',0,true)}
+      ${plRow(`( ضريبة الدخل ${(EGY_CORP_TAX*100)}% — قانون 91/2005 )`,taxExp,'text-red',1)}
+      <div style="padding:10px 8px;font-size:16px;font-weight:900;display:flex;justify-content:space-between;background:${netIncome>=0?'rgba(46,160,67,.08)':'rgba(248,81,73,.08)'}">
+        <span>صافي الربح / الخسارة</span>
+        <span style="color:${netIncome>=0?'var(--green-light)':'var(--red)'}">${fmtC(netIncome)}</span>
+      </div>
+      <div style="padding:8px;font-size:12px;color:var(--muted);text-align:center">
+        هامش الربح الصافي: ${npm.toFixed(2)}% | EAS 1 — معايير المحاسبة المصرية
+      </div>
+    </div>`
+  );
+};
+
+// ── E. الميزانية العمومية المحسّنة ───────────────────────────────
+
+PAGES.balancesheet = function(){
+  initCOA();
+  const accs   = getAll('accounts')||[];
+  const typeTotal = (type,cat)=>{
+    return accs.filter(a=>a.type===type&&(!cat||a.cat===cat)&&!a.summary)
+      .reduce((s,a)=>s+calcAccountBalance(a.code),0);
+  };
+
+  const cashBal     = typeTotal('asset','current') - typeTotal('asset','fixed') - typeTotal('asset','longterm');
+  const currentAss  = typeTotal('asset','current');
+  const fixedAss    = typeTotal('asset','fixed');
+  const totalAss    = currentAss + fixedAss + typeTotal('asset','longterm');
+  const currentLiab = typeTotal('liability','current');
+  const longLiab    = typeTotal('liability','longterm');
+  const totalLiab   = currentLiab + longLiab;
+  const equity      = typeTotal('equity',null);
+  const revenue     = typeTotal('revenue',null);
+  const expenses    = typeTotal('expense',null);
+  const netIncome   = Math.abs(revenue) - Math.abs(expenses);
+  const totalEqInc  = equity + netIncome;
+
+  const bsRow=(label,val,indent=0,bold=false,color='')=>`
+    <div style="display:flex;justify-content:space-between;padding:4px ${indent?20:8}px;${bold?'font-weight:700;':''}border-bottom:1px solid var(--border);font-size:12px">
+      <span>${label}</span>
+      <span style="direction:ltr;color:${color||'inherit'}">${fmtC(Math.abs(val))}</span>
+    </div>`;
+
+  setPage('📊 الميزانية العمومية — Balance Sheet','EAS 1 + قانون 127/1981',
+    `<div style="display:flex;gap:8px">
+      <button class="btn btn-white" onclick="go('incomestatement')">📊 قائمة الدخل</button>
+      <button class="btn btn-white" onclick="go('cashflow')">💧 التدفقات النقدية</button>
+      <button class="btn btn-white" onclick="go('trialbalance')">⚖️ ميزان مراجعة</button>
+    </div>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي الأصول</div><div class="val text-blue">${fmtC(totalAss)}</div></div>
+      <div class="stat-card"><div class="lbl">إجمالي الالتزامات</div><div class="val text-red">${fmtC(totalLiab)}</div></div>
+      <div class="stat-card"><div class="lbl">حقوق الملكية</div><div class="val text-purple">${fmtC(totalEqInc)}</div></div>
+      <div class="stat-card"><div class="lbl ${netIncome>=0?'text-green':'text-red'}">صافي الربح</div><div class="val ${netIncome>=0?'text-green':'text-red'}">${fmtC(netIncome)}</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="card">
+        <div style="font-weight:700;font-size:13px;margin-bottom:10px;color:var(--blue)">الأصول</div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px">الأصول المتداولة</div>
+        ${accs.filter(a=>a.type==='asset'&&a.cat==='current'&&!a.summary).map(a=>bsRow(a.name,calcAccountBalance(a.code),1)).join('')}
+        ${bsRow('إجمالي الأصول المتداولة',currentAss,0,true,'var(--blue)')}
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin:8px 0 4px">الأصول الثابتة</div>
+        ${accs.filter(a=>a.type==='asset'&&a.cat==='fixed'&&!a.summary&&!a.contra).map(a=>bsRow(a.name,calcAccountBalance(a.code),1)).join('')}
+        ${bsRow('إجمالي الأصول الثابتة (صافي)',fixedAss,0,true,'var(--blue)')}
+        ${bsRow('إجمالي الأصول',totalAss,0,true,'var(--blue)')}
+      </div>
+      <div class="card">
+        <div style="font-weight:700;font-size:13px;margin-bottom:10px;color:var(--red)">الالتزامات وحقوق الملكية</div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px">الالتزامات المتداولة</div>
+        ${accs.filter(a=>a.type==='liability'&&a.cat==='current'&&!a.summary).map(a=>bsRow(a.name,calcAccountBalance(a.code),1)).join('')}
+        ${bsRow('إجمالي الالتزامات المتداولة',currentLiab,0,true,'var(--red)')}
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin:8px 0 4px">حقوق الملكية</div>
+        ${accs.filter(a=>a.type==='equity'&&!a.summary).map(a=>bsRow(a.name,calcAccountBalance(a.code),1)).join('')}
+        ${bsRow('صافي الربح/الخسارة',netIncome,1,false,netIncome>=0?'var(--green-light)':'var(--red)')}
+        ${bsRow('إجمالي حقوق الملكية',totalEqInc,0,true,'var(--purple)')}
+        ${bsRow('إجمالي الالتزامات وحقوق الملكية',totalLiab+totalEqInc,0,true)}
+      </div>
+    </div>`
+  );
+};
+
+// ── F. التدفقات النقدية — Cash Flow (EAS 4) ───────────────────────
+
+PAGES.cashflow = function(){
+  initCOA();
+  const entries  = getAll('journalEntries')||[];
+
+  // Operating CF: cash movements in operating accounts
+  const cashAccs = ['1101','1102','1103','1104'];
+  function cashMove(source, positive){
+    return entries.filter(e=>e.source===source)
+      .reduce((s,e)=>{
+        const cashLines=(e.lines||[]).filter(l=>cashAccs.includes(l.accountCode));
+        return s + cashLines.reduce((ss,l)=>ss+(positive?Number(l.debit||0)-Number(l.credit||0):Number(l.credit||0)-Number(l.debit||0)),0);
+      },0);
+  }
+
+  const cfOp_collections = cashMove('collection', true);
+  const cfOp_payments    = cashMove('payment', false);
+  const cfOp_salary      = cashMove('payroll', false);
+  const cfOp_ops         = cashMove('manual', false);
+  const cfOperating      = cfOp_collections - cfOp_payments - cfOp_salary - cfOp_ops;
+
+  const cfInvesting      = cashMove('depreciation', false) * -1; // نهج مبسط
+  const cfFinancing      = 0; // يحتاج قيود تمويل
+
+  const netCF = cfOperating + cfInvesting + cfFinancing;
+
+  const cfRow=(label,val,indent=0,bold=false)=>`
+    <div style="display:flex;justify-content:space-between;padding:5px ${indent?20:8}px;${bold?'font-weight:700;background:var(--hover);':''}border-bottom:1px solid var(--border);font-size:12px">
+      <span>${label}</span>
+      <span style="direction:ltr;color:${val>=0?'inherit':'var(--red)'}">${val>=0?'+':''}${fmtC(val)}</span>
+    </div>`;
+
+  setPage('💧 التدفقات النقدية — Cash Flow','EAS 4 — الطريقة الغير مباشرة',
+    `<button class="btn btn-white" onclick="go('balancesheet')">← الميزانية</button>`,
+    `<div class="stats-grid g3" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl ${cfOperating>=0?'text-green':'text-red'}">تدفق تشغيلي</div><div class="val ${cfOperating>=0?'text-green':'text-red'}">${fmtC(cfOperating)}</div></div>
+      <div class="stat-card"><div class="lbl">تدفق استثماري</div><div class="val">${fmtC(cfInvesting)}</div></div>
+      <div class="stat-card"><div class="lbl ${netCF>=0?'text-green':'text-red'}">صافي التدفق</div><div class="val ${netCF>=0?'text-green':'text-red'}">${fmtC(netCF)}</div></div>
+    </div>
+    <div class="card">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px">أولاً: التدفقات من الأنشطة التشغيلية</div>
+      ${cfRow('+ تحصيلات من العملاء',cfOp_collections,1)}
+      ${cfRow('- مدفوعات للموردين',-cfOp_payments,1)}
+      ${cfRow('- مدفوعات رواتب',-cfOp_salary,1)}
+      ${cfRow('- مصروفات تشغيلية أخرى',-cfOp_ops,1)}
+      ${cfRow('صافي التدفق التشغيلي',cfOperating,0,true)}
+      <div style="height:8px"></div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px">ثانياً: التدفقات من الأنشطة الاستثمارية</div>
+      ${cfRow('- مشتريات أصول ثابتة',cfInvesting,1)}
+      ${cfRow('صافي التدفق الاستثماري',cfInvesting,0,true)}
+      <div style="height:8px"></div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px">ثالثاً: التدفقات من الأنشطة التمويلية</div>
+      ${cfRow('قروض وتمويل',0,1)}
+      ${cfRow('صافي التدفق التمويلي',cfFinancing,0,true)}
+      <div style="padding:10px 8px;font-size:15px;font-weight:900;display:flex;justify-content:space-between;background:${netCF>=0?'rgba(46,160,67,.08)':'rgba(248,81,73,.08)'}">
+        <span>صافي الزيادة/النقص في النقدية</span>
+        <span style="color:${netCF>=0?'var(--green-light)':'var(--red)'}">${fmtC(netCF)}</span>
+      </div>
+      <div style="padding:6px 8px;font-size:10px;color:var(--muted)">
+        EAS 4 — بيان التدفقات النقدية (الطريقة غير المباشرة)
+      </div>
+    </div>`
+  );
+};
+
+// ── G. الموازين التاريخية — Opening Balances ─────────────────────
+
+PAGES.openingbalances = function(){
+  initCOA();
+  const accs = (getAll('accounts')||[]).filter(a=>!a.summary);
+  const years= getAll('historicalBalances')||[];
+  const selYear = window._hbYear || (new Date().getFullYear()-1);
+  const hb = years.find(h=>h.year===selYear)||{year:selYear,balances:{}};
+
+  setPage('📅 الموازين التاريخية','Opening Balances — أرصدة بداية السنوات',
+    `<div style="display:flex;gap:8px">
+      <button class="btn btn-green" onclick="saveOpeningBalances()">💾 حفظ الموازين</button>
+      <button class="btn btn-white" onclick="go('journal')">← اليومية</button>
+    </div>`,
+    `<div class="form-row" style="margin-bottom:12px">
+      ${fg('السنة المالية', `<select id="hb-year" onchange="window._hbYear=Number(this.value);go('openingbalances')"
+        style="width:200px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        ${[2022,2023,2024,2025,2026].map(y=>`<option value="${y}" ${y===selYear?'selected':''}>${y}</option>`).join('')}
+      </select>`)}
+    </div>
+    <div style="padding:10px;background:rgba(56,139,253,.06);border-radius:8px;margin-bottom:12px;font-size:12px">
+      💡 أدخل أرصدة نهاية السنة السابقة كبداية للسنة الجديدة — تُضاف تلقائياً لأرصدة الحسابات
+    </div>
+    <div class="card">
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;font-size:11px;font-weight:700;color:var(--muted);padding:0 8px;margin-bottom:6px">
+        <span>الحساب</span><span>الرصيد الافتتاحي (ج.م)</span>
+      </div>
+      ${accs.map(a=>`
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-bottom:4px;align-items:center;padding:4px 8px;border-bottom:1px solid var(--border)">
+        <span style="font-size:12px"><code>${a.code}</code> ${escapeHtml(a.name)}</span>
+        <input type="number" id="hb-${a.code}" value="${hb.balances?.[a.code]||0}" min="0"
+          style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px;font-size:12px;color:var(--text);width:100%">
+      </div>`).join('')}
+    </div>`
+  );
+};
+
+function saveOpeningBalances(){
+  const year = Number(document.getElementById('hb-year')?.value)||new Date().getFullYear()-1;
+  const accs = (getAll('accounts')||[]).filter(a=>!a.summary);
+  const balances = {};
+  accs.forEach(a=>{
+    const v = Number(document.getElementById(`hb-${a.code}`)?.value||0);
+    if(v) balances[a.code] = v;
+  });
+  const existing = (getAll('historicalBalances')||[]).find(h=>h.year===year);
+  if(existing){ update('historicalBalances',existing.id,{year,balances,updatedAt:new Date().toISOString()}); }
+  else { insert('historicalBalances',{year,balances,createdAt:new Date().toISOString()}); }
+  showNotif&&showNotif(`✅ تم حفظ الموازين الافتتاحية لسنة ${year}`, 'success');
+  go('openingbalances');
+}
+
+// ── H. المصروفات ─────────────────────────────────────────────────
+
+PAGES.expenses = function(){
+  initCOA();
+  const expAccs = (getAll('accounts')||[]).filter(a=>a.type==='expense'&&!a.summary);
+  const entries = getAll('journalEntries')||[];
+
+  // Total per category
+  const expByAcc = expAccs.map(a=>{
+    const total = entries.reduce((s,e)=>(e.lines||[]).filter(l=>l.accountCode===a.code).reduce((ss,l)=>ss+Number(l.debit||0),s),0);
+    return {...a, total};
+  }).filter(a=>a.total>0).sort((a,b)=>b.total-a.total);
+
+  const totalExp = expByAcc.reduce((s,a)=>s+a.total,0);
+
+  // Group by category
+  const catLabels = {cogs:'تكلفة المبيعات',manufacturing:'تصنيع',quality:'جودة',
+    selling:'بيع وتوزيع',general:'إدارية',financial:'مالية',tax:'ضرائب'};
+
+  setPage('💸 المصروفات','Expenses — تصنيف حسب الطبيعة',
+    `<div style="display:flex;gap:8px">
+      <button class="btn btn-green" onclick="showQuickExpense()">+ مصروف جديد</button>
+      <button class="btn btn-white" onclick="go('budget')">📊 الميزانية التقديرية</button>
+    </div>`,
+    `<div class="stats-grid g3" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي المصروفات</div><div class="val text-red">${fmtC(totalExp)}</div></div>
+      <div class="stat-card"><div class="lbl">أكبر بند</div><div class="val text-amber" style="font-size:13px">${escapeHtml(expByAcc[0]?.name?.slice(0,20)||'—')}</div></div>
+      <div class="stat-card"><div class="lbl">عدد بنود نشطة</div><div class="val">${expByAcc.length}</div></div>
+    </div>
+    <div class="card">
+      ${Object.entries(catLabels).map(([cat,catLabel])=>{
+        const items = expByAcc.filter(a=>a.cat===cat);
+        if(!items.length) return '';
+        const catTotal = items.reduce((s,a)=>s+a.total,0);
+        return `<div style="margin-bottom:12px">
+          <div style="font-weight:700;font-size:12px;color:var(--muted);padding:6px 8px;background:var(--hover);border-radius:6px;display:flex;justify-content:space-between;margin-bottom:6px">
+            <span>${catLabel}</span><span>${fmtC(catTotal)}</span>
+          </div>
+          ${items.map(a=>{
+            const pct = totalExp>0 ? (a.total/totalExp)*100 : 0;
+            return `<div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-bottom:1px solid var(--border)">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:12px;display:flex;justify-content:space-between">
+                  <span><code style="font-size:10px">${a.code}</code> ${escapeHtml(a.name)}</span>
+                  <strong>${fmtC(a.total)}</strong>
+                </div>
+                <div style="height:4px;background:var(--border);border-radius:2px;margin-top:3px;overflow:hidden">
+                  <div style="height:100%;width:${pct.toFixed(1)}%;background:var(--amber);border-radius:2px"></div>
+                </div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`;
+      }).join('')}
+    </div>`
+  );
+};
+
+// ── I. الميزانية التقديرية ────────────────────────────────────────
+
+PAGES.budget = function(){
+  const budgets = getAll('budgetLines')||[];
+  const entries = getAll('journalEntries')||[];
+  const curYear = new Date().getFullYear();
+  const accs    = getAll('accounts')||[];
+
+  // Actual per account from journal entries
+  function getActual(accCode){
+    return entries.reduce((s,e)=>(e.lines||[]).filter(l=>l.accountCode===accCode)
+      .reduce((ss,l)=>ss+Number(l.debit||0),s),0);
+  }
+
+  const rows = budgets.map(b=>{
+    const acc    = accs.find(a=>a.code===b.accountCode);
+    const actual = getActual(b.accountCode);
+    const pct    = Number(b.budgetAmount||0)>0 ? (actual/Number(b.budgetAmount))*100 : 0;
+    return {...b, actualAmount:actual, pct, accName:acc?.name||b.accountCode};
+  });
+
+  const totBudget = rows.reduce((s,r)=>s+Number(r.budgetAmount||0),0);
+  const totActual = rows.reduce((s,r)=>s+r.actualAmount,0);
+  const totPct    = totBudget>0 ? (totActual/totBudget)*100 : 0;
+
+  setPage('📊 الميزانية التقديرية','Budget vs Actual',
+    `<button class="btn btn-green" onclick="addBudgetLine()">+ بند ميزانية</button>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">الميزانية المخططة</div><div class="val">${fmtC(totBudget)}</div></div>
+      <div class="stat-card"><div class="lbl">الفعلي المنفق</div><div class="val">${fmtC(totActual)}</div></div>
+      <div class="stat-card"><div class="lbl ${totPct>100?'text-red':'text-green'}">نسبة الصرف</div><div class="val ${totPct>100?'text-red':'text-green'}">${totPct.toFixed(1)}%</div></div>
+      <div class="stat-card"><div class="lbl">الفرق</div><div class="val ${totActual<=totBudget?'text-green':'text-red'}">${fmtC(totBudget-totActual)}</div></div>
+    </div>
+    <div class="card">${tbl(
+      ['الحساب','السنة','الميزانية المخططة','الفعلي','الفرق','نسبة الصرف','إجراء'],
+      rows.map(r=>{
+        const over = r.actualAmount > Number(r.budgetAmount||0);
+        return tr(
+          `<div><code style="font-size:10px">${r.accountCode}</code> ${escapeHtml(r.accName)}</div>`,
+          r.year||curYear,
+          fmtC(r.budgetAmount||0),
+          `<span style="color:${over?'var(--red)':'inherit'}">${fmtC(r.actualAmount)}</span>`,
+          `<span style="color:${over?'var(--red)':'var(--green-light)'}">${over?'-':'+'} ${fmtC(Math.abs(Number(r.budgetAmount||0)-r.actualAmount))}</span>`,
+          `<div style="display:flex;align-items:center;gap:6px">
+            <div style="width:80px;height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+              <div style="height:100%;width:${Math.min(100,r.pct).toFixed(0)}%;background:${over?'var(--red)':'var(--green)'};border-radius:4px"></div>
+            </div>
+            <span style="font-size:11px;color:${over?'var(--red)':'inherit'}">${r.pct.toFixed(0)}%</span>
+          </div>`,
+          `<button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('budgetLines',${r.id});go('budget')}">${ic.del}</button>`
+        );
+      })
+    ,'tbl_budget')}</div>`
+  );
+};
+
+function addBudgetLine(){
+  initCOA();
+  const expAccs = (getAll('accounts')||[]).filter(a=>a.type==='expense'&&!a.summary);
+  showModal(modal('+ بند ميزانية تقديرية',`
+    <div class="form-row">
+      ${fg('الحساب *', `<select id="bl-acc" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        ${expAccs.map(a=>`<option value="${a.code}">${a.code} — ${escapeHtml(a.name)}</option>`).join('')}
+      </select>`)}
+      ${fg('السنة', inp('bl-year','number',new Date().getFullYear(),''))}
+    </div>
+    <div class="form-row">
+      ${fg('الميزانية المخططة (ج.م) *', inp('bl-amount','number','',''))}
+      ${fg('ملاحظات', inp('bl-notes','text','',''))}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveBudgetLine()">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+function saveBudgetLine(){
+  const acc=document.getElementById('bl-acc')?.value;
+  const amount=numVal('bl-amount');
+  if(!acc||!amount) return alert('الحساب والمبلغ إلزاميان');
+  insert('budgetLines',{accountCode:acc,year:Number(val('bl-year'))||new Date().getFullYear(),
+    budgetAmount:amount,notes:val('bl-notes')||null});
+  closeModal(); go('budget');
+}
+
+// ── J. الأصول الثابتة المحسّنة (مع القيد التلقائي) ───────────────
+
+PAGES.assets = function(){
+  const rows = getAll('assets')||[];
+  const totalCost = rows.reduce((s,a)=>s+Number(a.purchaseCost||0),0);
+  const totalDep  = rows.reduce((s,a)=>s+Number(a.accDepreciation||0),0);
+  const netBook   = totalCost - totalDep;
+
+  setPage('🏗️ الأصول الثابتة — Fixed Assets',
+    'EAS 16 — القسط الثابت (Straight-Line)',
+    `<div style="display:flex;gap:8px">
+      <button class="btn btn-green" onclick="addAsset()">+ أصل جديد</button>
+      <button class="btn btn-white" onclick="runAllDepreciation()">⚙️ ترحيل إهلاك دوري</button>
+    </div>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي التكلفة</div><div class="val">${fmtC(totalCost)}</div></div>
+      <div class="stat-card"><div class="lbl">مجمع الإهلاك</div><div class="val text-amber">${fmtC(totalDep)}</div></div>
+      <div class="stat-card"><div class="lbl">صافي القيمة الدفترية</div><div class="val text-blue">${fmtC(netBook)}</div></div>
+      <div class="stat-card"><div class="lbl">عدد الأصول</div><div class="val">${rows.length}</div></div>
+    </div>
+    <div class="card">${tbl(
+      ['الأصل','التصنيف','التكلفة','الإهلاك السنوي','مجمع الإهلاك','صافي القيمة','رُحِّل؟','إجراء'],
+      rows.map(a=>{
+        const annualDep = Number(a.annualDepreciation||0);
+        const accDep    = Number(a.accDepreciation||0);
+        const net       = Number(a.purchaseCost||0) - accDep;
+        const deprPct   = Number(a.purchaseCost||0)>0 ? (accDep/Number(a.purchaseCost))*100 : 0;
+        return tr(
+          `<div><strong>${escapeHtml(a.name||'—')}</strong>
+           <div style="font-size:10px;color:var(--muted)">${a.purchaseDate||'—'}</div></div>`,
+          escapeHtml(a.category||'—'),
+          fmtC(a.purchaseCost||0),
+          fmtC(annualDep),
+          `<span>${fmtC(accDep)}</span>
+           <div style="height:4px;background:var(--border);border-radius:2px;margin-top:2px;overflow:hidden">
+             <div style="height:100%;width:${Math.min(100,deprPct).toFixed(0)}%;background:var(--amber);border-radius:2px"></div>
+           </div>`,
+          `<strong>${fmtC(net)}</strong>`,
+          a.lastDepreciationDate ? `<span class="badge b-green" style="font-size:10px">✅ ${a.lastDepreciationDate}</span>` : '<span class="badge b-gray" style="font-size:10px">معلق</span>',
+          `<div class="action-bar" style="gap:3px">
+            <button class="btn btn-white btn-sm" style="font-size:10px" onclick="runDepreciation(${a.id})">إهلاك</button>
+            <button class="icon-btn edit" onclick="editAsset(${a.id})">${ic.edit}</button>
+            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('assets',${a.id});go('assets')}">${ic.del}</button>
+          </div>`
+        );
+      })
+    ,'tbl_assets')}</div>`
+  );
+};
+
+function addAsset(){ showAssetForm(); }
+function editAsset(id){ showAssetForm(getById('assets',id)||{}); }
+function showAssetForm(a={}){
+  const assetCategories = [
+    {v:'buildings',l:'🏢 مباني وإنشاءات',depr:'1551',exp:'5507',rate:5},
+    {v:'production',l:'⚙️ خطوط إنتاج ومعدات',depr:'1552',exp:'5204',rate:10},
+    {v:'lab',l:'🔬 أجهزة مختبر QC',depr:'1553',exp:'5507',rate:20},
+    {v:'vehicles',l:'🚗 سيارات وأسطول',depr:'1554',exp:'5403',rate:25},
+    {v:'computers',l:'💻 حاسب آلي وبرامج',depr:'1555',exp:'5507',rate:33},
+    {v:'furniture',l:'🪑 أثاث وتجهيزات',depr:'1556',exp:'5507',rate:10},
+    {v:'intangible',l:'📄 أصول غير ملموسة (EDA)',depr:'1556',exp:'5507',rate:20},
+  ];
+  showModal(modal(a.id?'تعديل أصل':'🏗️ أصل ثابت جديد',`
+    ${fg('اسم الأصل *', inp('ast-name','text',a.name||'',''))}
+    <div class="form-row">
+      ${fg('التصنيف', `<select id="ast-cat" onchange="updateAssetRate(this.value)" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        ${assetCategories.map(c=>`<option value="${c.v}" data-rate="${c.rate}" data-depr="${c.depr}" ${(a.category||'furniture')===c.v?'selected':''}>${c.l}</option>`).join('')}
+      </select>`)}
+      ${fg('تاريخ الشراء', inp('ast-date','date',a.purchaseDate||today()))}
+    </div>
+    <div class="form-row">
+      ${fg('تكلفة الشراء (ج.م) *', inp('ast-cost','number',a.purchaseCost||'',''))}
+      ${fg('العمر الإنتاجي (سنة)', inp('ast-life','number',a.usefulLife||10,''))}
+    </div>
+    <div class="form-row">
+      ${fg('معدل الإهلاك % سنوياً', inp('ast-rate','number',a.depreciationRate||(a.category?10:10),''))}
+      ${fg('القيمة التخريدية (ج.م)', inp('ast-scrap','number',a.salvageValue||0,''))}
+    </div>
+    <div id="ast-dep-preview" style="padding:8px;background:var(--hover);border-radius:6px;margin-top:6px;font-size:12px"></div>
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveAsset(${a.id||''})">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+  setTimeout(()=>updateAssetRate(a.category||'furniture'),100);
+}
+
+function updateAssetRate(catVal){
+  const rates={buildings:5,production:10,lab:20,vehicles:25,computers:33,furniture:10,intangible:20};
+  const el = document.getElementById('ast-rate');
+  if(el && !el.value) el.value = rates[catVal]||10;
+  updateAssetPreview();
+}
+
+function updateAssetPreview(){
+  const cost = numVal('ast-cost')||0;
+  const rate = numVal('ast-rate')||0;
+  const scrap= numVal('ast-scrap')||0;
+  const life = numVal('ast-life')||0;
+  const annual = (cost-scrap)*rate/100;
+  const el = document.getElementById('ast-dep-preview');
+  if(el && cost && rate){
+    el.innerHTML = `إهلاك سنوي: <strong>${fmtC(annual)}</strong> | الفترة الإجمالية: ${life} سنة | القيمة الدفترية بعد ${life} سنة: ${fmtC(Math.max(scrap,cost-annual*life))}`;
+  }
+}
+
+function saveAsset(id){
+  const name = val('ast-name');
+  const cost = numVal('ast-cost');
+  if(!name||!cost) return alert('الاسم والتكلفة إلزاميان');
+  const cat  = document.getElementById('ast-cat')?.value||'furniture';
+  const deprAccMap={buildings:'1551',production:'1552',lab:'1553',vehicles:'1554',computers:'1555',furniture:'1556',intangible:'1556'};
+  const rate = Number(val('ast-rate'))||10;
+  const life = Number(val('ast-life'))||10;
+  const scrap= Number(val('ast-scrap'))||0;
+  const d={
+    name, category:cat,
+    purchaseCost:cost, purchaseDate:document.getElementById('ast-date')?.value||today(),
+    usefulLife:life, depreciationRate:rate, salvageValue:scrap,
+    annualDepreciation:(cost-scrap)*rate/100,
+    monthlyDepreciation:(cost-scrap)*rate/100/12,
+    accDepreciation:id?getById('assets',id)?.accDepreciation||0:0,
+    accumDeprAccount:deprAccMap[cat]||'1555',
+    status:'active',
+  };
+  // Journal entry for asset purchase (new asset only)
+  if(!id){
+    autoJournalEntry(`شراء أصل — ${name}`,
+      [{accountCode:'1503',debit:cost,credit:0},  // الأصل
+       {accountCode:'1102',debit:0,credit:cost}],  // بنك
+      null, 'purchase');
+  }
+  id?update('assets',id,d):insert('assets',d);
+  closeModal(); go('assets');
+}
+
+function runDepreciation(assetId){
+  const a = getById('assets', assetId); if(!a) return;
+  const monthly = Number(a.monthlyDepreciation||0);
+  if(!monthly){ alert('لا إهلاك محدد لهذا الأصل'); return; }
+  const periods = prompt(`أدخل عدد الأشهر للإهلاك:`, '1');
+  if(!periods||isNaN(Number(periods))) return;
+  const months = Number(periods);
+  const amount = monthly * months;
+  if(amount > Number(a.purchaseCost||0)-Number(a.accDepreciation||0)-Number(a.salvageValue||0)){
+    alert('الإهلاك يتجاوز القيمة الدفترية الصافية'); return;
+  }
+  const je = jeDepreciation(assetId, a.name, amount, a.accumDeprAccount);
+  update('assets', assetId, {
+    accDepreciation: Number(a.accDepreciation||0)+amount,
+    lastDepreciationDate: today(),
+    lastDepreciationMonths: months,
+  });
+  if(je) showNotif&&showNotif(`✅ إهلاك ${fmtC(amount)} (${months} شهر) — JE-${String(je.id).padStart(6,'0')}`, 'success');
+  go('assets');
+}
+
+function runAllDepreciation(){
+  const assets = getAll('assets').filter(a=>a.status==='active'&&a.monthlyDepreciation);
+  if(!assets.length){ alert('لا أصول بإهلاك مفعّل'); return; }
+  if(!confirm(`ترحيل إهلاك شهر واحد لـ ${assets.length} أصل؟`)) return;
+  let total = 0;
+  assets.forEach(a=>{
+    const amount = Number(a.monthlyDepreciation||0);
+    if(!amount) return;
+    if(amount > Number(a.purchaseCost||0)-Number(a.accDepreciation||0)-Number(a.salvageValue||0)) return;
+    jeDepreciation(a.id, a.name, amount, a.accumDeprAccount);
+    update('assets',a.id,{accDepreciation:Number(a.accDepreciation||0)+amount, lastDepreciationDate:today()});
+    total += amount;
+  });
+  showNotif&&showNotif(`✅ تم ترحيل إهلاك ${assets.length} أصل — إجمالي ${fmtC(total)}`, 'success');
+  go('assets');
+}
+
+// ── K. تحليل التكلفة — Cost Analysis ─────────────────────────────
+
+PAGES.costanalysis = function(){
+  const prods   = getAll('products')||[];
+  const pos     = getAll('productionOrders')||[];
+  const batchM  = getAll('batchMaterials')||[];
+  const invs    = getAll('salesInvoices')||[];
+
+  const prodAnalysis = prods.map(p=>{
+    const pOrders = pos.filter(o=>o.productId===p.id&&o.status==='completed');
+    const totalProduced= pOrders.reduce((s,o)=>s+Number(o.batchSize||o.quantity||0),0);
+    const matCost = pOrders.reduce((s,o)=>{
+      const bm = batchM.filter(b=>b.productionOrderId===o.id);
+      return s + bm.reduce((ss,m)=>ss+Number(m.quantity||0)*Number(m.unitCostAtTime||0),0);
+    },0);
+    const cmoCost = pOrders.reduce((s,o)=>s+Number(o.cmoAmount||0),0);
+    const totalCost = matCost+cmoCost;
+    const unitCost  = totalProduced>0 ? totalCost/totalProduced : 0;
+    const salePrice = Number(p.sellingPrice||0);
+    const margin    = salePrice>0 ? ((salePrice-unitCost)/salePrice)*100 : 0;
+    const revenue   = invs.filter(i=>(i.lines||[]).some(l=>l.productId===p.id))
+      .reduce((s,i)=>(i.lines||[]).filter(l=>l.productId===p.id).reduce((ss,l)=>ss+l.lineTotal||0,s),0);
+    return {...p, totalProduced, matCost, cmoCost, totalCost, unitCost, margin, revenue};
+  });
+
+  setPage('📈 تحليل التكلفة — Cost Analysis','تكلفة الوحدة وهامش الربح',
+    `<button class="btn btn-white" onclick="go('incomestatement')">← الدخل</button>`,
+    `<div class="card">${tbl(
+      ['المنتج','الكمية المنتجة','تكلفة مواد','تكلفة CMO','التكلفة الكلية','تكلفة الوحدة','سعر البيع','هامش الربح %','الإيراد الكلي'],
+      prodAnalysis.map(p=>tr(
+        escapeHtml(p.name||'—'),
+        fmtN(p.totalProduced||0),
+        fmtC(p.matCost||0),
+        fmtC(p.cmoCost||0),
+        fmtC(p.totalCost||0),
+        `<strong>${fmtC(p.unitCost||0)}</strong>`,
+        fmtC(p.sellingPrice||0),
+        `<span class="badge ${p.margin>=30?'b-green':p.margin>=15?'b-amber':'b-red'}">${p.margin.toFixed(1)}%</span>`,
+        fmtC(p.revenue||0)
+      ))
+    ,'tbl_cost')}</div>`
+  );
+};
+
 
 // renderNav/go called by coEnter() after company is selected
 
