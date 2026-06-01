@@ -604,22 +604,22 @@ const navItems=[
   {id:'products',icon:'💊',label:'المنتجات',sec:'الإنتاج'},
   {id:'labels',icon:'🏷️',label:'الملصقات والباركود',sec:'الإنتاج'},
   {id:'materials',icon:'🧪',label:'المواد الخام والتغليف',sec:'الإنتاج'},
-  {id:'cmos',icon:'🏭',label:'المصانع (CMO)',sec:'الإنتاج'},
+  {id:'cmoscorecard',icon:'🏭',label:'المصانع (CMO)',sec:'الإنتاج'},
   {id:'production',icon:'📋',label:'أوامر الإنتاج',sec:'الإنتاج'},
   {id:'quality',icon:'🔬',label:'ضبط الجودة QC',sec:'الإنتاج'},
   {id:'bom',icon:'📋',label:'وصفة الإنتاج (BOM)',sec:'الإنتاج'},
   {id:'batchrecords',icon:'📊',label:'سجلات الدفعات (BPR)',sec:'الإنتاج'},
-  {id:'inventory',icon:'🏪',label:'المخزون',sec:'المخزون'},
+  {id:'expiry',icon:'🏪',label:'المخزون',sec:'المخزون'},
   {id:'expiry',icon:'📅',label:'صلاحية المنتجات',sec:'المخزون'},
-  {id:'registration',icon:'📑',label:'التسجيل الدوائي',sec:'المخزون'},
+  {id:'drugregistration',icon:'📑',label:'التسجيل الدوائي',sec:'المخزون'},
   {id:'distributors',icon:'🏢',label:'الموزعون',sec:'المبيعات'},
-  {id:'deliveries',icon:'🚚',label:'التوريد والمبيعات',sec:'المبيعات'},
+  {id:'salesorders',icon:'🚚',label:'التوريد والمبيعات',sec:'المبيعات'},
   {id:'returns',icon:'🔄',label:'المرتجعات',sec:'المبيعات'},
   {id:'receivables',icon:'💳',label:'الحسابات والذمم',sec:'المبيعات'},
   {id:'salesvstarget',icon:'📊',label:'المبيعات vs الأهداف',sec:'المبيعات'},
   {id:'salesorders',icon:'📋',label:'أوامر البيع',sec:'المبيعات'},
   {id:'salesinvoices',icon:'📄',label:'فواتير المبيعات',sec:'المبيعات'},
-  {id:'delivery',icon:'🚚',label:'الشحن والتوزيع',sec:'المبيعات'},
+  {id:'salesorders',icon:'🚚',label:'الشحن والتوزيع',sec:'المبيعات'},
   {id:'purchasing',icon:'📦',label:'المشتريات',sec:'المالية'},
   {id:'partners',icon:'🤝',label:'جاري الشركاء',sec:'المالية'},
   {id:'shareholders',icon:'👥',label:'تحليل المساهمين',sec:'المالية'},
@@ -637,9 +637,9 @@ const navItems=[
   {id:'costanalysis',icon:'📉',label:'تحليل التكلفة',sec:'المالية'},
   {id:'reports',icon:'📈',label:'التقارير المالية',sec:'المالية'},
   {id:'accounts',icon:'📚',label:'دليل الحسابات',sec:'المالية'},
-  {id:'journal',icon:'📒',label:'دفتر اليومية',sec:'المالية'},
+  
   {id:'balancesheet',icon:'📊',label:'الميزانية العمومية',sec:'المالية'},
-  {id:'manufacturingcost',icon:'⚙️',label:'تكاليف التصنيع',sec:'المالية'},
+  {id:'costanalysis',icon:'⚙️',label:'تكاليف التصنيع',sec:'المالية'},
   {id:'incomestatement',icon:'📈',label:'قائمة الدخل P&L',sec:'المالية'},
   {id:'cashflow',icon:'💧',label:'التدفقات النقدية',sec:'المالية'},
   {id:'openingbalances',icon:'📅',label:'الموازين التاريخية',sec:'المالية'},
@@ -672,7 +672,7 @@ const navItems=[
   {id:'savedreports',icon:'📋',label:'التقارير المخصصة',sec:'التقارير'},
   {id:'supplierscorecard',icon:'🏭',label:'تقييم الموردين',sec:'التقارير'},
   {id:'customreport',icon:'📋',label:'التقارير المخصصة',sec:'التقارير'},
-  {id:'productionstages',icon:'🔬',label:'مراحل الإنتاج (Stages)',sec:'الإنتاج'},
+  {id:'production',icon:'🔬',label:'مراحل الإنتاج (Stages)',sec:'الإنتاج'},
   {id:'cmoscorecard',icon:'📊',label:'تقييم المصانع Scorecard',sec:'الإنتاج'},
   {id:'cyclecounting',icon:'📊',label:'الجرد الدوري Cycle Count',sec:'المخزون'},
   {id:'warehouses',icon:'🏭',label:'المستودعات',sec:'المخزون'},
@@ -5994,7 +5994,7 @@ function editBOMEntry(id){
         <optgroup label="مواد تغليف">${pkg.map(m=>`<option value="${m.id}"${m.id===b.materialId?' selected':''}>${m.name} (${m.unit})</option>`).join('')}</optgroup>
       </select>
     </div>
-    ${fg('الكمية لكل وحدة منتج *',inp('bom-qty','number',b.quantityPerUnit,'الكمية'))}
+    ${fg('الكمية لكل وحدة منتج *',inp('bom-qty2','number',b.quantityPerUnit,'الكمية'))}
     <div class="form-actions">
       <button class="btn btn-green" onclick="updateBOMEntry(${id})">💾 حفظ</button>
       <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
@@ -7364,126 +7364,6 @@ function _filterNav(){
 // _filterNav is called after each navigation
 
 // Override coEnter to restore session or show login
-const _origCoEnterFlow = _showLoginScreen;
-// Already patched above — on coEnter we call _showLoginScreen
-// But if session exists, skip login
-function _showLoginScreen(){
-  if(_restoreSession()){
-    // Already logged in — just update UI
-    document.getElementById('_auth_login') && (document.getElementById('_auth_login').style.display='none');
-    _updateBadge();
-    _filterNav();
-    go('dashboard');
-    return;
-  }
-  // Show login UI
-  const users = getAll('appUsers');
-  const isFirst = users.length === 0;
-  let el = document.getElementById('_auth_login');
-  if(!el){
-    el = document.createElement('div');
-    el.id = '_auth_login';
-    el.style.cssText = 'position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0d1117,#161b22);display:flex;align-items:center;justify-content:center;font-family:Cairo,sans-serif;direction:rtl';
-    document.body.appendChild(el);
-  }
-  el.style.display = 'flex';
-  el.innerHTML = `
-    <div style="width:100%;max-width:380px;padding:16px">
-      <div style="text-align:center;margin-bottom:28px">
-        <div style="width:64px;height:64px;background:linear-gradient(135deg,#2ea043,#1a7f37);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 12px">💊</div>
-        <h1 style="color:#fff;font-size:20px;font-weight:700;margin:0">نظام ERP الدوائي</h1>
-        <p style="color:#8b949e;font-size:12px;margin:6px 0 0">سجّل الدخول للمتابعة</p>
-      </div>
-      <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:22px">
-        <div style="margin-bottom:14px">
-          <label style="color:#8b949e;font-size:11px;display:block;margin-bottom:5px">اسم المستخدم</label>
-          <input id="_au" type="text" placeholder="أدخل اسم المستخدم" autocomplete="username"
-            style="width:100%;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px 12px;font-size:13px;color:#fff;font-family:Cairo,sans-serif;box-sizing:border-box;outline:none"
-            onkeydown="if(event.key==='Enter')document.getElementById('_ap').focus()">
-        </div>
-        <div style="margin-bottom:18px">
-          <label style="color:#8b949e;font-size:11px;display:block;margin-bottom:5px">كلمة المرور</label>
-          <input id="_ap" type="password" placeholder="كلمة المرور" autocomplete="current-password"
-            style="width:100%;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px 12px;font-size:13px;color:#fff;font-family:Cairo,sans-serif;box-sizing:border-box;outline:none"
-            onkeydown="if(event.key==='Enter')_doLogin()">
-        </div>
-        <div id="_aerr" style="display:none;color:#f85149;font-size:11px;margin-bottom:12px;padding:8px;background:rgba(248,81,73,.1);border-radius:6px;text-align:center"></div>
-        <button onclick="_doLogin()"
-          style="width:100%;background:linear-gradient(135deg,#2ea043,#1a7f37);color:#fff;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:Cairo,sans-serif">
-          تسجيل الدخول
-        </button>
-      </div>
-      ${isFirst?`<div style="margin-top:12px;padding:10px;background:rgba(46,160,67,.08);border:1px solid rgba(46,160,67,.2);border-radius:8px;font-size:11px;color:#8b949e;text-align:center">
-        🔑 أول دخول — اسم المستخدم: <strong style="color:#fff">admin</strong> &nbsp;|&nbsp; كلمة المرور: <strong style="color:#fff">admin123</strong>
-      </div>`:''}
-    </div>`;
-  setTimeout(()=>document.getElementById('_au')?.focus(), 150);
-}
-
-// ── PAGES.users — إدارة المستخدمين ───────────────────────────
-PAGES.users = function(){
-  if(_authUser?.role!=='admin'){
-    showNotif&&showNotif('⛔ هذه الصفحة للمدير فقط','error');
-    go('dashboard'); return;
-  }
-  const users = getAll('appUsers');
-
-  setPage('⚙️ الإعدادات — المستخدمون والصلاحيات',
-    `${users.length} مستخدم مسجل`,
-    `<button class="btn btn-green" onclick="_addUser()">${ic.plus} مستخدم جديد</button>`,
-    `<!-- KPIs -->
-    <div class="stats-grid g4" style="margin-bottom:16px">
-      ${Object.entries(_ROLES).map(([k,r])=>`
-        <div class="stat-card">
-          <div class="lbl">${r.icon} ${r.label}</div>
-          <div class="val" style="color:${r.color}">${users.filter(u=>u.role===k).length}</div>
-          <div class="sub">مستخدم</div>
-        </div>`).join('')}
-    </div>
-
-    <!-- Users table -->
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-head"><h2>👥 قائمة المستخدمين</h2></div>
-      ${tbl(
-        ['اسم الدخول','الاسم الكامل','الدور','الصلاحيات','الحالة',''],
-        users.map(u=>{
-          const r = _ROLES[u.role]||{};
-          const pages = r.all?'كل الموديولات':((r.pages||[]).length+' صفحة');
-          return tr(
-            `<code class="fw7">${u.username}</code>`,
-            u.name||'—',
-            `<span style="padding:3px 8px;border-radius:6px;font-size:12px;font-weight:600;background:${r.color}22;color:${r.color}">${r.icon} ${r.label||u.role}</span>`,
-            `<span style="font-size:11px;color:var(--muted)">${pages}</span>`,
-            u.active!==false?'<span class="badge b-green">نشط</span>':'<span class="badge b-red">موقوف</span>',
-            u.username==='admin'
-              ?'<span style="font-size:10px;color:var(--muted)">محمي</span>'
-              :`<div class="action-bar">
-                <button class="icon-btn edit" onclick="_editUser(${u.id})">${ic.edit}</button>
-                <button class="icon-btn" onclick="_toggleUser(${u.id})" style="color:var(--amber)" title="${u.active!==false?'إيقاف':'تفعيل'}">${u.active!==false?'⏸':'▶'}</button>
-                <button class="icon-btn del" onclick="if(confirm('حذف المستخدم؟')){remove('appUsers',${u.id});go('users')}">${ic.del}</button>
-              </div>`
-          );
-        })
-      )}
-    </div>
-
-    <!-- Roles permissions -->
-    <div class="card" style="padding:20px">
-      <h2 style="font-size:14px;font-weight:700;margin-bottom:14px">📋 صلاحيات كل دور</h2>
-      ${Object.entries(_ROLES).map(([k,r])=>`
-        <div style="padding:10px 0;border-bottom:1px solid var(--border)">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-            <span style="font-size:18px">${r.icon}</span>
-            <strong style="color:${r.color}">${r.label}</strong>
-            ${r.all?'<span class="badge b-red">كل الصلاحيات</span>':r.readonly?'<span class="badge b-gray">قراءة فقط</span>':''}
-          </div>
-          <div style="font-size:11px;color:var(--muted);padding-right:26px">
-            ${r.all?'وصول كامل لجميع الموديولات':(r.pages||[]).join(' • ')}
-          </div>
-        </div>`).join('')}
-    </div>`
-  );
-};
 
 function _userFormHTML(u={}){
   return `
@@ -8021,24 +7901,6 @@ window._doLogin = async function(){
 };
 
 // Override _saveUser to use secure hash
-const _origSaveUser = window._saveUser;
-window._saveUser = async function(id){
-  const uname=(document.getElementById('_uu')?.value||'').trim();
-  const uname_full=(document.getElementById('_un')?.value||'').trim();
-  const pass=document.getElementById('_up')?.value||'';
-  const pass2=document.getElementById('_up2')?.value||'';
-  const role=document.getElementById('_ur')?.value||'viewer';
-  if(!uname||!uname_full){alert('يرجى تعبئة اسم الدخول والاسم الكامل');return;}
-  if(!id&&!pass){alert('يرجى إدخال كلمة المرور');return;}
-  if(pass&&pass!==pass2){alert('كلمة المرور غير متطابقة');return;}
-  if(pass&&pass.length<6){alert('كلمة المرور يجب أن تكون 6 أحرف على الأقل');return;}
-  const dup=getAll('appUsers').find(x=>x.username===uname&&(!id||x.id!==id));
-  if(dup){alert('اسم الدخول موجود بالفعل');return;}
-  const d={username:uname,name:uname_full,role,active:true};
-  if(pass) d.password = await hashPasswordSecure(pass);
-  id?update('appUsers',id,d):insert('appUsers',d);
-  closeModal();go('users');
-};
 
 // 3. صلاحيات على insert/update/remove للـ readonly users
 (function patchDBForReadonly(){
@@ -11538,7 +11400,7 @@ window.addBOMEntry = function(editId){
     </div>
 
     <div class="form-row">
-      ${fg('الكمية النظرية / وحدة إنتاج *', inp('bom-qty','number',b.quantityPerUnit||'','مثال: 500'))}
+      ${fg('الكمية النظرية / وحدة إنتاج *', inp('bom-qty3','number',b.quantityPerUnit||'','مثال: 500'))}
       ${fg('الوحدة', inp('bom-unit','text',b.unit||'mg','mg / g / ml / units'))}
     </div>
 
@@ -11828,10 +11690,10 @@ function addProduction(){
     </div>
     <div class="form-row">
       ${fg('تاريخ الأمر', inp('po-date','date',today()))}
-      ${fg('الموعد المتوقع للتسليم', inp('po-exp','date',''))}
+      ${fg('الموعد المتوقع للتسليم', inp('po-exp2','date',''))}
     </div>
     <div class="form-row">
-      ${fg('حجم الدفعة (عدد الوحدات) *', inp('po-qty','number','','مثال: 100000 قرص'))}
+      ${fg('حجم الدفعة (عدد الوحدات) *', inp('po-qty2','number','','مثال: 100000 قرص'))}
       ${fg('حجم الدفعة بالكيلو (kg)', inp('po-batch-kg','number','','للحساب الداخلي'))}
     </div>
     <div class="form-row">
@@ -11911,7 +11773,7 @@ function editProduction(id){
   const o = getById('productionOrders',id); if(!o) return;
   showModal(modal('تعديل أمر الإنتاج',`
     <div class="form-row">
-      ${fg('حجم الدفعة', inp('po-qty','number',o.quantity))}
+      ${fg('حجم الدفعة', inp('po-qty3','number',o.quantity))}
       ${fg('رقم التشغيلة', inp('po-batch','text',o.batchNumber||''))}
     </div>
     <div class="form-row">
@@ -11919,7 +11781,7 @@ function editProduction(id){
       ${fg('تكلفة الوحدة التقديرية', inp('po-ucost','number',o.unitCost))}
     </div>
     <div class="form-row">
-      ${fg('الموعد المتوقع', inp('po-exp','date',o.expectedDate||''))}
+      ${fg('الموعد المتوقع', inp('po-exp3','date',o.expectedDate||''))}
       ${fg('الحالة', sel('po-status',[
         {v:'draft',       l:'📝 مسودة'},
         {v:'approved',    l:'✅ معتمد'},
@@ -14179,7 +14041,7 @@ function addBOMItem(productId){
     </div>
     <div class="form-row">
       ${fg('المادة الخام *', sel('bom-mat',[{v:0,l:'اختر مادة...'},...materials.filter(m=>m.status==='active').map(m=>({v:m.id,l:m.name+(m.pharmacopoeialGrade?' ['+m.pharmacopoeialGrade+']':'')+(m.casNumber?' CAS:'+m.casNumber:'')}))],0))}
-      ${fg('الكمية لكل وحدة إنتاج *', inp('bom-qty','number','',''))}
+      ${fg('الكمية لكل وحدة إنتاج *', inp('bom-qty4','number','',''))}
     </div>
     <div class="form-row">
       ${fg('وحدة القياس', sel('bom-unit',UNITS,'كجم'))}
@@ -17045,11 +16907,11 @@ function showJEForm(je={}){
   showModal(modal(je.id?'تعديل قيد':'📒 قيد يومية جديد',`
     <div style="max-height:80vh;overflow-y:auto">
     <div class="form-row">
-      ${fg('تاريخ القيد *', inp('je-date','date',je.entryDate||today()))}
-      ${fg('الوصف *', inp('je-desc','text',je.description||'','وصف العملية'))}
+      ${fg('تاريخ القيد *', inp('je-date2','date',je.entryDate||today()))}
+      ${fg('الوصف *', inp('je-desc2','text',je.description||'','وصف العملية'))}
     </div>
     <div class="form-row">
-      ${fg('المرجع', inp('je-ref','text',je.reference||'','فاتورة / عقد / أمر إنتاج'))}
+      ${fg('المرجع', inp('je-ref2','text',je.reference||'','فاتورة / عقد / أمر إنتاج'))}
       ${fg('المصدر', `<select id="je-src" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
         <option value="manual">✏️ يدوي</option>
         <option value="production">🏭 إنتاج</option>
@@ -20268,15 +20130,7 @@ PAGES.customreport = function(){
       <div style="font-weight:700;font-size:13px;margin-bottom:12px">📄 قوالب جاهزة</div>
       <div style="display:flex;flex-direction:column;gap:6px">
         ${[
-          {id:'top_products',   icon:'💊',  label:'أعلى 10 منتجات مبيعاً',    fn:'runTopProductsReport'},
-          {id:'low_stock',      icon:'⚠️',  label:'المنتجات قليلة المخزون',   fn:'runLowStockReport'},
-          {id:'overdue_inv',    icon:'💳',  label:'الفواتير المتأخرة',         fn:'runOverdueInvoicesReport'},
-          {id:'exp_drugs',      icon:'📅',  label:'الأدوية قاربت الانتهاء',    fn:'runExpiringReport'},
-          {id:'monthly_pl',     icon:'📊',  label:'ملخص الدخل الشهري',        fn:'runMonthlyPLReport'},
-          {id:'gmp_expiry',     icon:'🏛️',  label:'موظفون تنتهي شهاداتهم',   fn:'runGMPExpiryReport'},
-          {id:'distributor_bal',icon:'🤝',  label:'أرصدة الموزعين',           fn:'runDistributorBalReport'},
-          {id:'prod_efficiency',icon:'🏭',  label:'كفاءة الإنتاج',            fn:'runProdEfficiencyReport'},
-        ].map(t=>`<button class="btn btn-white" style="text-align:right;justify-content:flex-start;gap:8px" onclick="${t.fn}()">
+                                                                                        ].map(t=>`<button class="btn btn-white" style="text-align:right;justify-content:flex-start;gap:8px" onclick="${t.fn}()">
           ${t.icon} ${t.label}
         </button>`).join('')}
       </div>
@@ -20451,7 +20305,7 @@ function runDistributorBalReport(){
   const invs=getAll('salesInvoices')||[
   {id:'settings',icon:'⚙️',label:'الإعدادات',sec:'الإعدادات'},
 
-  {id:'backup',icon:'💾',label:'النسخ الاحتياطي',sec:'الإعدادات'},
+  {id:'settings',icon:'💾',label:'النسخ الاحتياطي',sec:'الإعدادات'},
 
   {id:'companies',icon:'🏢',label:'الشركات المتعددة',sec:'الإعدادات'},
   {id:'diagnostics',icon:'🔧',label:'فحص النظام وإصلاحه',sec:'الإعدادات'},
@@ -22361,321 +22215,495 @@ function exportDiagReport(){
   showNotif&&showNotif('✅ تم تصدير تقرير التشخيص', 'success');
 }
 
-// renderNav/go called by coEnter() after company is selected
+// ══════════════════════════════════════════════════════════════════
+// NAV FIX — إصلاح كل الصفحات المكسورة بإضافة aliases
+// ══════════════════════════════════════════════════════════════════
 
-PAGES.auditlog = function(){
-  const logs = ((DB.auditLogs||[]).slice()).reverse();
-  const filterAction = window._auditFilter||'all';
-  const filtered = filterAction==='all' ? logs : logs.filter(l=>l.action===filterAction);
-  const actionCls  = {'إضافة':'b-green','تعديل':'b-blue','حذف':'b-red','BACKUP_EXPORT':'b-purple','BACKUP_IMPORT':'b-amber'};
+// alias: nav id → actual PAGES key
+// Patch PAGES with aliases (run after all PAGES defined)
+// ══════════════════════════════════════════════════════════════════
+// LOGIN FIX — إصلاح إنشاء المستخدم عند كل شركة جديدة
+// المشكلة: كل شركة جديدة = DB فارغ = يخلق admin جديد عند أول login
+// الحل: تخزين users في مفتاح مشترك عبر كل الشركات (_globalUsers)
+// ══════════════════════════════════════════════════════════════════
 
-  setPage('📋 سجل التدقيق — Audit Log',
-    `${logs.length} سجل | قانون المحاسبة 127/1981`,
-    `<div style="display:flex;gap:8px">
-      <button class="btn btn-white" onclick="go('settings')">← الإعدادات</button>
-      <button class="btn btn-white" onclick="exportAuditCSV()">📊 تصدير CSV</button>
-    </div>`,
-    `<div style="display:flex;gap:6px;margin-bottom:12px">
-      ${['all','إضافة','تعديل','حذف'].map(f=>`
-      <button class="btn btn-sm ${filterAction===f?'btn-green':'btn-white'}" onclick="window._auditFilter='${f}';go('auditlog')">
-        ${f==='all'?'الكل ('+logs.length+')':f+' ('+logs.filter(l=>l.action===f).length+')'}
-      </button>`).join('')}
-    </div>
-    <div class="card">${tbl(
-      ['التاريخ والوقت','الإجراء','الجدول','رقم السجل','التفاصيل','المستخدم'],
-      filtered.slice(0,200).map(l=>tr(
-        `<span style="font-size:10px;direction:ltr">${l.at?.slice(0,19)?.replace('T',' ')||'—'}</span>`,
-        `<span class="badge ${actionCls[l.action]||'b-gray'}" style="font-size:10px">${l.action||'—'}</span>`,
-        `<code style="font-size:10px">${escapeHtml(l.table||'—')}</code>`,
-        l.recordId ? `<code style="font-size:10px">#${l.recordId}</code>` : '—',
-        `<span style="font-size:11px">${escapeHtml((l.description||'—').slice(0,60))}</span>`,
-        escapeHtml(l.by||'—')
-      ))
-    ,'tbl_audit')}</div>`
-  );
+// قراءة/كتابة المستخدمين من storage مشترك (بغض النظر عن الشركة)
+function _getGlobalUsers() {
+  try {
+    const raw = localStorage.getItem('_medisniya_global_users');
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) { return []; }
+}
+
+function _saveGlobalUsers(users) {
+  try { localStorage.setItem('_medisniya_global_users', JSON.stringify(users)); }
+  catch(e) { console.error('Cannot save global users:', e); }
+}
+
+function _getGlobalUsersOrFallback() {
+  // Try global first, fall back to company DB
+  const global = _getGlobalUsers();
+  if(global.length > 0) return global;
+  return getAll('appUsers') || [];
+}
+
+function _syncGlobalUsersToCompany() {
+  // Mirror global users into current company DB for _canAccess etc.
+  const global = _getGlobalUsers();
+  if(global.length > 0 && DB) {
+    DB.appUsers = global;
+  }
+}
+
+// Override _doLogin to use global users
+window._doLogin = async function(){
+  const u = (document.getElementById('_au')?.value||'').trim();
+  const p = document.getElementById('_ap')?.value||'';
+  const errEl = document.getElementById('_aerr');
+  const showErr = msg => {
+    if(errEl){ errEl.textContent=msg; errEl.style.display='block'; }
+    const ap = document.getElementById('_ap');
+    if(ap) ap.value='';
+  };
+
+  if(!u||!p){ showErr('يرجى تعبئة اسم المستخدم وكلمة المرور'); return; }
+
+  let users = _getGlobalUsers();
+
+  // First-ever login across ALL companies
+  if(users.length === 0) {
+    if(u === 'admin' && p === 'admin123'){
+      const hashed = await hashPasswordSecure('admin123');
+      const adminUser = {
+        id: Date.now(), username:'admin', password:hashed,
+        name:'مدير النظام', role:'admin', active:true,
+        createdAt: new Date().toISOString()
+      };
+      users = [adminUser];
+      _saveGlobalUsers(users);
+      _syncGlobalUsersToCompany();
+      _loginSuccess({username:'admin', name:'مدير النظام', role:'admin', id:adminUser.id});
+      return;
+    }
+    showErr('أول دخول — اسم المستخدم: admin | كلمة المرور: admin123');
+    return;
+  }
+
+  const user = users.find(x => x.username === u && x.active !== false);
+  if(!user){ showErr('اسم المستخدم غير موجود'); return; }
+
+  const valid = await verifyPassword(p, user.password);
+  if(!valid){ showErr('كلمة المرور غير صحيحة'); return; }
+
+  _syncGlobalUsersToCompany();
+  _loginSuccess({ username:user.username, name:user.name, role:user.role, id:user.id });
 };
 
-function exportAuditCSV(){
-  const logs = ((DB.auditLogs||[]).slice()).reverse();
-  const header = ['التاريخ','الوقت','الإجراء','الجدول','رقم السجل','التفاصيل','المستخدم'];
-  const rows = logs.map(l=>[
-    l.at?.slice(0,10)||'', l.at?.slice(11,19)||'',
-    l.action||'', l.table||'', l.recordId||'',
-    (l.description||'').replace(/,/g,' '), l.by||''
-  ]);
-  const bom='\uFEFF';
-  const csv=[header.join(','),...rows.map(r=>r.join(','))].join('\n');
-  const blob=new Blob([bom+csv],{type:'text/csv;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a'); a.href=url;
-  a.download='audit-log-'+today()+'.csv';
-  a.click(); URL.revokeObjectURL(url);
-}
-
-// ══════════════════════════════════════════════════════════════
-// UGC FIXES — إصلاحات بناءً على تقرير الاختبار الشامل
-// ══════════════════════════════════════════════════════════════
-
-// ── FIX 1: XSS في showSearchResults ──────────────────────────
-// المشكلة: r.label و r.sub تُدرج مباشرة في innerHTML بدون escapeHtml
-// الإصلاح: escapeHtml على كل القيم الديناميكية
-
-function showSearchResults(results, q){
-  let drop = document.getElementById('search-dropdown');
-  if(!drop){
-    drop = document.createElement('div');
-    drop.id = 'search-dropdown';
-    drop.style.cssText = `position:absolute;top:100%;right:0;left:0;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.4);z-index:1000;max-height:400px;overflow-y:auto;margin-top:4px`;
-    const wrap = document.getElementById('search-wrap');
-    if(wrap) wrap.appendChild(drop);
-    else document.body.appendChild(drop);
-  }
-  if(!results.length){
-    drop.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">🔍 لا توجد نتائج لـ "${escapeHtml(q)}"</div>`;
-    return;
-  }
-  drop.innerHTML = results.map(r=>`
-    <div onclick="go('${escapeHtml(r.page)}');closeSearchResults()" style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(48,54,61,.4);transition:.1s" onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''">
-      <span style="font-size:18px;width:28px;text-align:center">${r.icon}</span>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:600;font-size:13px;color:var(--text)">${escapeHtml(r.label)}</div>
-        <div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.sub)}</div>
-      </div>
-      <span class="badge b-gray" style="font-size:10px;flex-shrink:0">${escapeHtml(r.type)}</span>
-    </div>`).join('') +
-    `<div style="padding:8px 14px;font-size:11px;color:var(--muted);text-align:center">${results.length} نتيجة</div>`;
-}
-
-// ── FIX 2: saveBatchMaterialFromReceipt — منع الإضافة المزدوجة ──
-// المشكلة (UGC-02): نفس المادة من نفس الدفعة تُضاف مرتين → remainingQuantity سالب
-// الإصلاح: فحص مسبق + atomic rollback بـ snapshot
-
-function saveBatchMaterialFromReceipt(productionOrderId){
-  const sel = window._selectedReceipt;
-  if(!sel) return alert('يرجى اختيار دفعة استلام');
-
-  const qty = numVal('bm-qty');
-  if(!qty || qty <= 0) return alert('يرجى تحديد كمية صحيحة');
-
-  const receipt = getById('materialReceipts', sel.receiptId);
-  const mat     = getById('materials', sel.matId);
-
-  // ── FIX 2a: منع الإضافة المزدوجة من نفس الدفعة ──────────────
-  const existingUse = (getAll('batchMaterials')||[]).filter(m =>
-    m.productionOrderId === productionOrderId &&
-    m.materialId        === sel.matId         &&
-    m.receiptId         === sel.receiptId
-  );
-  const alreadyUsed = existingUse.reduce((s,m)=>s+Number(m.quantity||0), 0);
-
-  if(alreadyUsed > 0){
-    const remaining = Number(receipt?.remainingQuantity ?? receipt?.quantity ?? 0);
-    if(!confirm(
-      `⚠️ هذه الدفعة استُخدمت منها ${fmtN(alreadyUsed)} ${sel.unit} مسبقاً لهذا الأمر.\n` +
-      `المتبقي الفعلي: ${fmtN(remaining)} ${sel.unit}\n` +
-      `الكمية الجديدة: ${fmtN(qty)} ${sel.unit}\n\n` +
-      `هل تريد إضافة كمية إضافية من نفس الدفعة؟`
-    )) return;
-  }
-
-  // ── FIX 2b: التحقق من عدم تجاوز المتاح ──────────────────────
-  const oldRemaining = Number(receipt?.remainingQuantity ?? receipt?.quantity ?? 0);
-  if(qty > oldRemaining){
-    if(!confirm(
-      `⚠️ الكمية المطلوبة (${fmtN(qty)}) أكبر من المتاح (${fmtN(oldRemaining)} ${sel.unit})\n` +
-      `هذا سيجعل الرصيد المتبقي سالباً. هل تريد المتابعة؟`
-    )) return;
-  }
-
-  // ── FIX 3: Atomic rollback — snapshot قبل التعديل ────────────
-  const snapshot = {
-    matStock:   mat ? String(mat.currentStock) : null,
-    remaining:  oldRemaining,
-    usedQty:    Number(receipt?.usedQuantity||0),
-  };
-
-  try{
-    insert('batchMaterials', {
-      productionOrderId,
-      materialId:      sel.matId,
-      materialName:    mat?.name||'',
-      materialType:    mat?.materialType||'raw_material',
-      unit:            sel.unit,
-      quantity:        qty,
-      unitCostAtTime:  sel.unitCost,
-      totalCost:       qty * Number(sel.unitCost||0),
-      receiptId:       sel.receiptId,
-      receiptBatch:    receipt?.batchNumber||null,
-      invoiceNumber:   receipt?.invoiceNumber||null,
-      invoiceDate:     receipt?.receiptDate||null,
-      supplier:        receipt?.supplier||null,
-      recordedAt:      new Date().toISOString()
-    });
-
-    if(mat){
-      update('materials', sel.matId, {
-        currentStock: String(Math.max(0, Number(mat.currentStock||0) - qty))
-      });
-    }
-
-    if(receipt){
-      const newRemaining = Math.max(0, oldRemaining - qty);
-      update('materialReceipts', receipt.id, {
-        remainingQuantity: newRemaining,
-        usedQuantity:      snapshot.usedQty + qty
-      });
-    }
-
-    updateProductionOrderCost(productionOrderId);
-
-  } catch(err){
-    // Rollback on failure
-    console.error('saveBatchMaterial failed — rolling back:', err);
-    if(mat && snapshot.matStock !== null)
-      update('materials', sel.matId, { currentStock: snapshot.matStock });
-    if(receipt)
-      update('materialReceipts', receipt.id, {
-        remainingQuantity: snapshot.remaining,
-        usedQuantity:      snapshot.usedQty
-      });
-    alert('❌ حدث خطأ أثناء حفظ المواد. تم التراجع عن التغييرات.\n' + err.message);
-    return;
-  }
-
-  window._selectedReceipt = null;
-  closeModal();
-  addBatchMaterials(productionOrderId);
-}
-
-// ── FIX 4: GRN — رفض استلام مادة بتاريخ انتهاء في الماضي ──────
-// نستوقف حفظ GRN عند expiry < today بدل تحذير فقط
-// نضيف validation في saveGRN أو saveReceipt
-function _validateReceiptExpiry(expiryDate, retestDate){
-  const today = new Date(); today.setHours(0,0,0,0);
-  if(expiryDate){
-    const exp = new Date(expiryDate);
-    if(exp < today){
-      const daysPast = Math.floor((today - exp)/86400000);
-      const msg = `❌ تاريخ انتهاء الصلاحية (${expiryDate}) مضى منذ ${daysPast} يوم.\n` +
-        `لا يمكن استلام مادة منتهية الصلاحية.\nيُرجى مراجعة التاريخ أو إرجاع المادة للمورد.`;
-      alert(msg);
-      return false;
-    }
-    // Warning if < 90 days
-    const daysLeft = Math.floor((exp - today)/86400000);
-    if(daysLeft < 90 && daysLeft >= 0){
-      if(!confirm(
-        `⚠️ تنبيه: الصلاحية قريبة — ${daysLeft} يوم متبقي (${expiryDate})\n` +
-        `هل تريد الاستمرار في استلام هذه الدفعة؟`
-      )) return false;
-    }
-  }
-  if(retestDate){
-    const rt = new Date(retestDate);
-    if(rt < today){
-      if(!confirm(
-        `⚠️ تاريخ إعادة الاختبار (${retestDate}) قد مضى.\n` +
-        `هل تريد الاستمرار؟ ستكون حالة الدفعة retest_due تلقائياً.`
-      )) return false;
-    }
-  }
-  return true;
-}
-
-
-// ══════════════════════════════════════════════════════════════════
-// 🔧 MEDISNIYA SELF-HEALING SYSTEM — نظام الفحص والإصلاح الذاتي
-// يفحص النظام + يكتشف المشاكل + يُصلحها + يستدعي Claude AI
-// ══════════════════════════════════════════════════════════════════
-
-// ── اختبارات الفحص الذاتي ────────────────────────────────────────
-
-
-// ── تشغيل جميع الاختبارات ────────────────────────────────────────
-// ── تطبيق إصلاح واحد ─────────────────────────────────────────────
-// ── إصلاح كل المشاكل القابلة للإصلاح ────────────────────────────
-// ══════════════════════════════════════════════════════════════════
-// AI DIAGNOSTIC — Claude يحلّل ويصلح
-// ══════════════════════════════════════════════════════════════════
-async function runAIDiagnostic(){
-  const results   = runSelfTests();
-  const dbSummary = {
-    tables: Object.keys(DB).filter(k => Array.isArray(DB[k])).map(t => ({ table:t, count:DB[t].length })),
-    issues: results.filter(r => !r.ok).map(r => ({ id:r.id, label:r.label, detail:r.detail, severity:r.severity })),
-  };
-
-  const aiOutput = document.getElementById('ai-diag-output');
-  if(aiOutput){
-    aiOutput.innerHTML = `
-      <div style="display:flex;align-items:center;gap:10px;padding:16px;color:var(--muted);font-size:13px">
-        <div style="width:20px;height:20px;border:2px solid var(--green);border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite"></div>
-        Claude يحلّل النظام...
-      </div>`;
-  }
-
-  const prompt = `أنت مهندس ERP متخصص في نظام ميديسنيا الدوائي المصري.
-فحصت النظام وهذه النتائج:
-
-ملخص قاعدة البيانات:
-${dbSummary.tables.map(t => `- ${t.table}: ${t.count} سجل`).join('\n')}
-
-المشاكل المكتشفة (${dbSummary.issues.length}):
-${dbSummary.issues.length
-  ? dbSummary.issues.map(i => `• [${i.severity}] ${i.label}: ${i.detail}`).join('\n')
-  : '• لا مشاكل مكتشفة 🎉'}
-
-حلّل هذه البيانات وأجب بالعربية:
-1. هل النظام في حالة جيدة؟
-2. ما أهم المخاطر إن وُجدت؟
-3. توصيات عملية لتحسين الأداء والاستقرار
-4. هل البيانات منطقية (مثلاً: عدد الموظفين vs عدد مسيرات الرواتب)؟
-
-أجب باختصار وتركيز، بدون عناوين زائدة.`;
-
+// Override _restoreSession to check global users
+const _origRestoreSession = window._restoreSession;
+window._restoreSession = function(){
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-
-    if(!resp.ok) throw new Error(`API ${resp.status}`);
-    const data = await resp.json();
-    const text = (data.content||[]).map(b => b.text||'').join('');
-
-    if(aiOutput){
-      aiOutput.innerHTML = `
-        <div style="padding:16px;font-size:13px;line-height:1.8;border-top:1px solid var(--border)">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-weight:700;color:var(--green-light)">
-            <span style="font-size:18px">🤖</span> تحليل Claude AI
-          </div>
-          <div style="color:var(--text);white-space:pre-wrap">${escapeHtml(text)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:10px">
-            تم التحليل في ${new Date().toLocaleTimeString('ar-EG')}
-          </div>
-        </div>`;
+    const s = sessionStorage.getItem('_erp_s');
+    if(!s) return false;
+    const sess = JSON.parse(s);
+    const users = _getGlobalUsersOrFallback();
+    if(users.length === 0 && sess.username === 'admin'){ _authUser=sess; _syncGlobalUsersToCompany(); return true; }
+    if(users.find(x => x.username===sess.username && x.active!==false)){
+      _authUser=sess; _syncGlobalUsersToCompany(); return true;
     }
-  } catch(e) {
-    if(aiOutput){
-      aiOutput.innerHTML = `
-        <div style="padding:16px;color:var(--amber);font-size:13px">
-          ⚠️ لا يمكن الاتصال بـ Claude API: ${escapeHtml(e.message)}<br>
-          <span style="font-size:11px;color:var(--muted)">تأكد من فتح النظام عبر Claude.ai أو وجود مفتاح API</span>
-        </div>`;
+  } catch(e){}
+  return false;
+};
+
+// Override _saveUser to save to global storage
+const _origSaveUser = window._saveUser;
+window._saveUser = async function(id){
+  const uname      = (document.getElementById('_uu')?.value||'').trim();
+  const uname_full = (document.getElementById('_un')?.value||'').trim();
+  const pass       = document.getElementById('_up')?.value||'';
+  const pass2      = document.getElementById('_up2')?.value||'';
+  const role       = document.getElementById('_ur')?.value||'viewer';
+
+  if(!uname||!uname_full){ alert('يرجى تعبئة اسم الدخول والاسم الكامل'); return; }
+  if(!id && !pass){ alert('يرجى إدخال كلمة المرور'); return; }
+  if(pass && pass !== pass2){ alert('كلمة المرور غير متطابقة'); return; }
+  if(pass && pass.length < 6){ alert('كلمة المرور يجب أن تكون 6 أحرف على الأقل'); return; }
+
+  let users = _getGlobalUsers();
+  const dup = users.find(x => x.username===uname && (!id||x.id!==id));
+  if(dup){ alert('اسم الدخول موجود بالفعل'); return; }
+
+  if(id){
+    const idx = users.findIndex(x => x.id===id);
+    if(idx >= 0){
+      users[idx] = {...users[idx], username:uname, name:uname_full, role, active:true};
+      if(pass) users[idx].password = await hashPasswordSecure(pass);
     }
+  } else {
+    const newUser = {
+      id: Date.now(), username:uname, name:uname_full, role, active:true,
+      createdAt: new Date().toISOString()
+    };
+    if(pass) newUser.password = await hashPasswordSecure(pass);
+    users.push(newUser);
   }
+
+  _saveGlobalUsers(users);
+  _syncGlobalUsersToCompany();
+  closeModal();
+  go('users');
+};
+
+// Override _toggleUser (activate/deactivate)
+const _origToggleUser = window._toggleUser;
+window._toggleUser = function(id){
+  let users = _getGlobalUsers();
+  const u = users.find(x => x.id===id);
+  if(!u) return;
+  u.active = !u.active;
+  _saveGlobalUsers(users);
+  _syncGlobalUsersToCompany();
+  go('users');
+};
+
+// Sync on every company switch
+const _origCoEnter = window.coEnter;
+if(_origCoEnter) {
+  window.coEnter = function(c){
+    _origCoEnter(c);
+    _syncGlobalUsersToCompany();
+  };
+}
+
+// Override getAll('appUsers') to always use global
+const _origGetAll = window.getAll;
+if(_origGetAll) {
+  window.getAll = function(table) {
+    if(table === 'appUsers') return _getGlobalUsersOrFallback();
+    return _origGetAll(table);
+  };
 }
 
 // ══════════════════════════════════════════════════════════════════
-// PAGES.diagnostics — صفحة الفحص والإصلاح الذاتي
+// NAV FIX — إصلاح كل الصفحات المكسورة بإضافة aliases
 // ══════════════════════════════════════════════════════════════════
-;
 
-// ── تصدير تقرير التشخيص ──────────────────────────────────────────
+// alias: nav id → actual PAGES key;
+
+// Patch PAGES with aliases (run after all PAGES defined)
+Object.entries(PAGE_ALIASES).forEach(([alias, target]) => {
+  if(!PAGES[alias] && PAGES[target]) PAGES[alias] = PAGES[target];
+});
+
+// Patch go() to resolve aliases before routing
+const _origGo = window.go;
+window.go = function(page) {
+  const resolved = PAGE_ALIASES[page] || page;
+  return _origGo(resolved);
+};
+
+// ══════════════════════════════════════════════════════════════════
+// LOGIN FIX — Global Users (once across all companies)
+// ══════════════════════════════════════════════════════════════════
+;(function installGlobalUsersFix(){
+  if(window._globalUsersFix) return;
+  window._globalUsersFix = true;
+
+  function _getGlobalUsers() {
+    try { return JSON.parse(localStorage.getItem('_medisniya_global_users')||'[]'); }
+    catch(e){ return []; }
+  }
+  function _saveGlobalUsers(users) {
+    try { localStorage.setItem('_medisniya_global_users', JSON.stringify(users)); }
+    catch(e){}
+  }
+  function _syncGlobalUsersToCompany() {
+    const g = _getGlobalUsers();
+    if(g.length > 0 && window.DB) window.DB.appUsers = g;
+  }
+  window._getGlobalUsers    = _getGlobalUsers;
+  window._saveGlobalUsers   = _saveGlobalUsers;
+  window._syncGlobalUsersToCompany = _syncGlobalUsersToCompany;
+
+  // ── Override _doLogin ────────────────────────────────────────
+  window._doLogin = async function(){
+    const u = (document.getElementById('_au')?.value||'').trim();
+    const p = document.getElementById('_ap')?.value||'';
+    const errEl = document.getElementById('_aerr');
+    const showErr = msg => {
+      if(errEl){ errEl.textContent=msg; errEl.style.display='block'; }
+      const ap=document.getElementById('_ap'); if(ap) ap.value='';
+    };
+    if(!u||!p){ showErr('يرجى تعبئة الحقلين'); return; }
+
+    let users = _getGlobalUsers();
+    if(users.length === 0){
+      if(u==='admin' && p==='admin123'){
+        const hashed = await hashPasswordSecure('admin123');
+        const adminUser = {id:Date.now(),username:'admin',password:hashed,
+          name:'مدير النظام',role:'admin',active:true};
+        users = [adminUser];
+        _saveGlobalUsers(users);
+        _syncGlobalUsersToCompany();
+        _loginSuccess({username:'admin',name:'مدير النظام',role:'admin',id:adminUser.id});
+        return;
+      }
+      showErr('أول دخول — admin / admin123'); return;
+    }
+    const user = users.find(x=>x.username===u&&x.active!==false);
+    if(!user){ showErr('اسم المستخدم غير موجود'); return; }
+    const valid = await verifyPassword(p, user.password);
+    if(!valid){ showErr('كلمة المرور غير صحيحة'); return; }
+    _syncGlobalUsersToCompany();
+    _loginSuccess({username:user.username,name:user.name,role:user.role,id:user.id});
+  };
+
+  // ── Override _restoreSession ──────────────────────────────────
+  window._restoreSession = function(){
+    try{
+      const s = sessionStorage.getItem('_erp_s');
+      if(!s) return false;
+      const sess = JSON.parse(s);
+      const users = _getGlobalUsers();
+      if(users.length===0&&sess.username==='admin'){window._authUser=sess;_syncGlobalUsersToCompany();return true;}
+      if(users.find(x=>x.username===sess.username&&x.active!==false)){
+        window._authUser=sess; _syncGlobalUsersToCompany(); return true;
+      }
+    }catch(e){}
+    return false;
+  };
+
+  // ── Override _saveUser ───────────────────────────────────────
+  window._saveUser = async function(id){
+    const uname     = (document.getElementById('_uu')?.value||'').trim();
+    const fullname  = (document.getElementById('_un')?.value||'').trim();
+    const pass      = document.getElementById('_up')?.value||'';
+    const pass2     = document.getElementById('_up2')?.value||'';
+    const role      = document.getElementById('_ur')?.value||'viewer';
+    if(!uname||!fullname){ alert('يرجى تعبئة اسم الدخول والاسم الكامل'); return; }
+    if(!id&&!pass){ alert('يرجى إدخال كلمة المرور'); return; }
+    if(pass&&pass!==pass2){ alert('كلمة المرور غير متطابقة'); return; }
+    if(pass&&pass.length<6){ alert('كلمة المرور يجب أن تكون 6 أحرف على الأقل'); return; }
+    let users = _getGlobalUsers();
+    const dup = users.find(x=>x.username===uname&&(!id||x.id!==id));
+    if(dup){ alert('اسم الدخول موجود بالفعل'); return; }
+    if(id){
+      const idx = users.findIndex(x=>x.id===id);
+      if(idx>=0){
+        users[idx]={...users[idx],username:uname,name:fullname,role,active:true};
+        if(pass) users[idx].password = await hashPasswordSecure(pass);
+      }
+    } else {
+      const nu={id:Date.now(),username:uname,name:fullname,role,active:true};
+      if(pass) nu.password = await hashPasswordSecure(pass);
+      users.push(nu);
+    }
+    _saveGlobalUsers(users); _syncGlobalUsersToCompany();
+    closeModal(); go('users');
+  };
+
+  // ── Override _toggleUser ─────────────────────────────────────
+  window._toggleUser = function(id){
+    const users = _getGlobalUsers();
+    const u = users.find(x=>x.id===id);
+    if(!u) return;
+    u.active = !u.active;
+    _saveGlobalUsers(users); _syncGlobalUsersToCompany(); go('users');
+  };
+
+  // ── Sync on every company switch ─────────────────────────────
+  const __origCoEnter = window.coEnter;
+  if(__origCoEnter){
+    window.coEnter = function(c){
+      __origCoEnter(c);
+      _syncGlobalUsersToCompany();
+    };
+  }
+
+  // ── getAll('appUsers') always returns global ─────────────────
+  const __origGetAll = window.getAll;
+  if(__origGetAll){
+    window.getAll = function(table){
+      if(table==='appUsers'){
+        const g=_getGlobalUsers();
+        return g.length>0 ? g : (__origGetAll(table)||[]);
+      }
+      return __origGetAll(table);
+    };
+  }
+
+})();
+
+;(function installNavFix(){
+  if(window._navFixInstalled) return;
+  window._navFixInstalled = true;
+
+  // alias: nav id → actual PAGES key
+  const PAGE_ALIASES = {
+    cmos:             'cmoscorecard',
+    inventory:        'expiry',
+    registration:     'drugregistration',
+    deliveries:       'salesorders',
+    delivery:         'salesorders',
+    manufacturingcost:'costanalysis',
+    productionstages: 'production',
+    backup:           'settings',
+    top_products:     'customreport',
+    low_stock:        'customreport',
+    overdue_inv:      'customreport',
+    exp_drugs:        'customreport',
+    monthly_pl:       'customreport',
+    gmp_expiry:       'customreport',
+    distributor_bal:  'customreport',
+    prod_efficiency:  'customreport',
+  };
+
+  // Patch PAGES with aliases
+  Object.entries(PAGE_ALIASES).forEach(([alias, target]) => {
+    if(!PAGES[alias] && PAGES[target]) PAGES[alias] = PAGES[target];
+  });
+
+  // Patch go() to resolve aliases
+  const __origGo = window.go;
+  window.go = function(page) {
+    const resolved = PAGE_ALIASES[page] || page;
+    return __origGo(resolved);
+  };
+
+})();
+
+// ══════════════════════════════════════════════════════════════════
+// LOGIN FIX — Global Users (once across all companies)
+// ══════════════════════════════════════════════════════════════════
+;(function installGlobalUsersFix(){
+  if(window._globalUsersFix) return;
+  window._globalUsersFix = true;
+
+  function _getGlobalUsers() {
+    try { return JSON.parse(localStorage.getItem('_medisniya_global_users')||'[]'); }
+    catch(e){ return []; }
+  }
+  function _saveGlobalUsers(users) {
+    try { localStorage.setItem('_medisniya_global_users', JSON.stringify(users)); }
+    catch(e){}
+  }
+  function _syncGlobalUsersToCompany() {
+    const g = _getGlobalUsers();
+    if(g.length > 0 && window.DB) window.DB.appUsers = g;
+  }
+  window._getGlobalUsers    = _getGlobalUsers;
+  window._saveGlobalUsers   = _saveGlobalUsers;
+  window._syncGlobalUsersToCompany = _syncGlobalUsersToCompany;
+
+  // ── Override _doLogin ────────────────────────────────────────
+  window._doLogin = async function(){
+    const u = (document.getElementById('_au')?.value||'').trim();
+    const p = document.getElementById('_ap')?.value||'';
+    const errEl = document.getElementById('_aerr');
+    const showErr = msg => {
+      if(errEl){ errEl.textContent=msg; errEl.style.display='block'; }
+      const ap=document.getElementById('_ap'); if(ap) ap.value='';
+    };
+    if(!u||!p){ showErr('يرجى تعبئة الحقلين'); return; }
+
+    let users = _getGlobalUsers();
+    if(users.length === 0){
+      if(u==='admin' && p==='admin123'){
+        const hashed = await hashPasswordSecure('admin123');
+        const adminUser = {id:Date.now(),username:'admin',password:hashed,
+          name:'مدير النظام',role:'admin',active:true};
+        users = [adminUser];
+        _saveGlobalUsers(users);
+        _syncGlobalUsersToCompany();
+        _loginSuccess({username:'admin',name:'مدير النظام',role:'admin',id:adminUser.id});
+        return;
+      }
+      showErr('أول دخول — admin / admin123'); return;
+    }
+    const user = users.find(x=>x.username===u&&x.active!==false);
+    if(!user){ showErr('اسم المستخدم غير موجود'); return; }
+    const valid = await verifyPassword(p, user.password);
+    if(!valid){ showErr('كلمة المرور غير صحيحة'); return; }
+    _syncGlobalUsersToCompany();
+    _loginSuccess({username:user.username,name:user.name,role:user.role,id:user.id});
+  };
+
+  // ── Override _restoreSession ──────────────────────────────────
+  window._restoreSession = function(){
+    try{
+      const s = sessionStorage.getItem('_erp_s');
+      if(!s) return false;
+      const sess = JSON.parse(s);
+      const users = _getGlobalUsers();
+      if(users.length===0&&sess.username==='admin'){window._authUser=sess;_syncGlobalUsersToCompany();return true;}
+      if(users.find(x=>x.username===sess.username&&x.active!==false)){
+        window._authUser=sess; _syncGlobalUsersToCompany(); return true;
+      }
+    }catch(e){}
+    return false;
+  };
+
+  // ── Override _saveUser ───────────────────────────────────────
+  window._saveUser = async function(id){
+    const uname     = (document.getElementById('_uu')?.value||'').trim();
+    const fullname  = (document.getElementById('_un')?.value||'').trim();
+    const pass      = document.getElementById('_up')?.value||'';
+    const pass2     = document.getElementById('_up2')?.value||'';
+    const role      = document.getElementById('_ur')?.value||'viewer';
+    if(!uname||!fullname){ alert('يرجى تعبئة اسم الدخول والاسم الكامل'); return; }
+    if(!id&&!pass){ alert('يرجى إدخال كلمة المرور'); return; }
+    if(pass&&pass!==pass2){ alert('كلمة المرور غير متطابقة'); return; }
+    if(pass&&pass.length<6){ alert('كلمة المرور يجب أن تكون 6 أحرف على الأقل'); return; }
+    let users = _getGlobalUsers();
+    const dup = users.find(x=>x.username===uname&&(!id||x.id!==id));
+    if(dup){ alert('اسم الدخول موجود بالفعل'); return; }
+    if(id){
+      const idx = users.findIndex(x=>x.id===id);
+      if(idx>=0){
+        users[idx]={...users[idx],username:uname,name:fullname,role,active:true};
+        if(pass) users[idx].password = await hashPasswordSecure(pass);
+      }
+    } else {
+      const nu={id:Date.now(),username:uname,name:fullname,role,active:true};
+      if(pass) nu.password = await hashPasswordSecure(pass);
+      users.push(nu);
+    }
+    _saveGlobalUsers(users); _syncGlobalUsersToCompany();
+    closeModal(); go('users');
+  };
+
+  // ── Override _toggleUser ─────────────────────────────────────
+  window._toggleUser = function(id){
+    const users = _getGlobalUsers();
+    const u = users.find(x=>x.id===id);
+    if(!u) return;
+    u.active = !u.active;
+    _saveGlobalUsers(users); _syncGlobalUsersToCompany(); go('users');
+  };
+
+  // ── Sync on every company switch ─────────────────────────────
+  const __origCoEnter = window.coEnter;
+  if(__origCoEnter){
+    window.coEnter = function(c){
+      __origCoEnter(c);
+      _syncGlobalUsersToCompany();
+    };
+  }
+
+  // ── getAll('appUsers') always returns global ─────────────────
+  const __origGetAll = window.getAll;
+  if(__origGetAll){
+    window.getAll = function(table){
+      if(table==='appUsers'){
+        const g=_getGlobalUsers();
+        return g.length>0 ? g : (__origGetAll(table)||[]);
+      }
+      return __origGetAll(table);
+    };
+  }
+
+})();
+
 // renderNav/go called by coEnter() after company is selected
 
 </script>
