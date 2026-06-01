@@ -415,7 +415,7 @@ const defaultDB = {
   expenses:[], employees:[], budgetLines:[], campaigns:[], salesTargets:[],
   receivables:[], payrollRuns:[], purchaseOrders:[], qualityChecks:[],
   returns:[], contracts:[], assets:[], eInvoices:[], taxLines:[], batchMaterials:[], productIngredients:[], partnerAccounts:[], partnerEntries:[], journalEntries:[], chartOfAccounts:[], historicalBalances:[], appUsers:[], auditLogs:[], leaveRequests:[], appraisals:[], equipment:[],
-  deviations:[], stabilityStudies:[], supplierRatings:[], warehouses:[], serialNumbers:[], savedReports:[], costCenters:[], capa:[], salesInvoices:[], salesOrders:[], drugRegistrations:[], cycleCountRecords:[], productionStages:[], dispensingRecords:[],
+  deviations:[], stabilityStudies:[], supplierRatings:[], warehouses:[], serialNumbers:[], savedReports:[], taxSettings:[], costCenters:[], capa:[], salesInvoices:[], salesOrders:[], drugRegistrations:[], cycleCountRecords:[], productionStages:[], dispensingRecords:[],
   billOfMaterials:[], accounts:[],
   _seq:{}
 };
@@ -643,6 +643,11 @@ const navItems=[
   {id:'incomestatement',icon:'📈',label:'قائمة الدخل P&L',sec:'المالية'},
   {id:'cashflow',icon:'💧',label:'التدفقات النقدية',sec:'المالية'},
   {id:'openingbalances',icon:'📅',label:'الموازين التاريخية',sec:'المالية'},
+  {id:'taxegypt',icon:'🏛️',label:'الضرائب والامتثال',sec:'المالية'},
+  {id:'vatreport',icon:'🧾',label:'إقرار VAT',sec:'المالية'},
+  {id:'payrolltax',icon:'👤',label:'ضريبة المرتبات',sec:'المالية'},
+  {id:'socialinsurance',icon:'👥',label:'التأمينات الاجتماعية',sec:'المالية'},
+  {id:'taxsettings',icon:'⚙️',label:'إعدادات الضرائب',sec:'المالية'},
   {id:'vat',icon:'🧾',label:'ضريبة القيمة المضافة',sec:'الضرائب'},
   {id:'einvoice',icon:'📄',label:'الفواتير الإلكترونية',sec:'الضرائب'},
   {id:'taxes',icon:'🏦',label:'الضرائب العامة',sec:'الضرائب'},
@@ -14754,37 +14759,7 @@ function saveCAPA(id){
 
 // ── ضريبة الدمغة المصرية ─────────────────────────────
 
-PAGES.stamptax = function(){
-  const invs = getAll('salesInvoices')||[];
-  // Stamp tax: 0.3% on contracts and invoices in Egypt
-  const STAMP_RATE = 0.003;
-  const totalInv = invs.reduce((s,i)=>s+Number(i.subtotal||0),0);
-  const totalStamp = totalInv * STAMP_RATE;
-  setPage('🏛️ ضريبة الدمغة المصرية','Stamp Tax — قانون رقم 111 لسنة 1980',
-    `<button class="btn btn-white" onclick="go('taxegypt')">← الضرائب المصرية</button>`,
-    `<div class="stats-grid g3" style="margin-bottom:16px">
-      <div class="stat-card"><div class="lbl">إجمالي الفواتير</div><div class="val">${fmtC(totalInv)}</div></div>
-      <div class="stat-card"><div class="lbl">معدل ضريبة الدمغة</div><div class="val">0.3%</div></div>
-      <div class="stat-card"><div class="lbl text-amber">ضريبة الدمغة المستحقة</div><div class="val text-amber">${fmtC(totalStamp)}</div></div>
-    </div>
-    <div style="padding:14px;background:rgba(240,136,0,.06);border:1px solid rgba(240,136,0,.2);border-radius:10px;margin-bottom:14px;font-size:13px">
-      <strong>🏛️ أساس قانون ضريبة الدمغة (111/1980):</strong><br>
-      • 0.3‰ على العقود والاتفاقيات التجارية<br>
-      • 0.3% على الفواتير التجارية (ملاحظة: تتغير بقرارات وزارية)<br>
-      • تسدد للمصلحة خلال 30 يوم من نهاية الفترة الضريبية
-    </div>
-    <div class="card">${tbl(
-      ['رقم الفاتورة','العميل','التاريخ','قيمة الفاتورة','ضريبة الدمغة (0.3%)'],
-      invs.map(inv=>tr(
-        `<code>INV-${String(inv.id).padStart(6,'0')}</code>`,
-        escapeHtml(inv.customerName||'—'),
-        inv.invoiceDate||'—',
-        fmtC(inv.subtotal||0),
-        fmtC(Number(inv.subtotal||0)*STAMP_RATE)
-      ))
-    ,'tbl_stamp')}</div>`
-  );
-};
+;
 
 
 // ── صفحة الموارد البشرية الرئيسية ────────────────────
@@ -18478,6 +18453,776 @@ PAGES.costanalysis = function(){
   );
 };
 
+
+// ══════════════════════════════════════════════════════════════════
+// 🏛️ الضرائب والامتثال المصري — Egyptian Tax Compliance
+// VAT 67/2016 | دخل 91/2005 | دمغة 111/1980 | تأمينات 148/2019
+// قرار 121/2021 (ETA) | هيئة الدواء 151/2019
+// ══════════════════════════════════════════════════════════════════
+
+// ── دالة قراءة إعدادات الضريبة (دائماً من DB، وإلا القيم الافتراضية) ──
+function getTaxSettings(){
+  const saved = (getAll('taxSettings')||[])[0] || {};
+  return {
+    // ضريبة القيمة المضافة — قانون 67/2016
+    vatRate:           Number(saved.vatRate           ?? 14)     / 100,  // 14%
+    vatRateDisplay:    Number(saved.vatRate            ?? 14),
+    exportVatRate:     0,       // الصادرات دائماً 0%
+    pharmaExemptVat:   saved.pharmaExemptVat ?? true,  // أدوية القائمة معفاة
+
+    // ضريبة الدخل — قانون 91/2005
+    corpTaxRate:       Number(saved.corpTaxRate       ?? 22.5)   / 100,
+    corpTaxDisplay:    Number(saved.corpTaxRate        ?? 22.5),
+    withholdContractor:Number(saved.withholdContractor?? 5)      / 100,  // م.56
+    withholdDividends: Number(saved.withholdDividends ?? 10)     / 100,  // م.59
+    advancePaymentPct: Number(saved.advancePaymentPct ?? 0.25),          // 25% دفعة
+
+    // ضريبة الدمغة — قانون 111/1980
+    stampInvoice:      Number(saved.stampInvoice      ?? 0.3)    / 100,  // م.22
+    stampContract:     Number(saved.stampContract     ?? 0.3)    / 100,  // م.26
+    stampRentContract: Number(saved.stampRentContract ?? 0.4)    / 100,  // م.40
+    stampPayrollEmployer: Number(saved.stampPayrollEmployer ?? 0.9) / 100, // م.51
+    stampPayrollEmployee: Number(saved.stampPayrollEmployee ?? 0.45)/ 100,
+
+    // ضريبة المرتبات — م.7/91/2005 — شرائح 2024
+    salaryPersonalExemption: Number(saved.salaryPersonalExemption ?? 15000),
+    salaryInsuranceExemption: Number(saved.salaryInsuranceExemption ?? 1200),
+    salaryBrackets: saved.salaryBrackets || [
+      { upTo: 40000,  rate: 10 },
+      { upTo: 55000,  rate: 15 },
+      { upTo: 70000,  rate: 20 },
+      { upTo: 200000, rate: 22.5 },
+      { upTo: 400000, rate: 25 },
+      { upTo: Infinity, rate: 27.5 },
+    ],
+
+    // التأمينات الاجتماعية — قانون 148/2019
+    siEmployer:        Number(saved.siEmployer        ?? 18.75)  / 100,
+    siEmployee:        Number(saved.siEmployee        ?? 11)     / 100,
+    siMinBase:         Number(saved.siMinBase         ?? 1700),
+    siMaxBase:         Number(saved.siMaxBase         ?? 11600),
+    siVarMaxMultiple:  Number(saved.siVarMaxMultiple  ?? 3),
+
+    // رسوم هيئة الدواء — قانون 151/2019
+    edaLateFeePct:     Number(saved.edaLateFeePct     ?? 0.5)    / 100,  // 0.5% يومياً
+
+    // ETA
+    companyTRN:        saved.companyTRN               || '',
+    etaEnabled:        saved.etaEnabled               ?? true,
+  };
+}
+
+// ── حساب ضريبة المرتب ─────────────────────────────────────────────
+function calcSalaryTax(annualGross, ts){
+  const brackets = ts.salaryBrackets || [];
+  const taxable  = Math.max(0, annualGross - ts.salaryPersonalExemption - ts.salaryInsuranceExemption);
+  let tax = 0, prev = 0;
+  for(const b of brackets){
+    const upTo = b.upTo === Infinity ? taxable : b.upTo;
+    if(taxable <= prev) break;
+    const slice = Math.min(taxable, upTo) - prev;
+    if(slice > 0) tax += slice * (b.rate/100);
+    prev = upTo;
+    if(taxable <= upTo) break;
+  }
+  return { annualGross, taxable, annualTax: tax, monthlyTax: tax/12 };
+}
+
+// ── حساب التأمينات الاجتماعية ────────────────────────────────────
+function calcSocialInsurance(basicSalary, varSalary, ts){
+  const base     = Math.min(Math.max(basicSalary, ts.siMinBase), ts.siMaxBase);
+  const varBase  = Math.min(varSalary||0, base * ts.siVarMaxMultiple);
+  const employer = (base + varBase) * ts.siEmployer;
+  const employee = (base + varBase) * ts.siEmployee;
+  return { base, varBase, employer, employee, total: employer+employee };
+}
+
+// ══════════════════════════════════════════════════════════════════
+// A. إعدادات الضرائب — Tax Settings (قابلة للتعديل بدون كود)
+// ══════════════════════════════════════════════════════════════════
+
+PAGES.taxsettings = function(){
+  const ts  = getTaxSettings();
+  const saved = (getAll('taxSettings')||[])[0] || {};
+
+  setPage('⚙️ إعدادات الضرائب المصرية',
+    'جميع النسب قابلة للتعديل — تُطبَّق تلقائياً على كل الحسابات',
+    `<button class="btn btn-green" onclick="saveTaxSettings()">💾 حفظ الإعدادات</button>`,
+    `<div style="padding:12px;background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.2);border-radius:10px;margin-bottom:14px;font-size:12px">
+      ⚖️ <strong>تنبيه:</strong> هذه الإعدادات تعكس النسب الضريبية القانونية النافذة. تغيير النسب يؤثر على جميع الحسابات المستقبلية.
+      المرجع: قوانين 67/2016، 91/2005، 111/1980، 148/2019.
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+
+    <!-- VAT -->
+    <div class="card">
+      <div style="font-weight:700;font-size:13px;margin-bottom:12px;color:var(--green-light)">🧾 ضريبة القيمة المضافة — قانون 67/2016</div>
+      <div class="form-row">
+        ${fg('النسبة العامة %', `<input type="number" id="ts-vat" value="${ts.vatRateDisplay}" min="0" max="100" step="0.5"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:14px;font-weight:700;color:var(--green-light)">`)}
+        ${fg('الأدوية المدرجة', `<select id="ts-pharma-exempt" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+          <option value="true" ${ts.pharmaExemptVat?'selected':''}>✅ معفاة (0%) — الأدوية المدرجة بقائمة EDA</option>
+          <option value="false" ${!ts.pharmaExemptVat?'selected':''}>خاضعة للنسبة العامة</option>
+        </select>`)}
+      </div>
+      ${fg('رقم التسجيل الضريبي للشركة (TRN)', `<input type="text" id="ts-trn" value="${escapeHtml(ts.companyTRN||'')}"
+        placeholder="مثال: 123456789" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">`)}
+    </div>
+
+    <!-- ضريبة الدخل -->
+    <div class="card">
+      <div style="font-weight:700;font-size:13px;margin-bottom:12px;color:var(--blue)">🏢 ضريبة دخل الشركات — قانون 91/2005</div>
+      <div class="form-row">
+        ${fg('معدل ضريبة الشركات %', `<input type="number" id="ts-corp" value="${ts.corpTaxDisplay}" min="0" max="100" step="0.5"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:14px;font-weight:700;color:var(--blue)">`)}
+        ${fg('استقطاع مقاولين % (م.56)', `<input type="number" id="ts-withhold" value="${ts.withholdContractor*100}" min="0" max="30"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">`)}
+      </div>
+      ${fg('استقطاع توزيعات % (م.59)', `<input type="number" id="ts-div" value="${ts.withholdDividends*100}" min="0" max="30"
+        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">`)}
+    </div>
+
+    <!-- دمغة -->
+    <div class="card">
+      <div style="font-weight:700;font-size:13px;margin-bottom:12px;color:var(--amber)">🏛️ ضريبة الدمغة — قانون 111/1980</div>
+      <div class="form-row">
+        ${fg('دمغة الفواتير التجارية % (م.22)', `<input type="number" id="ts-stamp-inv" value="${ts.stampInvoice*100}" min="0" max="5" step="0.05"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:14px;font-weight:700;color:var(--amber)">`)}
+        ${fg('دمغة عقود التوريد % (م.26)', `<input type="number" id="ts-stamp-ct" value="${ts.stampContract*100}" min="0" max="5" step="0.05"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">`)}
+      </div>
+      <div class="form-row">
+        ${fg('دمغة رواتب — صاحب عمل % (م.51)', `<input type="number" id="ts-stamp-emp" value="${ts.stampPayrollEmployer*100}" min="0" max="5" step="0.05"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">`)}
+        ${fg('دمغة رواتب — موظف %', `<input type="number" id="ts-stamp-ee" value="${ts.stampPayrollEmployee*100}" min="0" max="5" step="0.05"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">`)}
+      </div>
+    </div>
+
+    <!-- التأمينات -->
+    <div class="card">
+      <div style="font-weight:700;font-size:13px;margin-bottom:12px;color:var(--purple)">👥 التأمينات الاجتماعية — قانون 148/2019</div>
+      <div class="form-row">
+        ${fg('نسبة صاحب العمل %', `<input type="number" id="ts-si-emp" value="${ts.siEmployer*100}" min="0" max="30" step="0.25"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:14px;font-weight:700;color:var(--purple)">`)}
+        ${fg('نسبة الموظف %', `<input type="number" id="ts-si-ee" value="${ts.siEmployee*100}" min="0" max="20" step="0.25"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:14px;color:var(--text)">`)}
+      </div>
+      <div class="form-row">
+        ${fg('الحد الأدنى للوعاء (ج.م/شهر)', `<input type="number" id="ts-si-min" value="${ts.siMinBase}" min="0"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">`)}
+        ${fg('الحد الأقصى للوعاء (ج.م/شهر)', `<input type="number" id="ts-si-max" value="${ts.siMaxBase}" min="0"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:14px;font-weight:700;color:var(--purple)">`)}
+      </div>
+    </div>
+
+    </div>
+
+    <!-- شرائح ضريبة المرتبات -->
+    <div class="card" style="margin-top:14px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:12px;color:var(--blue)">📊 شرائح ضريبة الدخل على المرتبات — قانون 91/2005 م.7 (شرائح 2024)</div>
+      <div class="form-row">
+        ${fg('الإعفاء الشخصي السنوي (ج.م)', `<input type="number" id="ts-sal-exemp" value="${ts.salaryPersonalExemption}" min="0"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">`)}
+        ${fg('إعفاء التأمينات السنوي (ج.م)', `<input type="number" id="ts-si-exemp" value="${ts.salaryInsuranceExemption}" min="0"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">`)}
+      </div>
+      <div id="salary-brackets-editor" style="margin-top:8px">
+        ${(ts.salaryBrackets||[]).map((b,i)=>`
+        <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:6px;align-items:center">
+          <div style="display:flex;align-items:center;gap:6px;font-size:12px">
+            ${i===0?'0':'حتى '+fmtN((ts.salaryBrackets[i-1]||{}).upTo||0)+' → '}
+            <input type="number" id="sb-to-${i}" value="${b.upTo===Infinity?9999999:b.upTo}" min="0"
+              style="width:120px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px;font-size:12px;color:var(--text)">
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <input type="number" id="sb-rate-${i}" value="${b.rate}" min="0" max="50" step="0.5"
+              style="width:80px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px;font-size:13px;font-weight:700;color:var(--blue)">
+            <span style="font-size:12px">%</span>
+          </div>
+          <span style="font-size:11px;color:var(--muted)">${b.upTo===Infinity?'فما فوق':'ج.م'}</span>
+        </div>`).join('')}
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:6px">
+        💡 الشريحة الأخيرة تُطبَّق على كل ما يزيد عن الشريحة قبلها
+      </div>
+    </div>
+
+    <div style="margin-top:12px">
+      <button class="btn btn-green" onclick="saveTaxSettings()">💾 حفظ كل الإعدادات</button>
+      <button class="btn btn-white" style="margin-right:8px" onclick="resetTaxSettings()">↩️ استعادة الافتراضي</button>
+    </div>`
+  );
+};
+
+function saveTaxSettings(){
+  const brackets = [];
+  let i = 0;
+  while(document.getElementById('sb-to-'+i)){
+    const upTo = Number(document.getElementById('sb-to-'+i)?.value||0);
+    const rate = Number(document.getElementById('sb-rate-'+i)?.value||0);
+    brackets.push({ upTo: upTo >= 9999990 ? Infinity : upTo, rate });
+    i++;
+  }
+
+  const d = {
+    vatRate:            Number(document.getElementById('ts-vat')?.value||14),
+    pharmaExemptVat:    document.getElementById('ts-pharma-exempt')?.value === 'true',
+    companyTRN:         document.getElementById('ts-trn')?.value||'',
+    corpTaxRate:        Number(document.getElementById('ts-corp')?.value||22.5),
+    withholdContractor: Number(document.getElementById('ts-withhold')?.value||5),
+    withholdDividends:  Number(document.getElementById('ts-div')?.value||10),
+    stampInvoice:       Number(document.getElementById('ts-stamp-inv')?.value||0.3),
+    stampContract:      Number(document.getElementById('ts-stamp-ct')?.value||0.3),
+    stampPayrollEmployer:Number(document.getElementById('ts-stamp-emp')?.value||0.9),
+    stampPayrollEmployee:Number(document.getElementById('ts-stamp-ee')?.value||0.45),
+    siEmployer:         Number(document.getElementById('ts-si-emp')?.value||18.75),
+    siEmployee:         Number(document.getElementById('ts-si-ee')?.value||11),
+    siMinBase:          Number(document.getElementById('ts-si-min')?.value||1700),
+    siMaxBase:          Number(document.getElementById('ts-si-max')?.value||11600),
+    salaryPersonalExemption: Number(document.getElementById('ts-sal-exemp')?.value||15000),
+    salaryInsuranceExemption:Number(document.getElementById('ts-si-exemp')?.value||1200),
+    salaryBrackets: brackets,
+    updatedAt: new Date().toISOString(),
+    updatedBy: _authUser?.name||'—',
+  };
+
+  const existing = (getAll('taxSettings')||[])[0];
+  if(existing){ update('taxSettings', existing.id, d); }
+  else { insert('taxSettings', d); }
+
+  showNotif&&showNotif('✅ تم حفظ إعدادات الضرائب — ستُطبَّق على جميع الحسابات فوراً', 'success');
+  go('taxsettings');
+}
+
+function resetTaxSettings(){
+  if(!confirm('إعادة ضبط جميع النسب للقيم الافتراضية (2024)؟')) return;
+  const existing = (getAll('taxSettings')||[])[0];
+  if(existing) remove('taxSettings', existing.id);
+  showNotif&&showNotif('✅ تمت إعادة الضبط للقيم الافتراضية', 'success');
+  go('taxsettings');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// B. لوحة الضرائب الرئيسية — Tax Dashboard
+// ══════════════════════════════════════════════════════════════════
+
+PAGES.taxegypt = function(){
+  const ts   = getTaxSettings();
+  const invs = getAll('salesInvoices')||[];
+  const pos  = getAll('productionOrders')||[];
+  const emps = getAll('employees')||[];
+  const curMonth = today().slice(0,7);
+
+  const vatDue   = invs.filter(i=>i.paymentStatus!=='paid').reduce((s,i)=>s+Number(i.vatAmount||0),0);
+  const stampDue = invs.reduce((s,i)=>s+Number(i.subtotal||0)*ts.stampInvoice, 0);
+  const totalPayroll = (getAll('payrollRuns')||[]).reduce((s,p)=>s+Number(p.totalGross||0),0);
+  const siDue    = totalPayroll * ts.siEmployer;
+  const yr = new Date().getFullYear();
+  const revenue= invs.reduce((s,i)=>s+Number(i.totalAmount||0),0);
+  const expenses=(getAll('journalEntries')||[]).filter(e=>e.source!=='sales').reduce((s,e)=>(e.lines||[]).filter(l=>l.accountCode?.startsWith('5')).reduce((ss,l)=>ss+Number(l.debit||0),s),0);
+  const corpTaxEst = Math.max(0,(revenue-expenses)*ts.corpTaxRate);
+
+  setPage('🏛️ الضرائب والامتثال المصري',
+    'Tax Compliance — قوانين 67/2016 + 91/2005 + 111/1980 + 148/2019',
+    `<div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-white" onclick="go('taxsettings')">⚙️ إعدادات الضرائب</button>
+      <button class="btn btn-white" onclick="go('vatreport')">🧾 إقرار VAT</button>
+      <button class="btn btn-white" onclick="go('stamptax')">🏛️ ضريبة الدمغة</button>
+      <button class="btn btn-white" onclick="go('payrolltax')">👤 ضريبة المرتبات</button>
+      <button class="btn btn-white" onclick="go('socialinsurance')">👥 التأمينات</button>
+    </div>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card" onclick="go('vatreport')" style="cursor:pointer">
+        <div class="lbl">VAT مستحق 🧾</div>
+        <div class="val text-red">${fmtC(vatDue)}</div>
+        <div style="font-size:10px;color:var(--muted)">نسبة: ${ts.vatRateDisplay}% | قانون 67/2016</div>
+      </div>
+      <div class="stat-card" onclick="go('stamptax')" style="cursor:pointer">
+        <div class="lbl">دمغة فواتير 🏛️</div>
+        <div class="val text-amber">${fmtC(stampDue)}</div>
+        <div style="font-size:10px;color:var(--muted)">نسبة: ${(ts.stampInvoice*100).toFixed(2)}% | قانون 111/1980</div>
+      </div>
+      <div class="stat-card" onclick="go('socialinsurance')" style="cursor:pointer">
+        <div class="lbl">تأمينات اجتماعية 👥</div>
+        <div class="val text-purple">${fmtC(siDue)}</div>
+        <div style="font-size:10px;color:var(--muted)">صاحب عمل: ${(ts.siEmployer*100).toFixed(2)}% | قانون 148/2019</div>
+      </div>
+      <div class="stat-card">
+        <div class="lbl">ضريبة دخل تقديرية 🏢</div>
+        <div class="val text-blue">${fmtC(corpTaxEst)}</div>
+        <div style="font-size:10px;color:var(--muted)">نسبة: ${(ts.corpTaxRate*100).toFixed(1)}% | قانون 91/2005</div>
+      </div>
+    </div>
+
+    <!-- التقويم الضريبي -->
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:12px">📅 التقويم الضريبي — المواعيد النهائية</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px">
+        ${[
+          {label:'إقرار VAT الشهري',date:'آخر الشهر التالي',law:'م.39/67/2016',color:'var(--green-light)'},
+          {label:'دفع التأمينات الاجتماعية',date:'15 من الشهر التالي',law:'قانون 148/2019',color:'var(--purple)'},
+          {label:'الدفعة المقدمة ضريبة دخل',date:'30 أبريل / أغسطس / يناير',law:'م.60/91/2005',color:'var(--blue)'},
+          {label:'الإقرار الضريبي السنوي',date:'30 أبريل',law:'م.82/91/2005',color:'var(--blue)'},
+          {label:'ضريبة الدمغة الشهرية',date:'آخر الشهر التالي',law:'قانون 111/1980',color:'var(--amber)'},
+          {label:'نموذج 6 تأمينات (سنوي)',date:'مارس كل سنة',law:'قانون 148/2019',color:'var(--purple)'},
+        ].map(t=>`
+        <div style="padding:10px;background:var(--hover);border-radius:8px;border-right:3px solid ${t.color}">
+          <div style="font-size:12px;font-weight:700">${t.label}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">📅 ${t.date}</div>
+          <div style="font-size:10px;color:${t.color};margin-top:2px">${t.law}</div>
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- النسب الحالية -->
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-weight:700;font-size:13px">📊 النسب الضريبية النافذة</div>
+        <button class="btn btn-white btn-sm" onclick="go('taxsettings')">✏️ تعديل النسب</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;font-size:12px">
+        ${[
+          {label:'VAT — قانون 67/2016',          val:ts.vatRateDisplay+'%',       color:'var(--green-light)'},
+          {label:'ضريبة شركات — قانون 91/2005',  val:(ts.corpTaxRate*100).toFixed(1)+'%', color:'var(--blue)'},
+          {label:'دمغة فواتير — قانون 111/1980',  val:(ts.stampInvoice*100).toFixed(2)+'%',color:'var(--amber)'},
+          {label:'دمغة رواتب (صاحب عمل)',         val:(ts.stampPayrollEmployer*100).toFixed(2)+'%',color:'var(--amber)'},
+          {label:'تأمينات — صاحب عمل',            val:(ts.siEmployer*100).toFixed(2)+'%',color:'var(--purple)'},
+          {label:'تأمينات — موظف',                val:(ts.siEmployee*100).toFixed(2)+'%',color:'var(--purple)'},
+          {label:'استقطاع مقاولين',               val:(ts.withholdContractor*100)+'%',    color:'var(--red)'},
+          {label:'استقطاع توزيعات',               val:(ts.withholdDividends*100)+'%',     color:'var(--red)'},
+        ].map(t=>`
+        <div style="padding:8px 12px;background:var(--hover);border-radius:8px;display:flex;justify-content:space-between;align-items:center">
+          <span style="color:var(--muted)">${t.label}</span>
+          <strong style="color:${t.color};font-size:15px">${t.val}</strong>
+        </div>`).join('')}
+      </div>
+    </div>`
+  );
+};
+
+// ══════════════════════════════════════════════════════════════════
+// C. إقرار ضريبة القيمة المضافة — VAT Return
+// ══════════════════════════════════════════════════════════════════
+
+PAGES.vatreport = function(){
+  const ts   = getTaxSettings();
+  const invs = getAll('salesInvoices')||[];
+  const pos  = getAll('purchaseOrders')||[];
+  const selM = window._vatMonth || today().slice(0,7);
+
+  const mInvs = invs.filter(i=>(i.invoiceDate||'').startsWith(selM));
+  const mPOs  = pos.filter(p=>(p.orderDate||p.createdAt||'').startsWith(selM));
+
+  const salesStd    = mInvs.filter(i=>!i.vatExempt).reduce((s,i)=>s+Number(i.subtotal||0),0);
+  const salesExempt = mInvs.filter(i=>i.vatExempt).reduce((s,i)=>s+Number(i.subtotal||0),0);
+  const salesExport = mInvs.filter(i=>i.isExport).reduce((s,i)=>s+Number(i.subtotal||0),0);
+  const vatOut      = mInvs.filter(i=>!i.vatExempt&&!i.isExport).reduce((s,i)=>s+Number(i.vatAmount||0),0);
+  const purchStd    = mPOs.filter(p=>p.status==='مستلم').reduce((s,p)=>s+Number(p.totalAmount||0),0);
+  const vatIn       = mPOs.filter(p=>p.status==='مستلم').reduce((s,p)=>s+Number(p.vatAmount||0),0);
+  const netVat      = vatOut - vatIn;
+  const months = [];
+  for(let y=2023;y<=new Date().getFullYear();y++)
+    for(let m=1;m<=12;m++) months.push(`${y}-${String(m).padStart(2,'0')}`);
+
+  setPage('🧾 إقرار ضريبة القيمة المضافة',
+    'VAT Return — قانون 67/2016 + منظومة ETA',
+    `<div style="display:flex;gap:8px">
+      <button class="btn btn-white" onclick="go('taxegypt')">← الرئيسية</button>
+      <button class="btn btn-green" onclick="exportVATDeclaration()">📤 تصدير إقرار ETA</button>
+    </div>`,
+    `<div class="form-row" style="margin-bottom:14px">
+      ${fg('الفترة الضريبية', `<select id="vat-month" onchange="window._vatMonth=this.value;go('vatreport')"
+        style="width:200px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        ${months.reverse().map(m=>`<option value="${m}" ${m===selM?'selected':''}>${m}</option>`).join('')}
+      </select>`)}
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+      <!-- المخرجات -->
+      <div class="card">
+        <div style="font-weight:700;font-size:13px;margin-bottom:10px;color:var(--green-light)">📤 ضريبة المخرجات (Output VAT)</div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+          <span>مبيعات خاضعة (${ts.vatRateDisplay}%)</span><strong>${fmtC(salesStd)}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+          <span>مبيعات معفاة (0%) — أدوية قائمة EDA</span><strong>${fmtC(salesExempt)}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+          <span>صادرات (0%)</span><strong>${fmtC(salesExport)}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:14px;font-weight:700;color:var(--green-light)">
+          <span>ضريبة المخرجات</span><span>${fmtC(vatOut)}</span>
+        </div>
+      </div>
+      <!-- المدخلات -->
+      <div class="card">
+        <div style="font-weight:700;font-size:13px;margin-bottom:10px;color:var(--blue)">📥 ضريبة المدخلات (Input VAT)</div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+          <span>مشتريات مواد خام</span><strong>${fmtC(purchStd)}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:14px;font-weight:700;color:var(--blue)">
+          <span>ضريبة المدخلات</span><span>${fmtC(vatIn)}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- الصافي -->
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <span>ضريبة المخرجات</span><strong class="text-green">${fmtC(vatOut)}</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <span>( ضريبة المدخلات )</span><strong class="text-blue">( ${fmtC(vatIn)} )</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:10px 0;font-size:16px;font-weight:900">
+        <span>${netVat>=0?'🔴 ضريبة مستحقة السداد':'🟢 ضريبة مستردة'}</span>
+        <span style="color:${netVat>=0?'var(--red)':'var(--green-light)'}">${fmtC(Math.abs(netVat))}</span>
+      </div>
+    </div>
+
+    <!-- جدول الفواتير -->
+    <div class="card">
+      <div style="font-weight:700;font-size:12px;margin-bottom:10px">📋 تفصيل فواتير ${selM} (${mInvs.length} فاتورة)</div>
+      ${tbl(
+        ['رقم الفاتورة','العميل / TRN','التاريخ','الوعاء','الضريبة','الإجمالي','ETA UUID'],
+        mInvs.map(inv=>tr(
+          `<code>INV-${String(inv.id).padStart(6,'0')}</code>`,
+          `<div><strong>${escapeHtml(inv.customerName||'—')}</strong>
+           ${inv.customerTIN?`<div style="font-size:10px;color:var(--muted)">TIN:${inv.customerTIN}</div>`:''}
+           </div>`,
+          inv.invoiceDate||'—',
+          fmtC(inv.subtotal||0),
+          inv.vatExempt?'<span class="badge b-gray">معفى</span>':fmtC(inv.vatAmount||0),
+          fmtC(inv.totalAmount||0),
+          inv.etaUUID?`<code style="font-size:9px">${inv.etaUUID.slice(0,15)}...</code>` : '<span style="color:var(--red);font-size:11px">⚠️ بدون UUID</span>'
+        ))
+      ,'tbl_vat_inv')}
+    </div>`
+  );
+};
+
+function exportVATDeclaration(){
+  const ts    = getTaxSettings();
+  const selM  = window._vatMonth||today().slice(0,7);
+  const invs  = (getAll('salesInvoices')||[]).filter(i=>(i.invoiceDate||'').startsWith(selM));
+  const pos   = (getAll('purchaseOrders')||[]).filter(p=>(p.orderDate||'').startsWith(selM)&&p.status==='مستلم');
+  const vatOut= invs.filter(i=>!i.vatExempt).reduce((s,i)=>s+Number(i.vatAmount||0),0);
+  const vatIn = pos.reduce((s,p)=>s+Number(p.vatAmount||0),0);
+  const net   = vatOut - vatIn;
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<!-- إقرار ضريبة القيمة المضافة — منظومة ETA — الفترة: ${selM} -->
+<!-- قانون 67 لسنة 2016 — مصلحة الضرائب المصرية -->
+<VATReturn>
+  <TaxPeriod>${selM}</TaxPeriod>
+  <IssuedDate>${today()}</IssuedDate>
+  <TRN>${escapeHtml(ts.companyTRN||'YOUR-TRN')}</TRN>
+  <OutputVAT>
+    <TaxableSupplies rate="${ts.vatRateDisplay}">
+      <Amount>${invs.filter(i=>!i.vatExempt).reduce((s,i)=>s+Number(i.subtotal||0),0).toFixed(2)}</Amount>
+      <Tax>${vatOut.toFixed(2)}</Tax>
+    </TaxableSupplies>
+    <ZeroRated>
+      <Amount>${invs.filter(i=>i.vatExempt||i.isExport).reduce((s,i)=>s+Number(i.subtotal||0),0).toFixed(2)}</Amount>
+    </ZeroRated>
+  </OutputVAT>
+  <InputVAT>
+    <Amount>${pos.reduce((s,p)=>s+Number(p.totalAmount||0),0).toFixed(2)}</Amount>
+    <Tax>${vatIn.toFixed(2)}</Tax>
+  </InputVAT>
+  <NetVAT>${net.toFixed(2)}</NetVAT>
+  <Status>${net>=0?'DUE':'REFUND'}</Status>
+  <Invoices count="${invs.length}">
+${invs.map(i=>`    <Invoice>
+      <ID>INV-${String(i.id).padStart(6,'0')}</ID>
+      <UUID>${escapeHtml(i.etaUUID||'')}</UUID>
+      <Date>${i.invoiceDate||''}</Date>
+      <CustomerTRN>${escapeHtml(i.customerTIN||'')}</CustomerTRN>
+      <Subtotal>${Number(i.subtotal||0).toFixed(2)}</Subtotal>
+      <VAT>${Number(i.vatAmount||0).toFixed(2)}</VAT>
+      <Total>${Number(i.totalAmount||0).toFixed(2)}</Total>
+      <Exempt>${i.vatExempt?'true':'false'}</Exempt>
+    </Invoice>`).join('\n')}
+  </Invoices>
+</VATReturn>`;
+
+  const blob = new Blob([xml], {type:'application/xml;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url; a.download = `VAT-Return-${selM}.xml`;
+  a.click(); URL.revokeObjectURL(url);
+  showNotif&&showNotif(`✅ تم تصدير إقرار VAT — ${selM}`, 'success');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// D. ضريبة الدمغة
+// ══════════════════════════════════════════════════════════════════
+
+PAGES.stamptax = function(){
+  const ts   = getTaxSettings();
+  const invs = getAll('salesInvoices')||[];
+  const pay  = getAll('payrollRuns')||[];
+  const selM = window._stampMonth||today().slice(0,7);
+  const mInvs= invs.filter(i=>(i.invoiceDate||'').startsWith(selM));
+  const mPay = pay.filter(p=>(p.period||'').startsWith(selM));
+
+  const invBase    = mInvs.reduce((s,i)=>s+Number(i.subtotal||0),0);
+  const stampInvs  = invBase * ts.stampInvoice;
+  const payBase    = mPay.reduce((s,p)=>s+Number(p.totalGross||0),0);
+  const stampEmpR  = payBase * ts.stampPayrollEmployer;
+  const stampEmpE  = payBase * ts.stampPayrollEmployee;
+  const total      = stampInvs + stampEmpR;
+
+  setPage('🏛️ ضريبة الدمغة المصرية','Stamp Tax — قانون 111/1980',
+    `<div style="display:flex;gap:8px">
+      <button class="btn btn-white" onclick="go('taxegypt')">← الرئيسية</button>
+      <button class="btn btn-green" onclick="postStampTax()">📒 ترحيل في اليومية</button>
+    </div>`,
+    `<div class="form-row" style="margin-bottom:14px">
+      ${fg('الشهر', `<input type="month" id="stamp-month" value="${selM}" onchange="window._stampMonth=this.value;go('stamptax')"
+        style="width:200px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">`)}
+    </div>
+    <div class="stats-grid g3" style="margin-bottom:14px">
+      <div class="stat-card"><div class="lbl">دمغة فواتير تجارية</div><div class="val text-amber">${fmtC(stampInvs)}</div><div style="font-size:10px;color:var(--muted)">${fmtC(invBase)} × ${(ts.stampInvoice*100).toFixed(2)}%</div></div>
+      <div class="stat-card"><div class="lbl">دمغة رواتب (صاحب عمل)</div><div class="val text-amber">${fmtC(stampEmpR)}</div><div style="font-size:10px;color:var(--muted)">${fmtC(payBase)} × ${(ts.stampPayrollEmployer*100).toFixed(2)}%</div></div>
+      <div class="stat-card"><div class="lbl text-red">إجمالي الدمغة المستحقة</div><div class="val text-red">${fmtC(total)}</div></div>
+    </div>
+    <div class="card">
+      <div style="font-weight:700;font-size:12px;margin-bottom:10px">القاعدة القانونية — قانون 111 لسنة 1980</div>
+      <div style="font-size:12px;color:var(--muted)">
+        <div>• م.22: دمغة نسبية على الفواتير التجارية = ${(ts.stampInvoice*100).toFixed(2)}%</div>
+        <div>• م.51: دمغة على كشوف المرتبات — صاحب العمل ${(ts.stampPayrollEmployer*100).toFixed(2)}% | الموظف ${(ts.stampPayrollEmployee*100).toFixed(2)}%</div>
+        <div>• الموعد النهائي: آخر الشهر التالي</div>
+      </div>
+    </div>`
+  );
+};
+
+function postStampTax(){
+  const ts   = getTaxSettings();
+  const selM = window._stampMonth||today().slice(0,7);
+  const invs = (getAll('salesInvoices')||[]).filter(i=>(i.invoiceDate||'').startsWith(selM));
+  const pay  = (getAll('payrollRuns')||[]).filter(p=>(p.period||'').startsWith(selM));
+  const invBase   = invs.reduce((s,i)=>s+Number(i.subtotal||0),0);
+  const stampInvs = invBase * ts.stampInvoice;
+  const payBase   = pay.reduce((s,p)=>s+Number(p.totalGross||0),0);
+  const stampPay  = payBase * ts.stampPayrollEmployer;
+  const total     = stampInvs + stampPay;
+  if(!total){ alert('لا توجد قيم لترحيلها'); return; }
+  autoJournalEntry(`ضريبة دمغة — ${selM}`,
+    [{accountCode:'5703',debit:total,credit:0},
+     {accountCode:'2203',debit:0,credit:total}],
+    'STAMP-'+selM, 'manual');
+  showNotif&&showNotif(`✅ تم ترحيل ضريبة الدمغة ${fmtC(total)} للشهر ${selM}`, 'success');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// E. ضريبة المرتبات
+// ══════════════════════════════════════════════════════════════════
+
+PAGES.payrolltax = function(){
+  const ts   = getTaxSettings();
+  const emps = getAll('employees')||[];
+  const selM = window._payTaxMonth||today().slice(0,7);
+
+  const empCalc = emps.filter(e=>e.status==='active').map(e=>{
+    const basic   = Number(e.basicSalary||e.salary||0);
+    const gross   = Number(e.grossSalary||basic);
+    const si      = calcSocialInsurance(basic, gross-basic, ts);
+    const tax     = calcSalaryTax(gross*12, ts);
+    const net     = gross - tax.monthlyTax - si.employee;
+    return {...e, basic, gross, si, tax, net,
+      stampEmpR: gross * ts.stampPayrollEmployer,
+      stampEmpE: gross * ts.stampPayrollEmployee };
+  });
+
+  const totGross   = empCalc.reduce((s,e)=>s+e.gross, 0);
+  const totTax     = empCalc.reduce((s,e)=>s+e.tax.monthlyTax, 0);
+  const totSI_emp  = empCalc.reduce((s,e)=>s+e.si.employer, 0);
+  const totSI_ee   = empCalc.reduce((s,e)=>s+e.si.employee, 0);
+  const totStamp   = empCalc.reduce((s,e)=>s+e.stampEmpR, 0);
+
+  setPage('👤 ضريبة المرتبات والرواتب',
+    'Payroll Tax — قانون 91/2005 م.7 | شرائح 2024',
+    `<div style="display:flex;gap:8px">
+      <button class="btn btn-white" onclick="go('taxegypt')">← الرئيسية</button>
+      <button class="btn btn-green" onclick="postPayrollTax()">📒 ترحيل في اليومية</button>
+    </div>`,
+    `<div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">إجمالي الرواتب</div><div class="val">${fmtC(totGross)}</div></div>
+      <div class="stat-card"><div class="lbl text-red">ضريبة دخل مستقطعة</div><div class="val text-red">${fmtC(totTax)}</div></div>
+      <div class="stat-card"><div class="lbl text-purple">تأمينات (صاحب عمل)</div><div class="val text-purple">${fmtC(totSI_emp)}</div></div>
+      <div class="stat-card"><div class="lbl text-amber">دمغة رواتب (صاحب عمل)</div><div class="val text-amber">${fmtC(totStamp)}</div></div>
+    </div>
+
+    <div class="card">
+      <div style="font-weight:700;font-size:12px;margin-bottom:10px">📊 تفصيل الموظفين — شرائح ضريبية تلقائية</div>
+      ${tbl(
+        ['الموظف','الراتب الإجمالي','وعاء التأمينات','تأمينات (صاحب عمل)','تأمينات (موظف)','الدخل الخاضع (سنوي)','ضريبة/شهر','صافي الراتب'],
+        empCalc.map(e=>tr(
+          escapeHtml(e.name||'—'),
+          fmtC(e.gross),
+          `${fmtC(e.si.base)}<div style="font-size:10px;color:var(--muted)">حد أقصى: ${fmtC(ts.siMaxBase)}</div>`,
+          `<span class="text-purple">${fmtC(e.si.employer)}</span><div style="font-size:10px;color:var(--muted)">${(ts.siEmployer*100).toFixed(2)}%</div>`,
+          `<span>${fmtC(e.si.employee)}</span><div style="font-size:10px;color:var(--muted)">${(ts.siEmployee*100).toFixed(2)}%</div>`,
+          `<div>${fmtC(e.tax.taxable)}/سنة</div><div style="font-size:10px;color:var(--muted)">بعد إعفاء ${fmtC(ts.salaryPersonalExemption)}</div>`,
+          `<strong class="text-red">${fmtC(e.tax.monthlyTax)}</strong>`,
+          `<strong class="text-green">${fmtC(e.net)}</strong>`
+        ))
+      ,'tbl_payroll_tax')}
+    </div>`
+  );
+};
+
+function postPayrollTax(){
+  const ts   = getTaxSettings();
+  const emps = (getAll('employees')||[]).filter(e=>e.status==='active');
+  const selM = window._payTaxMonth||today().slice(0,7);
+  let totalGross=0, totalTax=0, totalSI_emp=0, totalSI_ee=0, totalStamp=0;
+  emps.forEach(e=>{
+    const g = Number(e.grossSalary||e.basicSalary||e.salary||0);
+    const si= calcSocialInsurance(Number(e.basicSalary||g), g-Number(e.basicSalary||g), ts);
+    const tx= calcSalaryTax(g*12, ts);
+    totalGross  += g;
+    totalTax    += tx.monthlyTax;
+    totalSI_emp += si.employer;
+    totalSI_ee  += si.employee;
+    totalStamp  += g * ts.stampPayrollEmployer;
+  });
+  if(!totalGross){ alert('لا يوجد موظفون نشطون'); return; }
+  autoJournalEntry(`رواتب شهر ${selM} — ضريبة + تأمينات + دمغة`,
+    [{accountCode:'5501',debit:totalGross,credit:0},
+     {accountCode:'5701',debit:totalTax,credit:0},
+     {accountCode:'5703',debit:totalStamp,credit:0},
+     {accountCode:'2301',debit:0,credit:totalGross-totalTax-totalSI_ee-totalStamp},
+     {accountCode:'2204',debit:0,credit:totalTax},
+     {accountCode:'2304',debit:0,credit:totalSI_ee},
+     {accountCode:'2203',debit:0,credit:totalStamp}],
+    'PAY-'+selM, 'payroll');
+  showNotif&&showNotif(`✅ تم ترحيل كشف المرتبات — ${selM}`, 'success');
+  go('journal');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// F. التأمينات الاجتماعية + تصدير Excel نموذج 2
+// ══════════════════════════════════════════════════════════════════
+
+PAGES.socialinsurance = function(){
+  const ts   = getTaxSettings();
+  const emps = getAll('employees')||[];
+  const selM = window._siMonth||today().slice(0,7);
+
+  const empCalc = emps.filter(e=>e.status==='active').map(e=>{
+    const basic = Number(e.basicSalary||e.salary||0);
+    const gross = Number(e.grossSalary||basic);
+    const si    = calcSocialInsurance(basic, gross-basic, ts);
+    return {...e, basic, gross, si};
+  });
+
+  const totBase  = empCalc.reduce((s,e)=>s+e.si.base,0);
+  const totEmp   = empCalc.reduce((s,e)=>s+e.si.employer,0);
+  const totEE    = empCalc.reduce((s,e)=>s+e.si.employee,0);
+  const totTotal = empCalc.reduce((s,e)=>s+e.si.total,0);
+
+  setPage('👥 التأمينات الاجتماعية — نموذج 2',
+    'Social Insurance — قانون 148/2019 | نموذج 2 الشهري',
+    `<div style="display:flex;gap:8px">
+      <button class="btn btn-white" onclick="go('taxegypt')">← الرئيسية</button>
+      <button class="btn btn-green" onclick="exportSIExcel()">📊 تصدير Excel — نموذج 2</button>
+      <button class="btn btn-white" onclick="postSIToJournal()">📒 ترحيل اليومية</button>
+    </div>`,
+    `<div style="padding:12px;background:rgba(148,103,189,.06);border:1px solid rgba(148,103,189,.2);border-radius:10px;margin-bottom:14px;font-size:12px">
+      📋 <strong>قانون 148/2019 — تأمين اجتماعي شامل:</strong>
+      صاحب العمل ${(ts.siEmployer*100).toFixed(2)}% | الموظف ${(ts.siEmployee*100).toFixed(2)}% |
+      وعاء: ${fmtC(ts.siMinBase)} → ${fmtC(ts.siMaxBase)} شهرياً | سداد قبل 15 من الشهر التالي
+    </div>
+    <div class="stats-grid g4" style="margin-bottom:16px">
+      <div class="stat-card"><div class="lbl">عدد المؤمَّن عليهم</div><div class="val">${empCalc.length}</div></div>
+      <div class="stat-card"><div class="lbl">إجمالي وعاء الاشتراك</div><div class="val">${fmtC(totBase)}</div></div>
+      <div class="stat-card"><div class="lbl text-purple">حصة صاحب العمل</div><div class="val text-purple">${fmtC(totEmp)}</div></div>
+      <div class="stat-card"><div class="lbl">حصة الموظفين</div><div class="val">${fmtC(totEE)}</div></div>
+    </div>
+    <div class="card">
+      ${tbl(
+        ['م','اسم الموظف','الرقم الوطني','الراتب الأساسي','الراتب المتغير','وعاء الاشتراك','حصة صاحب العمل','حصة الموظف','الإجمالي'],
+        empCalc.map((e,i)=>tr(
+          i+1,
+          escapeHtml(e.name||'—'),
+          escapeHtml(e.nationalId||'—'),
+          fmtC(e.basic),
+          fmtC(e.si.varBase||0),
+          fmtC(e.si.base),
+          `<strong class="text-purple">${fmtC(e.si.employer)}</strong>`,
+          fmtC(e.si.employee),
+          `<strong>${fmtC(e.si.total)}</strong>`
+        ))
+      ,'tbl_si')}
+      <div style="padding:8px;font-weight:700;font-size:14px;display:flex;justify-content:space-between;background:rgba(148,103,189,.06);border-top:2px solid var(--purple)">
+        <span>الإجمالي</span>
+        <span style="color:var(--purple)">${fmtC(totEmp)} (ص.ع) + ${fmtC(totEE)} (موظف) = ${fmtC(totTotal)}</span>
+      </div>
+    </div>`
+  );
+};
+
+function exportSIExcel(){
+  const ts   = getTaxSettings();
+  const emps = (getAll('employees')||[]).filter(e=>e.status==='active');
+  const selM = window._siMonth||today().slice(0,7);
+
+  const rows = emps.map((e,i)=>{
+    const basic = Number(e.basicSalary||e.salary||0);
+    const gross = Number(e.grossSalary||basic);
+    const si    = calcSocialInsurance(basic, gross-basic, ts);
+    return [i+1, e.name||'', e.nationalId||'', e.insuranceNo||'', basic, si.varBase||0, si.base, si.employer, si.employee, si.total];
+  });
+
+  const header = ['م','الاسم الكامل','الرقم الوطني','رقم التأمين','الأجر الأساسي','الأجر المتغير','وعاء الاشتراك',`حصة صاحب العمل (${(ts.siEmployer*100).toFixed(2)}%)`,`حصة الموظف (${(ts.siEmployee*100).toFixed(2)}%)`,`الإجمالي (${(ts.siEmployer*100+ts.siEmployee*100).toFixed(2)}%)`];
+  const totals = ['','','','','الإجمالي','','',
+    rows.reduce((s,r)=>s+r[7],0).toFixed(2),
+    rows.reduce((s,r)=>s+r[8],0).toFixed(2),
+    rows.reduce((s,r)=>s+r[9],0).toFixed(2)
+  ];
+
+  // Generate CSV (Excel-compatible)
+  const csvLines = [
+    `نموذج 2 — التأمينات الاجتماعية — ${selM}`,
+    `قانون 148 لسنة 2019 | اسم الشركة: ${(getAll('companies')||[]).find(c=>c.isActive)?.name||'—'}`,
+    '',
+    header.join(','),
+    ...rows.map(r=>r.join(',')),
+    totals.join(','),
+  ];
+  const bom = '\uFEFF'; // UTF-8 BOM for Arabic Excel
+  const blob = new Blob([bom+csvLines.join('\n')], {type:'text/csv;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a'); a.href=url;
+  a.download = `SI-Form2-${selM}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+  showNotif&&showNotif(`✅ تم تصدير نموذج 2 — ${selM}`, 'success');
+}
+
+function postSIToJournal(){
+  const ts   = getTaxSettings();
+  const emps = (getAll('employees')||[]).filter(e=>e.status==='active');
+  const selM = window._siMonth||today().slice(0,7);
+  let totEmp=0, totEE=0;
+  emps.forEach(e=>{
+    const basic=Number(e.basicSalary||e.salary||0);
+    const gross=Number(e.grossSalary||basic);
+    const si=calcSocialInsurance(basic,gross-basic,ts);
+    totEmp+=si.employer; totEE+=si.employee;
+  });
+  if(!totEmp){ alert('لا يوجد موظفون'); return; }
+  autoJournalEntry(`تأمينات اجتماعية — ${selM}`,
+    [{accountCode:'5501',debit:totEmp,credit:0},
+     {accountCode:'2304',debit:0,credit:totEmp+totEE},
+     {accountCode:'2301',debit:totEE,credit:0}],
+    'SI-'+selM, 'payroll');
+  showNotif&&showNotif(`✅ تم ترحيل التأمينات: صاحب عمل ${fmtC(totEmp)}`, 'success');
+}
 
 // renderNav/go called by coEnter() after company is selected
 
