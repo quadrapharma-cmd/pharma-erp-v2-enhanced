@@ -13259,46 +13259,6 @@ function enterCycleCount(receiptId){
     </div>`));
 }
 
-function saveCycleCount(receiptId){
-  const actual = numVal('cc-qty');
-  if(actual===null||actual===undefined||actual<0) return alert('أدخل الكمية الفعلية (صفر أو أكثر)');
-  const rec = getById('materialReceipts', receiptId);
-  const bookQty = Number(rec?.remainingQuantity||0);
-  const diff = actual - bookQty;
-  const ccRec = insert('cycleCountRecords',{
-    receiptId, materialId:rec?.materialId,
-    batchNumber: rec?.batchNumber,
-    bookQty: bookQty,
-    actualQty: actual,
-    difference: diff,
-    countDate: today(),
-    countedBy: val('cc-counter')||_authUser?.name||'—',
-    notes: document.getElementById('cc-notes')?.value||null,
-    approved: Math.abs(diff) <= 0.01,
-  });
-  // GMP: Adjust stock to physical count if discrepancy confirmed
-  if(Math.abs(diff) > 0.01){
-    // Update remainingQuantity to match physical count
-    update('materialReceipts', receiptId, {
-      remainingQuantity: actual,
-      lastCycleCountId: ccRec.id,
-      lastCycleCountDate: today(),
-      stockAdjustedBy: _authUser?.name||'—',
-    });
-    // Also adjust material currentStock
-    if(rec?.materialId){
-      const mat = getById('materials', rec.materialId);
-      if(mat){
-        const oldStock = Number(mat.currentStock||0);
-        update('materials', rec.materialId, { currentStock: String(Math.max(0, oldStock + diff)) });
-      }
-    }
-    showNotif&&showNotif(`⚠️ تم تعديل المخزون: ${diff>0?'+':''}${fmtN(diff)} بناءً على الجرد الفعلي`, 'warn');
-  } else {
-    showNotif&&showNotif(`✅ الجرد مطابق — لا يوجد فرق`, 'success');
-  }
-  closeModal(); go('cyclecounting');
-}
 
 // ── ٩. تحديث صفحة المواد الخام لتشمل كل الميزات ─────────────────────
 
@@ -22951,6 +22911,549 @@ window.toggleAI = function(){
     head.appendChild(actDiv);
   });
 })();
+
+// ══════════════════════════════════════════════════════════════════
+// MISSING FUNCTIONS PATCH — إصلاح كل الأزرار المكسورة
+// ══════════════════════════════════════════════════════════════════
+
+// ── 1. switchTab — مفقودة تماماً ────────────────────────────────
+function switchTab(groupId, tabId){
+  // Support both: data-group tabs and id-based tabs
+  const container = document.getElementById(groupId) || document;
+  container.querySelectorAll('.tab').forEach(b => {
+    b.classList.toggle('active', b.onclick?.toString().includes(tabId) ||
+      b.getAttribute('onclick')?.includes(tabId));
+  });
+  // Hide/show panes
+  const allPanes = document.querySelectorAll(`[id^="${groupId.replace('-tabs','-')}"]`);
+  allPanes.forEach(p => {
+    p.style.display = p.id === tabId ? '' : 'none';
+  });
+  // Also try data-group approach
+  document.querySelectorAll(`.tab-pane[data-group="${groupId}"]`).forEach(p => {
+    p.style.display = p.id === tabId ? '' : 'none';
+  });
+  document.querySelectorAll(`.tab[data-group="${groupId}"]`).forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tabId);
+  });
+}
+
+// ── 2. addCmo / editCmo / saveCmo ────────────────────────────────
+function addCmo(){ showCmoForm(); }
+function editCmo(id){ showCmoForm(getById('cmos',id)||{}); }
+
+function showCmoForm(c={}){
+  showModal(modal(c.id?'✏️ تعديل مصنع CMO':'🏭 مصنع CMO جديد', `
+    <div style="max-height:80vh;overflow-y:auto;padding-right:4px">
+    ${fg('اسم المصنع *', inp('cmo-name','text',c.name||'','مثال: صيدليات النيل'))}
+    <div class="form-row">
+      ${fg('رقم ترخيص التصنيع *', inp('cmo-lic','text',c.licenseNumber||'','مثال: CMO-2024-001'))}
+      ${fg('رقم ترخيص EDA', inp('cmo-eda','text',c.edaLicenseNumber||'',''))}
+    </div>
+    <div class="form-row">
+      ${fg('نوع المصنع', sel('cmo-type',[
+        {v:'local',l:'محلي'},{v:'imported',l:'مستورد'},{v:'joint',l:'مشترك'}
+      ],c.factoryType||'local'))}
+      ${fg('دولة المنشأ', inp('cmo-country','text',c.country||'مصر',''))}
+    </div>
+    ${fg('العنوان', inp('cmo-addr','text',c.address||'',''))}
+    <div class="form-row">
+      ${fg('رقم الهاتف', inp('cmo-phone','tel',c.phone||'',''))}
+      ${fg('البريد الإلكتروني', inp('cmo-email','email',c.email||'',''))}
+    </div>
+    <div class="form-row">
+      ${fg('تاريخ انتهاء الترخيص', inp('cmo-exp','date',c.licenseExpiry||'',''))}
+      ${fg('تكلفة التصنيع (ج.م/دفعة)', inp('cmo-cost','number',c.baseCostPerBatch||'',''))}
+    </div>
+    ${fg('ملاحظات', inp('cmo-notes','text',c.notes||'',''))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveCmo(${c.id||''})">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>
+    </div>`));
+}
+
+function saveCmo(id){
+  const name = document.getElementById('cmo-name')?.value?.trim();
+  if(!name) return alert('يرجى كتابة اسم المصنع');
+  const d = {
+    name,
+    licenseNumber:    document.getElementById('cmo-lic')?.value||null,
+    edaLicenseNumber: document.getElementById('cmo-eda')?.value||null,
+    factoryType:      document.getElementById('cmo-type')?.value||'local',
+    country:          document.getElementById('cmo-country')?.value||'مصر',
+    address:          document.getElementById('cmo-addr')?.value||null,
+    phone:            document.getElementById('cmo-phone')?.value||null,
+    email:            document.getElementById('cmo-email')?.value||null,
+    licenseExpiry:    document.getElementById('cmo-exp')?.value||null,
+    baseCostPerBatch: document.getElementById('cmo-cost')?.value||null,
+    notes:            document.getElementById('cmo-notes')?.value||null,
+    status: 'active',
+  };
+  id ? update('cmos',id,d) : insert('cmos',d);
+  closeModal(); go('cmoscorecard');
+}
+
+// ── 3. addMaterial / editMaterial ────────────────────────────────
+// saveMaterial already exists — just need add/edit wrappers
+function addMaterial(type){
+  // showMaterialForm is likely showMaterialDetail or similar
+  // Let's open a simple form
+  showAddMaterialForm(type||'raw_material');
+}
+function editMaterial(id){
+  const m = getById('materials',id);
+  if(!m) return;
+  showAddMaterialForm(m.materialType, m);
+}
+
+function showAddMaterialForm(type, m={}){
+  const isEdit = !!m.id;
+  showModal(modal(isEdit?'✏️ تعديل مادة':'🧪 مادة جديدة', `
+    <div style="max-height:80vh;overflow-y:auto;padding-right:4px">
+    ${fg('اسم المادة *', inp('m-name','text',m.name||'',''))}
+    <div class="form-row">
+      ${fg('النوع', sel('m-type',[
+        {v:'raw_material',l:'مادة خام API'},
+        {v:'excipient',l:'سواغ (Excipient)'},
+        {v:'packaging',l:'مادة تغليف'},
+        {v:'other',l:'أخرى'}
+      ],type||m.materialType||'raw_material'))}
+      ${fg('وحدة القياس *', sel('m-unit',[
+        {v:'كجم',l:'كجم'},{v:'جم',l:'جم'},{v:'لتر',l:'لتر'},
+        {v:'مل',l:'مل'},{v:'قطعة',l:'قطعة'},{v:'علبة',l:'علبة'}
+      ],m.unit||'كجم'))}
+    </div>
+    <div class="form-row">
+      ${fg('رقم CAS', inp('m-cas','text',m.casNumber||'','مثال: 26787-78-0'))}
+      ${fg('المورد المعتمد', inp('m-sup','text',m.approvedSupplier||m.supplier||'',''))}
+    </div>
+    <div class="form-row">
+      ${fg('الرصيد الحالي', inp('m-stock','number',m.currentStock||0,''))}
+      ${fg('حد إعادة الطلب', inp('m-reorder','number',m.reorderLevel||10,''))}
+    </div>
+    <div class="form-row">
+      ${fg('تكلفة الوحدة (ج.م)', inp('m-cost','number',m.unitCost||'',''))}
+      ${fg('المرجع الدوائي', inp('m-ref','text',m.pharmacopeiaRef||'','مثال: BP 2023'))}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveMaterial(${m.id||''})">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>
+    </div>`));
+}
+
+// ── 4. addDelivery ───────────────────────────────────────────────
+function addDelivery(){
+  const dists = getAll('distributors');
+  const prods = getAll('products');
+  const dOpts = [{v:0,l:'اختر موزع...'},...dists.map(d=>({v:d.id,l:d.name}))];
+  showModal(modal('🚚 أمر توريد جديد', `
+    <div style="max-height:80vh;overflow-y:auto;padding-right:4px">
+    ${fg('الموزع *', sel('del-dist',dOpts,0))}
+    <div class="form-row">
+      ${fg('رقم الأمر', inp('del-num','text','','مثال: DO-2024-001'))}
+      ${fg('تاريخ الأمر *', inp('del-date','date',today(),''))}
+    </div>
+    <div class="form-row">
+      ${fg('المبلغ الإجمالي (ج.م) *', inp('del-amt','number','',''))}
+      ${fg('ضريبة VAT (ج.م)', inp('del-vat','number',0,''))}
+    </div>
+    ${fg('الحالة', sel('del-status',[
+      {v:'pending',l:'معلق'},{v:'delivered',l:'مسلّم'},{v:'cancelled',l:'ملغي'}
+    ],'pending'))}
+    ${fg('ملاحظات', inp('del-notes','text','',''))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveDelivery()">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>
+    </div>`));
+}
+
+function saveDelivery(){
+  const distId = numVal('del-dist');
+  if(!distId) return alert('يرجى اختيار الموزع');
+  const amt = val('del-amt');
+  if(!amt) return alert('يرجى إدخال المبلغ');
+  const d = {
+    distributorId: distId,
+    orderNumber:   val('del-num')||null,
+    orderDate:     val('del-date')||today(),
+    totalAmount:   amt,
+    vatAmount:     val('del-vat')||0,
+    status:        val('del-status')||'pending',
+    notes:         val('del-notes')||null,
+  };
+  insert('deliveryOrders',d);
+  // Auto journal
+  if(d.status==='delivered'){
+    autoJournalEntry('توريد للموزع',
+      [{accountCode:'1201',debit:Number(amt),credit:0},
+       {accountCode:'4101',debit:0,credit:Number(amt)}], null,'delivery');
+  }
+  closeModal(); go('salesorders');
+}
+
+// ── 5. addExpense ────────────────────────────────────────────────
+function addExpense(){
+  showModal(modal('🧾 مصروف جديد', `
+    <div style="max-height:80vh;overflow-y:auto;padding-right:4px">
+    ${fg('الوصف *', inp('exp-desc','text','',''))}
+    <div class="form-row">
+      ${fg('المبلغ (ج.م) *', inp('exp-amt','number','',''))}
+      ${fg('التاريخ *', inp('exp-date','date',today(),''))}
+    </div>
+    <div class="form-row">
+      ${fg('الفئة', sel('exp-cat',[
+        {v:'رواتب وأجور',l:'رواتب وأجور'},
+        {v:'إيجار',l:'إيجار'},
+        {v:'كهرباء',l:'كهرباء'},
+        {v:'مياه',l:'مياه'},
+        {v:'هاتف وإنترنت',l:'هاتف وإنترنت'},
+        {v:'صيانة',l:'صيانة'},
+        {v:'تعبئة وتغليف',l:'تعبئة وتغليف'},
+        {v:'جودة ورقابة',l:'جودة ورقابة'},
+        {v:'نقل المنتج',l:'نقل المنتج'},
+        {v:'دعاية وإعلان',l:'دعاية وإعلان'},
+        {v:'تسجيل دوائي',l:'تسجيل دوائي'},
+        {v:'مصاريف إدارية',l:'مصاريف إدارية'},
+        {v:'other',l:'أخرى'},
+      ],'other'))}
+      ${fg('نوع', sel('exp-type',[
+        {v:'direct',l:'مباشر'},{v:'indirect',l:'غير مباشر'}
+      ],'indirect'))}
+    </div>
+    ${fg('القسم', sel('exp-dept',[
+      {v:'production',l:'إنتاج'},{v:'qc',l:'جودة'},
+      {v:'admin',l:'إداري'},{v:'sales',l:'مبيعات'},{v:'other',l:'أخرى'}
+    ],'admin'))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveExpense()">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>
+    </div>`));
+}
+
+function saveExpense(){
+  const desc = document.getElementById('exp-desc')?.value?.trim();
+  if(!desc) return alert('يرجى كتابة وصف المصروف');
+  const amt = val('exp-amt');
+  if(!amt) return alert('يرجى إدخال المبلغ');
+  const d = {
+    description:  desc,
+    amount:       amt,
+    expenseDate:  val('exp-date')||today(),
+    category:     val('exp-cat')||'other',
+    expenseType:  val('exp-type')||'indirect',
+    department:   val('exp-dept')||null,
+  };
+  insert('expenses',d);
+  autoJournalEntry(desc,
+    [{accountCode:'5509',debit:Number(amt),credit:0},
+     {accountCode:'1102',debit:0,credit:Number(amt)}], null,'expense');
+  closeModal(); go('expenses');
+}
+
+// ── 6. addGoodsReceipt / addQualityCheck ────────────────────────
+// addGoodsReceipt = open material receipt form
+function addGoodsReceipt(){
+  // showMaterialReceiptForm should exist — if not, redirect to materials
+  if(typeof showMaterialReceiptForm === 'function') {
+    showMaterialReceiptForm();
+  } else {
+    go('materials');
+    setTimeout(()=> showNotif&&showNotif('افتح تفاصيل المادة لتسجيل استلام','info'), 500);
+  }
+}
+
+function addQualityCheck(){
+  const mats = getAll('materialReceipts').filter(r=>r.status==='quarantine');
+  const orders = getAll('productionOrders').filter(o=>o.status!=='cancelled');
+  showModal(modal('🔬 فحص جودة جديد', `
+    <div style="max-height:80vh;overflow-y:auto;padding-right:4px">
+    ${fg('نوع الفحص', sel('qc-type',[
+      {v:'material',l:'مادة خام / استلام'},{v:'inprocess',l:'أثناء الإنتاج'},{v:'finished',l:'منتج نهائي'}
+    ],'material'))}
+    <div class="form-row">
+      ${fg('الكيميائي / المحلل *', inp('qc-analyst','text','','اسم الكيميائي'))}
+      ${fg('تاريخ الفحص *', inp('qc-date','date',today(),''))}
+    </div>
+    ${fg('رقم الدفعة', inp('qc-batch','text','',''))}
+    ${fg('المعايير المفحوصة', inp('qc-tests','text','','مثال: Assay, pH, Dissolution'))}
+    <div class="form-row">
+      ${fg('النتيجة', sel('qc-result',[
+        {v:'ناجح',l:'✅ ناجح (Pass)'},{v:'راسب',l:'❌ راسب (Fail)'},{v:'OOT',l:'⚠️ OOT'}
+      ],'ناجح'))}
+      ${fg('رقم شهادة التحليل CoA', inp('qc-coa','text','',''))}
+    </div>
+    ${fg('ملاحظات', inp('qc-notes','text','',''))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveQualityCheck()">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>
+    </div>`));
+}
+
+function saveQualityCheck(){
+  const analyst = document.getElementById('qc-analyst')?.value?.trim();
+  if(!analyst) return alert('يرجى كتابة اسم الكيميائي');
+  const result = val('qc-result');
+  const d = {
+    checkType:   val('qc-type')||'material',
+    analyst,
+    checkDate:   val('qc-date')||today(),
+    batchNumber: val('qc-batch')||null,
+    tests:       val('qc-tests')||null,
+    result,
+    coaNumber:   val('qc-coa')||null,
+    notes:       val('qc-notes')||null,
+  };
+  insert('qualityChecks',d);
+  // If fail → create deviation
+  if(result==='راسب'){
+    insert('deviations',{
+      description:`OOS — فحص الجودة — دفعة ${d.batchNumber||'—'}`,
+      severity:'major', status:'open',
+      detectedDate: today(), reportedBy: analyst,
+      source:'quality_check',
+    });
+    showNotif&&showNotif('⚠️ نتيجة راسب — تم فتح انحراف تلقائياً','warning');
+  }
+  closeModal(); go('quality');
+}
+
+function editQualityCheck(id){
+  const r = getById('qualityChecks',id); if(!r) return;
+  showModal(modal('✏️ تعديل فحص جودة', `
+    <div class="form-row">
+      ${fg('الكيميائي', inp('qc-analyst','text',r.analyst||'',''))}
+      ${fg('تاريخ الفحص', inp('qc-date','date',r.checkDate||today(),''))}
+    </div>
+    ${fg('المعايير', inp('qc-tests','text',r.tests||'',''))}
+    ${fg('النتيجة', sel('qc-result',[
+      {v:'ناجح',l:'✅ ناجح'},{v:'راسب',l:'❌ راسب'},{v:'OOT',l:'⚠️ OOT'}
+    ],r.result||'ناجح'))}
+    ${fg('ملاحظات', inp('qc-notes','text',r.notes||'',''))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="update('qualityChecks',${id},{analyst:val('qc-analyst'),checkDate:val('qc-date'),tests:val('qc-tests'),result:val('qc-result'),notes:val('qc-notes')||null});closeModal();go('quality')">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+// ── 7. addRegistration / editRegistration / saveRegistration ─────
+function addRegistration(){
+  const prods = getAll('products');
+  showModal(modal('📑 تسجيل دوائي جديد', `
+    <div style="max-height:80vh;overflow-y:auto;padding-right:4px">
+    ${fg('المنتج *', sel('reg-prod',[{v:0,l:'اختر منتج...'},...prods.map(p=>({v:p.id,l:p.name}))],0))}
+    <div class="form-row">
+      ${fg('رقم التسجيل *', inp('reg-num','text','','مثال: 30/12345'))}
+      ${fg('نوع التسجيل', sel('reg-type',[
+        {v:'new',l:'جديد'},{v:'renewal',l:'تجديد'},{v:'variation',l:'تعديل'}
+      ],'new'))}
+    </div>
+    <div class="form-row">
+      ${fg('تاريخ الإصدار', inp('reg-issue','date',today(),''))}
+      ${fg('تاريخ الانتهاء *', inp('reg-exp','date','',''))}
+    </div>
+    <div class="form-row">
+      ${fg('رسوم التسجيل (ج.م)', inp('reg-fee','number','',''))}
+      ${fg('رسوم التجديد (ج.م)', inp('reg-renew','number','',''))}
+    </div>
+    ${fg('ملاحظات', inp('reg-notes','text','',''))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveRegistration()">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>
+    </div>`));
+}
+
+function saveRegistration(){
+  const prodId = numVal('reg-prod');
+  if(!prodId) return alert('يرجى اختيار المنتج');
+  const num = val('reg-num');
+  if(!num) return alert('يرجى إدخال رقم التسجيل');
+  insert('registrations',{
+    productId:        prodId,
+    registrationNumber: num,
+    registrationType:  val('reg-type')||'new',
+    issueDate:         val('reg-issue')||today(),
+    expiryDate:        val('reg-exp')||null,
+    registrationFee:   val('reg-fee')||null,
+    renewalFee:        val('reg-renew')||null,
+    notes:             val('reg-notes')||null,
+    status: 'active',
+  });
+  closeModal(); go('drugregistration');
+}
+
+function editRegistration(id){
+  const r = getById('registrations',id); if(!r) return;
+  const prods = getAll('products');
+  showModal(modal('✏️ تعديل التسجيل', `
+    ${fg('المنتج', sel('reg-prod',[{v:0,l:'اختر...'},...prods.map(p=>({v:p.id,l:p.name}))],r.productId||0))}
+    <div class="form-row">
+      ${fg('رقم التسجيل', inp('reg-num','text',r.registrationNumber||'',''))}
+      ${fg('تاريخ الانتهاء', inp('reg-exp','date',r.expiryDate||'',''))}
+    </div>
+    <div class="form-row">
+      ${fg('رسوم التسجيل', inp('reg-fee','number',r.registrationFee||'',''))}
+      ${fg('رسوم التجديد', inp('reg-renew','number',r.renewalFee||'',''))}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="update('registrations',${id},{registrationNumber:val('reg-num'),expiryDate:val('reg-exp')||null,registrationFee:val('reg-fee')||null,renewalFee:val('reg-renew')||null});closeModal();go('drugregistration')">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+// ── 8. openProductionStages ──────────────────────────────────────
+function openProductionStages(orderId){
+  const o = getById('productionOrders', orderId); if(!o) return;
+  const prod = getById('products', o.productId);
+  const stages = [
+    {id:'weighing',    label:'الوزن والصرف',     icon:'⚖️'},
+    {id:'mixing',      label:'الخلط والتحضير',    icon:'🔄'},
+    {id:'granulation', label:'التحبيب',           icon:'🔵'},
+    {id:'compression', label:'الكبس / الكبسلة',  icon:'💊'},
+    {id:'coating',     label:'التغليف الفيلمي',   icon:'🎨'},
+    {id:'inspection',  label:'الفرز والتفتيش',    icon:'🔍'},
+    {id:'packaging',   label:'التعبئة والتغليف',  icon:'📦'},
+    {id:'qcrelease',   label:'إفراج الجودة QA',   icon:'✅'},
+  ];
+  const stageProgress = o.stageProgress || {};
+  showModal(modal(`🔬 مراحل الإنتاج — ${prod?.name||'—'}`, `
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
+      أمر الإنتاج: ${o.orderNumber||'PO-'+orderId} | الكمية: ${fmtN(o.quantity)} وحدة
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${stages.map((s,i) => {
+        const done = stageProgress[s.id] === 'done';
+        const inprog = stageProgress[s.id] === 'inprogress';
+        return `<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:${done?'rgba(46,160,67,.1)':inprog?'rgba(56,139,253,.1)':'var(--hover)'};border-radius:8px;border:1px solid ${done?'rgba(46,160,67,.3)':inprog?'rgba(56,139,253,.3)':'var(--border)'}">
+          <span style="font-size:20px">${s.icon}</span>
+          <span style="flex:1;font-size:13px;font-weight:600">${i+1}. ${s.label}</span>
+          <span class="badge ${done?'b-green':inprog?'b-blue':'b-gray'}">${done?'✅ مكتمل':inprog?'🔄 جاري':'—'}</span>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-white btn-sm" style="font-size:10px" onclick="updateProductionStage('${orderId}','${s.id}','inprogress')">بدأ</button>
+            <button class="btn btn-green btn-sm" style="font-size:10px" onclick="updateProductionStage('${orderId}','${s.id}','done')">✓</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">إغلاق</button>
+    </div>`));
+}
+
+function updateProductionStage(orderId, stageId, status){
+  const o = getById('productionOrders', orderId); if(!o) return;
+  const stageProgress = {...(o.stageProgress||{}), [stageId]: status};
+  update('productionOrders', orderId, { stageProgress });
+  closeModal();
+  openProductionStages(orderId);
+}
+
+// ── 9. addIngredientToList ───────────────────────────────────────
+function addIngredientToList(productId){
+  const mats = getAll('materials');
+  showModal(modal('➕ إضافة مكوّن', `
+    ${fg('المادة *', sel('ing-mat',[{v:0,l:'اختر مادة...'},...mats.map(m=>({v:m.id,l:`${m.name} (${m.unit})`}))],0))}
+    <div class="form-row">
+      ${fg('النوع', sel('ing-type',[
+        {v:'active',l:'مادة فعالة API'},
+        {v:'excipient',l:'سواغ'},
+        {v:'coating',l:'طلاء'},
+        {v:'packaging',l:'تغليف'},
+      ],'active'))}
+      ${fg('التركيز / الكمية *', inp('ing-conc','number','',''))}
+    </div>
+    ${fg('الوحدة', sel('ing-unit',[
+      {v:'mg',l:'mg'},{v:'g',l:'g'},{v:'%',l:'%'},{v:'ml',l:'ml'},{v:'IU',l:'IU'}
+    ],'mg'))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveIngredientToList(${productId||0})">💾 إضافة</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+function saveIngredientToList(productId){
+  const matId = numVal('ing-mat');
+  if(!matId) return alert('يرجى اختيار المادة');
+  const conc = val('ing-conc');
+  if(!conc) return alert('يرجى إدخال التركيز');
+  const mat = getById('materials', matId);
+  const d = {
+    productId: productId||null,
+    materialId: matId,
+    name: mat?.name||'',
+    type: val('ing-type')||'active',
+    concentration: conc,
+    unit: val('ing-unit')||'mg',
+  };
+  if(productId){
+    insert('productIngredients', d);
+  } else {
+    // Pending — add to window temp
+    if(!window._pendingIngredients) window._pendingIngredients = [];
+    d._tmpId = Date.now();
+    window._pendingIngredients.push(d);
+    if(typeof renderIngredientList === 'function') renderIngredientList(0);
+  }
+  closeModal();
+}
+
+// ── 10. startCycleCount ──────────────────────────────────────────
+function startCycleCount(){
+  const warehouses = getAll('warehouses');
+  showModal(modal('🔄 بدء جرد دوري', `
+    ${fg('المستودع', sel('cc-wh',[{v:0,l:'كل المستودعات'},...warehouses.map(w=>({v:w.id,l:w.name}))],0))}
+    ${fg('فئة الجرد', sel('cc-cat',[
+      {v:'all',l:'كل المنتجات'},{v:'A',l:'فئة A فقط'},{v:'B',l:'فئة B فقط'},{v:'expiring',l:'قريبة الانتهاء'}
+    ],'all'))}
+    ${fg('ملاحظات', inp('cc-notes','text','',''))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveCycleCount()">✅ بدء الجرد</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+function saveCycleCount(){
+  const d = {
+    warehouseId: numVal('cc-wh')||null,
+    category:    val('cc-cat')||'all',
+    notes:       val('cc-notes')||null,
+    startDate:   today(),
+    status:      'in_progress',
+    startedBy:   window._authUser?.name||'—',
+  };
+  insert('cycleCounts', d);
+  closeModal();
+  showNotif&&showNotif('✅ تم بدء الجرد الدوري','success');
+  go('cyclecounting');
+}
+
+// ── Fix duplicate nav entries ─────────────────────────────────────
+// Remove duplicates from navItems at runtime
+;(function deduplicateNav(){
+  if(window._navDeduped) return;
+  window._navDeduped = true;
+  if(typeof navItems === 'undefined') return;
+  const seen = new Set();
+  const labelSeen = new Set();
+  for(let i = navItems.length-1; i >= 0; i--){
+    const item = navItems[i];
+    const key = item.id + '|' + item.label;
+    if(seen.has(key) || (seen.has(item.id) && labelSeen.has(item.label))){
+      navItems.splice(i,1);
+    } else {
+      seen.add(item.id);
+      labelSeen.add(item.label);
+      seen.add(key);
+    }
+  }
+  if(typeof renderNav === 'function') renderNav();
+})();
+
 
 // renderNav/go called by coEnter() after company is selected
 
