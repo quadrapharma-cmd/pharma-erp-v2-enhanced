@@ -1305,7 +1305,6 @@ function addMaterial(type){
 function editMaterial(id){ const m=getById('materials',id); if(!m)return; showModal(modal('تعديل مادة',materialForm(m))); }
 
 
-
 function addCmo(){ showModal(modal('إضافة مصنع جديد',cmoForm())); }
 function editCmo(id){ const c=getById('cmos',id); if(!c)return; showModal(modal('تعديل مصنع',cmoForm(c))); }
 function cmoForm(c={}){
@@ -1326,7 +1325,7 @@ function saveCmo(id){
 // ═══════════════════════════════════════════════
 // MODALS — Production
 // ═══════════════════════════════════════════════
-/* DEDUP_REMOVED */function editProduction(id){
+function editProduction(id){
   const o=getById('productionOrders',id); if(!o)return;
   showModal(modal('تعديل أمر الإنتاج',`
     <div class="form-row">${fg('الكمية',inp('po-qty','number',o.quantity))}${fg('تكلفة الوحدة',inp('po-ucost','number',o.unitCost))}</div>
@@ -1335,7 +1334,7 @@ function saveCmo(id){
     <div class="form-actions"><button class="btn btn-green" onclick="saveProduction(${id})">💾 حفظ</button><button class="btn btn-ghost" onclick="closeModal()">إلغاء</button></div>
   `));
 }
-/* DEDUP_REMOVED */
+
 // ═══════════════════════════════════════════════
 // MODALS — Inventory
 // ═══════════════════════════════════════════════
@@ -1457,7 +1456,7 @@ function saveDelivery(){
 // MODALS — Expenses
 // ═══════════════════════════════════════════════
 function addExpense(){ showModal(modal('إضافة مصروف جديد',expenseForm())); }
-/* DEDUP_REMOVED */function expenseForm(e={}){
+function expenseForm(e={}){
   return `
     ${fg('الوصف *',inp('ex-desc','text',e.description))}
     <div class="form-row">${fg('المبلغ (ج.م) *',inp('ex-amt','number',e.amount))}${fg('نوع التكلفة *',sel('ex-type',[{v:'direct',l:'تكلفة مباشرة'},{v:'indirect',l:'تكلفة غير مباشرة'}],e.expenseType||'direct'))}</div>
@@ -1813,7 +1812,7 @@ function editPayrollEmp(id){
 }
 function savePayrollEmp(id){update('employees',id,{salary:val('ep-sal')||null,allowances:val('ep-allow')||'0',deductions:val('ep-deduct')||'0'});closeModal();go('payroll');}
 
-/* DEDUP_REMOVED */function editPurchaseOrder(id){
+function editPurchaseOrder(id){
   const o=getById('purchaseOrders',id);if(!o)return;
   showModal(modal('تعديل طلب شراء',`
     <div class="form-row">${fg('المورد',inp('pur-sup','text',o.supplier))}${fg('الكمية',inp('pur-qty','number',o.quantity))}</div>
@@ -1842,7 +1841,7 @@ function saveReturn(){
   closeModal();go('returns');
 }
 
-/* DEDUP_REMOVED */function editContract(id){
+function editContract(id){
   const c=getById('contracts',id);if(!c)return;
   showModal(modal('تعديل عقد',`
     ${fg('اسم الطرف الثاني *',inp('con-name','text',c.partyName))}
@@ -2644,7 +2643,7 @@ function removeBatchOrder(id){
 }
 
 // ── إدارة مواد التشغيلة ─────────────────────────────────────
-/* DEDUP_REMOVED */
+
 function saveBatchMaterial(productionOrderId){
   const matId = numVal('bm-mat');
   const qty   = numVal('bm-qty');
@@ -3304,7 +3303,6 @@ function updateProductionOrderCost(productionOrderId){
 }
 
 
-
 function showProductIngredients(productId){
   const prod = getById('products', productId);
   const ings = getAll('productIngredients').filter(i=>i.productId===productId);
@@ -3560,7 +3558,7 @@ function rejectReceipt(id){
 }
 
 // ── FULL Material Form (GMP-compliant) ───────────────────────
-/* DEDUP_REMOVED */{
+{
   const isRaw = !m.materialType || m.materialType==='raw_material';
   return `
     <div class="tabs">
@@ -3622,9 +3620,9 @@ function rejectReceipt(id){
     </div>`;
 }
 
-/* DEDUP_REMOVED */
+
 // ── FULL Material Receipt Form (COA + GMP fields) ────────────
-/* DEDUP_REMOVED */
+
 function loadMatDetails(matId){
   const mat = getById('materials', Number(matId));
   const info = document.getElementById('mr-mat-info');
@@ -3641,7 +3639,7 @@ function loadMatDetails(matId){
     </div>`;
 }
 
-/* DEDUP_REMOVED */
+
 // ════════════════════════════════════════════════════════════════
 // FULL PRODUCT PAGE — صفحة المنتج الكاملة
 // ════════════════════════════════════════════════════════════════
@@ -4318,46 +4316,45 @@ function rejectBatch(orderId){
 // ════════════════════════════════════════════════════════════════
 
 
-
 // ── مساعد عرض السطر ──────────────────────────────────────────
-/* DEDUP_REMOVED */
-/* DEDUP_REMOVED */
+
+
 // ════════════════════════════════════════════════════════════════
 // INCOME STATEMENT — قائمة الدخل
 // ════════════════════════════════════════════════════════════════
-/* DEDUP_REMOVED */
+
 // ════════════════════════════════════════════════════════════════
 // BALANCE SHEET — المركز المالي
 // ════════════════════════════════════════════════════════════════
-/* DEDUP_REMOVED */
+
 // ════════════════════════════════════════════════════════════════
 // COGS ANALYSIS — تكلفة الإنتاج
 // ════════════════════════════════════════════════════════════════
-/* DEDUP_REMOVED */
+
 // ════════════════════════════════════════════════════════════════
 // EXPENSES ANALYSIS — تحليل المصروفات
 // ════════════════════════════════════════════════════════════════
-/* DEDUP_REMOVED */
+
 // ════════════════════════════════════════════════════════════════
 // BUDGET vs ACTUAL
 // ════════════════════════════════════════════════════════════════
-/* DEDUP_REMOVED */
+
 // ════════════════════════════════════════════════════════════════
 // INVENTORY REPORT
 // ════════════════════════════════════════════════════════════════
-/* DEDUP_REMOVED */
+
 // ════════════════════════════════════════════════════════════════
 // SALES ANALYSIS
 // ════════════════════════════════════════════════════════════════
-/* DEDUP_REMOVED */
+
 // ════════════════════════════════════════════════════════════════
 // TAX REPORT
 // ════════════════════════════════════════════════════════════════
-/* DEDUP_REMOVED */
+
 // ════════════════════════════════════════════════════════════════
 // EXCEL EXPORT — تصدير Excel كامل من البيانات
 // ════════════════════════════════════════════════════════════════
-/* DEDUP_REMOVED */
+
 // ════════════════════════════════════════════════════════════════
 // FINANCIAL REPORTS v2 — النسخة الكاملة
 // كل البنود المحاسبية طبقاً للمعايير المصرية والدولية
@@ -5951,8 +5948,6 @@ function showPartnerLedger(partnerId){
 }
 
 
-
-/* DEDUP_REMOVED */
 function addPartnerEntry(partnerId){
   const partners=getAll('partnerAccounts');
   const pOpts=[{v:0,l:'اختر شريك...'},...partners.map(p=>({v:p.id,l:p.name}))];
@@ -6032,8 +6027,7 @@ function buildJournalTable(entries){
   ,'tbl_partners');
 }
 
-/* DEDUP_REMOVED */
-/* DEDUP_REMOVED */
+
 function editJournalEntry(id){
   const e=getById('journalEntries',id); if(!e) return;
   const accounts=getChartOfAccounts();
@@ -6078,8 +6072,6 @@ function updateJournalEntry(id){
 // ════════════════════════════════════════════════════════════════
 // 5. دليل الحسابات — Chart of Accounts
 // ════════════════════════════════════════════════════════════════
-
-
 
 
 // ════════════════════════════════════════════════════════════════
@@ -6636,7 +6628,7 @@ function saveDeliveryEdit(id){
 }
 
 // ── 3. BUDGET — إضافة تعديل ──────────────────────────────────
-/* DEDUP_REMOVED */function saveBudgetEdit(id){
+function saveBudgetEdit(id){
   if(!val('bl-cat')||!val('bl-amt')) return alert('يرجى تعبئة الفئة والمبلغ');
   update('budgetLines',id,{category:val('bl-cat'),department:val('bl-dept')||null,year:val('bl-year')||new Date().getFullYear(),budgetedAmount:val('bl-amt'),notes:val('bl-notes')||null});
   closeModal(); go('budget');
@@ -7781,11 +7773,11 @@ function accountForm(a={}){
     </div>`;
 }
 
-/* DEDUP_REMOVED */function editAccount(id){
+function editAccount(id){
   const a=getById('chartOfAccounts',id); if(!a) return;
   showModal(modal('تعديل الحساب',accountForm(a)));
 }
-/* DEDUP_REMOVED */
+
 // ════════════════════════════════════════════════════════════════
 // ميزان المراجعة — Trial Balance (كامل من اليومية + DB)
 // ════════════════════════════════════════════════════════════════
@@ -8192,7 +8184,6 @@ function processBulkHistorical(){
 }
 
 
-
 // ═══════════════════════════════════════════════════════════════
 // AUTH SYSTEM — نظام تسجيل الدخول والصلاحيات
 // ═══════════════════════════════════════════════════════════════
@@ -8238,7 +8229,7 @@ function _canAccess(page){
 }
 
 // ── Show login screen ─────────────────────────────────────────
-/* DEDUP_REMOVED */
+
 function _doLogin(){
   const u = (document.getElementById('_au')?.value||'').trim();
   const p = document.getElementById('_ap')?.value||'';
@@ -8523,8 +8514,7 @@ function escapeHtml(str){
 // PRODUCT INGREDIENTS — مكونات وتركيبة المنتج
 // ════════════════════════════════════════════════════════════════
 
-/* DEDUP_REMOVED */
-/* DEDUP_REMOVED */
+
 // removeIngredientFromList is already defined above — keep one version
 // (defined earlier, this comment serves as documentation)
 
@@ -8855,7 +8845,7 @@ function expiryBadge(expiryDateStr){
   return `<span class="badge b-green">✅ ${days} يوم</span>`;
 }
 
-/* DEDUP_REMOVED */
+
 // ── 9. Sound Alert for Critical Notifications ─────────────────
 function playCriticalAlert(){
   if(localStorage.getItem('sound_alerts') === '0') return;
@@ -12074,7 +12064,6 @@ var _hsInitDone=false;
 })();
 
 
-
 // ── B2: Complete Production → auto-create inventory entry ────
 function completeProduction(orderId){
   const order   = getById('productionOrders', orderId);
@@ -15006,9 +14995,6 @@ function runDailyExpiryCheck(){
 setTimeout(runDailyExpiryCheck, 2000);
 
 
-
-
-
 // ═══════════════════════════════════════════════════════
 // 🧪 إدارة الجودة والتسجيل — Quality & Registration
 // ICH Q7 / EU GMP Annex 11 / 21 CFR Part 211
@@ -16344,7 +16330,6 @@ PAGES.hr = function(){
 })();
 
 
-
 function deleteProductSafe(id){
   const prod = getById('products', id);
   if(!prod) return;
@@ -16507,40 +16492,18 @@ function deleteProductionOrderSafe(id){
 // tr() patch: wrap each cell in escapeHtml if it's a plain string
 // Note: cells can be HTML (badges, buttons) — we can't blindly escape
 // Safe approach: keep tr() as-is but add a trSafe() for user-supplied data
-function trSafe(...cells){
-  return '<tr>'+cells.map(c=>'<td>'+escapeHtml(String(c??''))+'</td>').join('')+'</tr>';
-}
 
 // C5: _saveUser — check authentication first
 // _saveUser auth guard (see _saveUser function below)
-// _saveUser auth check handled inline
 
-// C6: Session token validation improvement
 // Add timestamp to session so it expires after 8 hours
-const _SESSION_DURATION = 8 * 60 * 60 * 1000; // 8 hours in ms
 
-function _checkSessionExpiry(){
-  try {
-    const sess = JSON.parse(localStorage.getItem('_erp_session')||'{}');
-    if(sess.ts && (Date.now() - sess.ts) > _SESSION_DURATION){
-      localStorage.removeItem('_erp_session');
-      _authUser = null;
-      return false;
-    }
-    return true;
-  } catch(e){ return false; }
-}
 
 // Wrap go() to check session expiry on each navigation
-// go() session check (patched below)
 if(typeof go === 'function'){
   const __origGo = go;
   window.go = function(page){
-    if(_authUser && !_checkSessionExpiry()){
-      _authUser = null;
-      if(typeof _showLoginScreen === 'function') _showLoginScreen();
-      return;
-    }
+
     return __origGo(page);
   };
 }
@@ -16578,28 +16541,9 @@ if(typeof go === 'function'){
 // ═══════════════════════════════════════════════════════════════
 
 // E1: BarcodeDetector fallback
-function startBarcodeScannerSafe(callback){
-  if(typeof BarcodeDetector === 'undefined'){
-    const sn = prompt('BarcodeDetector غير مدعوم في هذا المتصفح.\nأدخل الرقم التسلسلي يدوياً:');
-    if(sn && callback) callback(sn);
-    return;
-  }
-  if(typeof startBarcodeScanner === 'function') startBarcodeScanner(callback);
-}
 
 // E2: localStorage size guard
 // saveDB storage check
-function _checkStorageSize(){
-  try {
-    let total = 0;
-    for(let k in localStorage){ total += (localStorage[k]?.length||0); }
-    const MB = total / (1024*1024);
-    if(MB > 4.5){
-      console.warn('localStorage approaching limit: '+MB.toFixed(2)+'MB');
-      if(typeof showNotif==='function') showNotif('⚠️ مساحة التخزين تقترب من الحد ('+MB.toFixed(1)+'MB / 5MB)', 'warn');
-    }
-  } catch(e){}
-}
 
 // ═══════════════════════════════════════════════════════════════
 // GROUP F: MISCELLANEOUS FIXES
