@@ -3751,10 +3751,10 @@ function calcFinancials(){
 
   // ── الأرباح ───────────────────────────────────────────────
   const ebit     = grossProfit - totalOpExp - annualDepreciation;
-  const ebitda   = ebit + annualDepreciation + financeExp + incomeTax;
   const ebt      = ebit - financeExp;
-  // ضريبة الدخل الفعلية المدفوعة
+  // ضريبة الدخل الفعلية المدفوعة — يجب تعريفها قبل ebitda
   const incomeTax= taxL.filter(t=>t.taxType==='income'&&t.status==='مدفوع').reduce((s,t)=>s+Number(t.amount||0),0);
+  const ebitda   = ebit + annualDepreciation + financeExp + incomeTax;
   const netProfit= ebt - incomeTax;
   const netMargin= netRevenue > 0 ? netProfit/netRevenue : 0;
 
