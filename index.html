@@ -1909,25 +1909,7 @@ function toggleAI(){
   if(_aiOpen){ document.getElementById('ai-input')?.focus(); }
 }
 
-async function sendAIMessage(){
-  const input = document.getElementById('ai-input');
-  const msg = input?.value?.trim();
-  if(!msg) return;
-  input.value = '';
-  appendAIMsg(msg,'user');
-  appendAIMsg('⚠️ المساعد الذكي يحتاج خادم وسيط (backend proxy) للعمل من المتصفح. يمكن تفعيله عبر تكامل API منفصل.','assistant');
-}
 
-function appendAIMsg(text, role){
-  const chat = document.getElementById('ai-chat');
-  if(!chat)return;
-  const div = document.createElement('div');
-  div.className = 'ai-msg ai-'+role.replace(' loading','');
-  if(role.includes('loading')) div.id = 'ai-loading';
-  div.textContent = text;
-  chat.appendChild(div);
-  chat.scrollTop = chat.scrollHeight;
-}
 function removeLoadingMsg(){
   const el = document.getElementById('ai-loading');
   if(el) el.remove();
@@ -22702,6 +22684,272 @@ window.go = function(page) {
     };
   }
 
+})();
+
+// ══════════════════════════════════════════════════════════════════
+// 🤖 AI ASSISTANT — مساعد ذكي يعمل مباشرة بدون backend
+// يستخدم Anthropic API من المتصفح مع سياق كامل من بيانات ERP
+// ══════════════════════════════════════════════════════════════════
+
+let _aiHistory = [];     // conversation history
+let _aiTyping  = false;  // prevent double-send
+
+// ── بناء سياق النظام للـ AI ─────────────────────────────────────
+function _buildAIContext(){
+  const now    = new Date().toLocaleDateString('ar-EG', {weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  const coName = document.getElementById('co-active-label')?.textContent ||
+                 document.getElementById('logo-name')?.textContent || 'الشركة';
+  const page   = window.currentPage || 'dashboard';
+
+  // DB snapshot
+  const snap = {};
+  ['products','materials','employees','distributors','salesInvoices',
+   'productionOrders','expenses','deliveryOrders','inventory',
+   'journalEntries','purchaseOrders','qualityChecks','deviations',
+   'registrations','assets'].forEach(t => {
+    if(Array.isArray(DB[t])) snap[t] = DB[t].length;
+  });
+
+  // Quick financial summary
+  const delivered  = (DB.deliveryOrders||[]).filter(o=>o.status==='delivered');
+  const revenue    = delivered.reduce((s,o)=>s+Number(o.totalAmount||0),0);
+  const totalExp   = (DB.expenses||[]).reduce((s,e)=>s+Number(e.amount||0),0);
+  const lowStock   = (DB.materials||[]).filter(m=>m.reorderLevel&&Number(m.currentStock||0)<=Number(m.reorderLevel)).length;
+  const expiredInv = (DB.inventory||[]).filter(i=>i.expiryDate&&new Date(i.expiryDate)<new Date()).length;
+  const activeEmps = (DB.employees||[]).filter(e=>e.status==='active').length;
+  const overdue    = (DB.receivables||[]).filter(r=>r.status!=='محصّل'&&r.dueDate&&new Date(r.dueDate)<new Date()).length;
+
+  return `أنت مساعد ذكي متخصص في نظام ميديسنيا ERP الدوائي المصري.
+اسم الشركة: ${coName}
+التاريخ: ${now}
+الصفحة الحالية: ${page}
+
+ملخص قاعدة البيانات:
+${Object.entries(snap).map(([t,c])=>`- ${t}: ${c} سجل`).join('\n')}
+
+مؤشرات سريعة:
+- إجمالي المبيعات المسلّمة: ${fmt?.(revenue)||revenue.toFixed(0)} ج.م
+- إجمالي المصروفات: ${fmt?.(totalExp)||totalExp.toFixed(0)} ج.م
+- الموظفون النشطون: ${activeEmps}
+- مواد تحت حد الطلب: ${lowStock}
+- منتجات منتهية الصلاحية: ${expiredInv}
+- فواتير متأخرة السداد: ${overdue}
+
+أجب دائماً بالعربية، باختصار وتركيز، مع أرقام دقيقة من البيانات المتاحة.
+إذا لم تجد بيانات كافية للإجابة، قل ذلك بوضوح.
+لا تستخدم عناوين أو قوائم إلا عند الضرورة.`;
+}
+
+// ── إرسال رسالة للـ AI ───────────────────────────────────────────
+async function sendAIMessage(){
+  if(_aiTyping) return;
+
+  const input = document.getElementById('ai-input');
+  const msg   = input?.value?.trim();
+  if(!msg) return;
+
+  input.value = '';
+  _aiTyping   = true;
+
+  // أضف رسالة المستخدم للتاريخ والواجهة
+  _aiHistory.push({ role:'user', content: msg });
+  appendAIMsg(msg, 'user');
+
+  // Loading indicator
+  const loadId = 'ai-load-' + Date.now();
+  appendAIMsg('...', 'assistant loading', loadId);
+
+  try {
+    const systemPrompt = _buildAIContext();
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model:      'claude-sonnet-4-20250514',
+        max_tokens: 1024,
+        system:     systemPrompt,
+        messages:   _aiHistory.slice(-10), // آخر 10 رسائل فقط
+      })
+    });
+
+    // Remove loading
+    document.getElementById(loadId)?.remove();
+
+    if(!resp.ok){
+      const errBody = await resp.text().catch(()=>'');
+      if(resp.status === 401 || resp.status === 403){
+        appendAIMsg('🔑 المساعد يعمل فقط عند فتح البرنامج من خلال Claude.ai — الـ API key يتم توفيره تلقائياً من المنصة.', 'assistant error');
+      } else {
+        appendAIMsg(`⚠️ خطأ من الخادم (${resp.status}). حاول مرة أخرى.`, 'assistant error');
+      }
+      _aiHistory.pop(); // remove failed user message
+      _aiTyping = false;
+      return;
+    }
+
+    const data  = await resp.json();
+    const reply = (data.content||[]).map(b=>b.text||'').join('').trim();
+
+    // أضف رد AI للتاريخ والواجهة
+    _aiHistory.push({ role:'assistant', content: reply });
+    appendAIMsg(reply, 'assistant');
+
+    // اقتراحات متابعة ذكية بناءً على الصفحة
+    _showFollowUpSuggestions();
+
+  } catch(err){
+    document.getElementById(loadId)?.remove();
+    if(err.message?.includes('fetch') || err.message?.includes('Failed')){
+      appendAIMsg('🌐 لا يمكن الوصول لـ API. تأكد من الاتصال بالإنترنت وأن البرنامج مفتوح من Claude.ai.', 'assistant error');
+    } else {
+      appendAIMsg('❌ خطأ: ' + err.message, 'assistant error');
+    }
+    _aiHistory.pop();
+  }
+
+  _aiTyping = false;
+}
+
+// ── عرض اقتراحات متابعة ─────────────────────────────────────────
+function _showFollowUpSuggestions(){
+  const page = window.currentPage || 'dashboard';
+  const suggestions = {
+    dashboard:       ['كيف حال المبيعات هذا الشهر؟', 'ما أهم التنبيهات الآن؟', 'لخّص وضع الشركة'],
+    products:        ['ما المنتجات الأكثر مبيعاً؟', 'ما المنتجات منخفضة المخزون؟'],
+    materials:       ['ما المواد تحت حد الطلب؟', 'كم تكلفة المخزون الإجمالية؟'],
+    production:      ['كم أمر إنتاج قيد التنفيذ؟', 'ما إجمالي تكاليف الإنتاج؟'],
+    reports:         ['ما صافي الربح؟', 'كيف هامش الربح الإجمالي؟', 'ما نسبة تحقيق الأهداف؟'],
+    distributors:    ['من أكبر موزع بالمبيعات؟', 'كم إجمالي الذمم المستحقة؟'],
+    employees:       ['كم إجمالي الرواتب الشهرية؟', 'كم موظف في كل قسم؟'],
+    journal:         ['هل الميزان متوازن؟', 'ما آخر القيود المدخلة؟'],
+    quality:         ['كم انحراف مفتوح؟', 'ما نسبة نجاح فحوصات الجودة؟'],
+  };
+
+  const suggs = suggestions[page] || suggestions.dashboard;
+  const chat  = document.getElementById('ai-chat');
+  if(!chat) return;
+
+  // Remove old suggestions
+  chat.querySelectorAll('.ai-suggestions').forEach(el=>el.remove());
+
+  const div = document.createElement('div');
+  div.className = 'ai-suggestions';
+  div.innerHTML = suggs.map(s=>
+    `<button onclick="document.getElementById('ai-input').value='${s.replace(/'/g,"\\'")}';sendAIMessage()"
+      style="background:rgba(46,160,67,.1);border:1px solid rgba(46,160,67,.3);border-radius:20px;
+             padding:5px 12px;font-size:11px;cursor:pointer;color:var(--text);font-family:Cairo,sans-serif;
+             transition:.2s" onmouseover="this.style.background='rgba(46,160,67,.2)'"
+             onmouseout="this.style.background='rgba(46,160,67,.1)'">${s}</button>`
+  ).join('');
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+// ── إلحاق رسالة للواجهة ──────────────────────────────────────────
+function appendAIMsg(text, role, id){
+  const chat = document.getElementById('ai-chat');
+  if(!chat) return;
+
+  const div = document.createElement('div');
+  div.className = 'ai-msg ai-' + role.replace(' loading','').replace(' error','');
+  if(id) div.id = id;
+  if(role.includes('loading')){
+    div.innerHTML = '<span class="ai-dots"><span>.</span><span>.</span><span>.</span></span>';
+  } else if(role.includes('error')){
+    div.style.cssText += ';background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:var(--red)';
+    div.textContent = text;
+  } else {
+    // Render newlines as <br>
+    div.innerHTML = escapeHtml(text).replace(/\n/g,'<br>');
+  }
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+// ── مسح المحادثة ─────────────────────────────────────────────────
+function clearAIChat(){
+  _aiHistory = [];
+  const chat = document.getElementById('ai-chat');
+  if(!chat) return;
+  chat.innerHTML = `<div class="ai-msg ai-assistant">
+    مرحباً من جديد! كيف يمكنني مساعدتك؟
+  </div>`;
+  _showFollowUpSuggestions();
+}
+
+// ── اقتراحات فورية عند فتح المساعد ──────────────────────────────
+const _origToggleAI = window.toggleAI;
+window.toggleAI = function(){
+  if(typeof _origToggleAI === 'function') _origToggleAI();
+  // Show suggestions when panel opens
+  setTimeout(()=>{
+    const panel = document.getElementById('ai-panel');
+    if(panel && panel.style.display !== 'none'){
+      _showFollowUpSuggestions();
+    }
+  }, 100);
+};
+
+// ── inject CSS for dots animation + suggestions ───────────────────
+;(function injectAICss(){
+  if(document.getElementById('ai-extra-css')) return;
+  const style = document.createElement('style');
+  style.id = 'ai-extra-css';
+  style.textContent = `
+    .ai-dots span {
+      display:inline-block; animation:aiDot 1.2s infinite;
+      font-size:18px; color:var(--green-light);
+    }
+    .ai-dots span:nth-child(2){ animation-delay:.2s; }
+    .ai-dots span:nth-child(3){ animation-delay:.4s; }
+    @keyframes aiDot{ 0%,80%,100%{opacity:.2} 40%{opacity:1} }
+    .ai-suggestions{
+      display:flex; flex-wrap:wrap; gap:6px;
+      padding:4px 0; max-width:100%;
+    }
+    .ai-msg.ai-user{
+      align-self:flex-end;
+      background:linear-gradient(135deg,rgba(46,160,67,.25),rgba(26,127,55,.15));
+      border:1px solid rgba(46,160,67,.3);
+    }
+    #ai-panel .ai-panel-head {
+      display:flex; align-items:center;
+      justify-content:space-between;
+    }
+    #ai-panel .ai-panel-head-actions {
+      display:flex; gap:6px; align-items:center;
+    }
+    #ai-panel .ai-clear-btn {
+      background:rgba(255,255,255,.15); border:none;
+      color:#fff; border-radius:6px; padding:3px 8px;
+      font-size:11px; cursor:pointer; font-family:Cairo,sans-serif;
+    }
+    #ai-panel .ai-clear-btn:hover{ background:rgba(255,255,255,.25); }
+  `;
+  document.head.appendChild(style);
+})();
+
+// ── Add clear button to AI panel header ──────────────────────────
+;(function patchAIPanelHeader(){
+  if(window._aiHeaderPatched) return;
+  window._aiHeaderPatched = true;
+  requestAnimationFrame(()=>{
+    const head = document.querySelector('#ai-panel .ai-panel-head');
+    if(!head) return;
+    const closeBtn = head.querySelector('.ai-panel-close');
+    if(!closeBtn) return;
+    // Wrap in actions div
+    const actDiv = document.createElement('div');
+    actDiv.className = 'ai-panel-head-actions';
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'ai-clear-btn';
+    clearBtn.textContent = '🗑 مسح';
+    clearBtn.onclick = clearAIChat;
+    actDiv.appendChild(clearBtn);
+    actDiv.appendChild(closeBtn);
+    head.appendChild(actDiv);
+  });
 })();
 
 // renderNav/go called by coEnter() after company is selected
