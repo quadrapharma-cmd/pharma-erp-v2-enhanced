@@ -5510,70 +5510,6 @@ function initGlobalSearch(){
   });
 }
 
-function runGlobalSearch(q){
-  q = q.toLowerCase();
-  const results = [];
-
-  // Products
-  getAll('products').forEach(p=>{
-    if((p.name||'').toLowerCase().includes(q)||(p.scientificName||'').toLowerCase().includes(q)){
-      results.push({type:'منتج',icon:'💊',label:p.name,sub:p.dosageForm+' '+( p.strength||''),page:'products',id:p.id});
-    }
-  });
-  // Materials
-  getAll('materials').forEach(m=>{
-    if((m.name||'').toLowerCase().includes(q)||(m.supplier||'').toLowerCase().includes(q)){
-      results.push({type:'مادة',icon:'🧪',label:m.name,sub:`مخزون: ${fmtN(m.currentStock||0)} ${m.unit}`,page:'materials',id:m.id});
-    }
-  });
-  // Distributors
-  getAll('distributors').forEach(d=>{
-    if((d.name||'').toLowerCase().includes(q)||(d.contactPerson||'').toLowerCase().includes(q)){
-      results.push({type:'موزع',icon:'🏢',label:d.name,sub:d.phone||'',page:'distributors',id:d.id});
-    }
-  });
-  // Employees
-  getAll('employees').forEach(e=>{
-    if((e.name||'').toLowerCase().includes(q)||(e.position||'').toLowerCase().includes(q)){
-      results.push({type:'موظف',icon:'👤',label:e.name,sub:`${e.department} — ${e.position}`,page:'employees',id:e.id});
-    }
-  });
-  // Expenses
-  getAll('expenses').forEach(e=>{
-    if((e.description||'').toLowerCase().includes(q)||(e.category||'').toLowerCase().includes(q)){
-      results.push({type:'مصروف',icon:'🧾',label:e.description,sub:`${fmt(e.amount)} ج.م — ${e.category}`,page:'expenses',id:e.id});
-    }
-  });
-  // CMOs
-  getAll('cmos').forEach(c=>{
-    if((c.name||'').toLowerCase().includes(q)){
-      results.push({type:'مصنع',icon:'🏭',label:c.name,sub:c.licenseNumber||'',page:'cmos',id:c.id});
-    }
-  });
-  // Delivery Orders
-  getAll('deliveryOrders').forEach(o=>{
-    const d = getById('distributors',o.distributorId);
-    if((o.orderNumber||'').toLowerCase().includes(q)||(d?.name||'').toLowerCase().includes(q)){
-      results.push({type:'أمر توريد',icon:'🚚',label:o.orderNumber||'DO-'+o.id,sub:`${d?.name||'—'} — ${fmt(o.totalAmount)} ج.م`,page:'deliveries',id:o.id});
-    }
-  });
-  // Production Orders
-  getAll('productionOrders').forEach(o=>{
-    const p = getById('products',o.productId);
-    if((o.orderNumber||'').toLowerCase().includes(q)||(p?.name||'').toLowerCase().includes(q)){
-      results.push({type:'تشغيلة',icon:'⚙️',label:o.orderNumber||'PO-'+o.id,sub:p?.name||'—',page:'production',id:o.id});
-    }
-  });
-  // Registrations
-  getAll('registrations').forEach(r=>{
-    const p=getById('products',r.productId);
-    if((r.registrationNumber||'').toLowerCase().includes(q)||(p?.name||'').toLowerCase().includes(q)){
-      results.push({type:'تسجيل',icon:'📑',label:r.registrationNumber||p?.name||'—',sub:p?.name||'',page:'registration',id:r.id});
-    }
-  });
-
-  showSearchResults(results.slice(0,12), q);
-}
 
 function showSearchResults(results, q){
   let drop = document.getElementById('search-dropdown');
@@ -17313,86 +17249,9 @@ function viewJE(id){
 }
 
 // ── استيراد كشف بنكي CSV ─────────────────────────────────────────
-function showBankImport(){
-  showModal(modal('📊 استيراد كشف بنكي CSV',`
-    <div style="padding:10px;background:rgba(56,139,253,.06);border-radius:8px;margin-bottom:12px;font-size:12px">
-      📋 الصيغة المطلوبة: <code>تاريخ, وصف, مدين, دائن</code> (أو حسب صيغة البنك المصري)
-      <br>يدعم: CIB, NBE, QNB, HSBC Egypt, Banque Misr CSV formats
-    </div>
-    <div style="margin-bottom:10px">
-      ${fg('اختر ملف CSV', `<input type="file" id="csv-file" accept=".csv,.txt"
-        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">`)}
-    </div>
-    <div class="form-row">
-      ${fg('حساب البنك', `<select id="csv-bank-acc" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
-        ${(getAll('accounts')||[]).filter(a=>a.code.startsWith('11')).map(a=>`<option value="${a.code}">${a.code} — ${escapeHtml(a.name)}</option>`).join('')}
-      </select>`)}
-      ${fg('الحساب المقابل (افتراضي)', `<select id="csv-contra-acc" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
-        <option value="1201">1201 — ذمم مدينة</option>
-        <option value="2101">2101 — ذمم دائنة</option>
-        <option value="5509">5509 — مصروفات متنوعة</option>
-      </select>`)}
-    </div>
-    <div id="csv-preview" style="margin-top:10px"></div>
-    <div class="form-actions">
-      <button class="btn btn-white" onclick="previewCSV()">🔍 معاينة</button>
-      <button class="btn btn-green" onclick="importCSV()">📥 استيراد وترحيل</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>
-    <script>
-    document.getElementById('csv-file')?.addEventListener('change',previewCSV);
-    </\x73cript>`));
-}
 
 window._csvParsed = [];
-function previewCSV(){
-  const file = document.getElementById('csv-file')?.files?.[0];
-  if(!file){ alert('اختر ملف CSV أولاً'); return; }
-  const reader = new FileReader();
-  reader.onload = function(e){
-    const text = e.target.result;
-    const rows = text.split('\n').filter(r=>r.trim());
-    const parsed = [];
-    rows.slice(1).forEach(row=>{
-      const cols = row.split(',').map(c=>c.trim().replace(/^"|"$/g,''));
-      if(cols.length < 3) return;
-      const date   = cols[0];
-      const desc   = cols[1];
-      const debit  = parseFloat(cols[2]?.replace(/,/g,''))||0;
-      const credit = parseFloat(cols[3]?.replace(/,/g,''))||0;
-      if(!debit && !credit) return;
-      parsed.push({date, desc, debit, credit});
-    });
-    window._csvParsed = parsed;
-    const prev = document.getElementById('csv-preview');
-    if(!prev) return;
-    prev.innerHTML = `<div style="font-size:12px;margin-bottom:6px"><strong>${parsed.length} حركة</strong> — معاينة أول 5:</div>`+
-      `<div style="max-height:200px;overflow-y:auto;font-size:11px">
-      ${parsed.slice(0,5).map(r=>`<div style="padding:4px 6px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between">
-        <span>${r.date} | ${escapeHtml(r.desc.slice(0,30))}</span>
-        <span>${r.debit?'مدين: '+fmtC(r.debit):''} ${r.credit?'دائن: '+fmtC(r.credit):''}</span>
-      </div>`).join('')}</div>`;
-  };
-  reader.readAsText(file,'UTF-8');
-}
 
-function importCSV(){
-  const bankCode   = document.getElementById('csv-bank-acc')?.value||'1102';
-  const contraCode = document.getElementById('csv-contra-acc')?.value||'5509';
-  const parsed     = window._csvParsed||[];
-  if(!parsed.length){ alert('لا توجد بيانات — اضغط معاينة أولاً'); return; }
-  let count = 0;
-  parsed.forEach(r=>{
-    const lines = r.debit > 0
-      ? [{accountCode:bankCode,debit:r.debit,credit:0},{accountCode:contraCode,debit:0,credit:r.debit}]
-      : [{accountCode:contraCode,debit:r.credit,credit:0},{accountCode:bankCode,debit:0,credit:r.credit}];
-    autoJournalEntry(r.desc||'استيراد بنكي', lines, 'BANK-'+r.date, 'bank_import');
-    count++;
-  });
-  closeModal();
-  showNotif&&showNotif(`✅ تم استيراد ${count} حركة بنكية وترحيلها في اليومية`, 'success');
-  go('journal');
-}
 
 // ── مصروف سريع من أي صفحة ────────────────────────────────────────
 function showQuickExpense(){
@@ -21213,6 +21072,699 @@ function exportAuditCSV(){
   a.click(); URL.revokeObjectURL(url);
 }
 
+// ══════════════════════════════════════════════════════════════════
+// 📱 تقنيات الدعم — Support Technologies
+// ══════════════════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════════════════
+// A. استيراد Excel — 4 قوالب (منتجات / مواد / موظفين / مصروفات)
+// ══════════════════════════════════════════════════════════════════
+
+const EXCEL_TEMPLATES = {
+  products: {
+    label: '💊 منتجات', icon: '💊',
+    headers: ['اسم المنتج*','الاسم العلمي','الشكل الدوائي','التركيز','الفئة','سعر البيع*','مدة الصلاحية(شهر)','رقم التسجيل','الباركود','ظروف التخزين'],
+    sample:  [['أموكسيسيلين 500 كبسولة','Amoxicillin Trihydrate','capsule','500mg','antibiotic','45.50','24','30/14789','12345678','room'],
+              ['باراسيتامول 500 أقراص','Paracetamol','tablet','500mg','analgesic','12.75','36','30/9876','87654321','room']],
+    mapper: (row,h)=>{
+      const get=(k)=>String(row[h.indexOf(k)]||'').trim();
+      const name=get('اسم المنتج*');
+      if(!name) return null;
+      return { name, scientificName:get('الاسم العلمي')||null,
+        dosageForm:get('الشكل الدوائي')||'tablet',
+        strength:get('التركيز')||null,
+        category:get('الفئة')||'other',
+        sellingPrice:Number(get('سعر البيع*'))||null,
+        shelfLifeMonths:Number(get('مدة الصلاحية(شهر)'))||24,
+        registrationNo:get('رقم التسجيل')||null,
+        barcode:get('الباركود')||null,
+        storageCondition:get('ظروف التخزين')||'room',
+        status:'active' };
+    }
+  },
+  materials: {
+    label: '🧪 مواد خام', icon: '🧪',
+    headers: ['اسم المادة*','النوع','المورد','وحدة القياس*','الرصيد الحالي','الحد الأدنى','السعر/الوحدة','رقم CAS','المرجع الدوائي'],
+    sample:  [['Amoxicillin Trihydrate','api','Sigma Pharma','كجم','50','10','850.00','26787-78-0','BP 2023'],
+              ['Starch Maize','excipient','Cairo Chemicals','كجم','200','50','35.00','9005-25-8','BP 2023']],
+    mapper: (row,h)=>{
+      const get=(k)=>String(row[h.indexOf(k)]||'').trim();
+      const name=get('اسم المادة*');
+      if(!name) return null;
+      return { name, materialType:get('النوع')||'raw_material',
+        supplier:get('المورد')||null,
+        unit:get('وحدة القياس*')||'كجم',
+        currentStock:String(Number(get('الرصيد الحالي'))||0),
+        minimumStock:Number(get('الحد الأدنى'))||10,
+        unitCost:Number(get('السعر/الوحدة'))||null,
+        casNumber:get('رقم CAS')||null,
+        pharmacopeiaRef:get('المرجع الدوائي')||null,
+        status:'active' };
+    }
+  },
+  employees: {
+    label: '👤 موظفين', icon: '👤',
+    headers: ['الاسم الكامل*','الرقم القومي*','القسم*','المسمى الوظيفي*','تاريخ التعيين','الأجر الأساسي*','رقم الهاتف','البريد الإلكتروني','بدل طبيعة عمل','بدل انتقال'],
+    sample:  [['أحمد محمد علي','28901011234567','qc','كيميائي QC','2023-01-15','12000','01012345678','ahmed@company.com','2000','1000'],
+              ['سارة إبراهيم','29504156789012','production','مشغّل إنتاج','2022-06-01','9500','01198765432','sara@company.com','1500','800']],
+    mapper: (row,h)=>{
+      const get=(k)=>String(row[h.indexOf(k)]||'').trim();
+      const name=get('الاسم الكامل*'), nid=get('الرقم القومي*'), basic=Number(get('الأجر الأساسي*'));
+      if(!name||!nid) return null;
+      if(basic < 3500) { console.warn(`${name}: الراتب أقل من 3500`); }
+      return { name, nationalId:nid,
+        department:get('القسم*')||'production',
+        position:get('المسمى الوظيفي*')||'موظف',
+        hireDate:get('تاريخ التعيين')||today(),
+        basicSalary:basic||3500, salary:basic||3500,
+        phone:get('رقم الهاتف')||null,
+        email:get('البريد الإلكتروني')||null,
+        allowChemical:Number(get('بدل طبيعة عمل'))||0,
+        allowTransport:Number(get('بدل انتقال'))||0,
+        status:'active', contractType:'permanent' };
+    }
+  },
+  expenses: {
+    label: '💸 مصروفات', icon: '💸',
+    headers: ['الوصف*','المبلغ*','التاريخ*','الفئة','حساب المصروف','يُدفع من','المرجع'],
+    sample:  [['فاتورة كهرباء المصنع — يناير','8500','2024-01-31','manufacturing','5202','1102','ELEC-2024-01'],
+              ['رواتب فريق QC — يناير','45000','2024-01-31','quality','5301','2301','PAY-QC-2024-01']],
+    mapper: (row,h)=>{
+      const get=(k)=>String(row[h.indexOf(k)]||'').trim();
+      const desc=get('الوصف*'), amount=Number(get('المبلغ*'));
+      if(!desc||!amount) return null;
+      return { description:desc, amount,
+        date:get('التاريخ*')||today(),
+        category:get('الفئة')||'general',
+        accountCode:get('حساب المصروف')||'5509',
+        paymentAccount:get('يُدفع من')||'1102',
+        reference:get('المرجع')||null };
+    }
+  },
+};
+
+function showImportExcel(){
+  const tpl = window._importTemplate||'products';
+  const t   = EXCEL_TEMPLATES[tpl];
+  showModal(modal('📊 استيراد من Excel / CSV',`
+    <div style="max-height:82vh;overflow-y:auto;padding-right:4px">
+
+    <!-- اختيار القالب -->
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      ${Object.entries(EXCEL_TEMPLATES).map(([k,v])=>`
+      <button class="btn btn-sm ${tpl===k?'btn-green':'btn-white'}" onclick="window._importTemplate='${k}';closeModal();showImportExcel()">
+        ${v.icon} ${v.label}
+      </button>`).join('')}
+    </div>
+
+    <!-- تعليمات + تحميل القالب -->
+    <div style="padding:10px;background:rgba(46,160,67,.06);border:1px solid rgba(46,160,67,.2);border-radius:8px;margin-bottom:12px;font-size:12px">
+      <strong>تعليمات الاستيراد:</strong><br>
+      1. حمّل القالب وامله بالبيانات<br>
+      2. احفظه كـ <code>.xlsx</code> أو <code>.csv</code><br>
+      3. ارفعه هنا — النظام يتحقق ويعرض معاينة قبل الحفظ<br>
+      الحقول المميزة بـ * إلزامية
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="btn btn-white" onclick="downloadExcelTemplate('${tpl}')">📥 تحميل قالب ${t.label}</button>
+    </div>
+
+    ${fg('ارفع ملف Excel أو CSV',`<input type="file" id="xl-file" accept=".xlsx,.xls,.csv"
+      style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)"
+      onchange="previewExcelImport(this,'${tpl}')">`)}
+
+    <div id="xl-preview" style="margin-top:12px"></div>
+
+    <div class="form-actions">
+      <button class="btn btn-green" id="xl-confirm-btn" onclick="confirmExcelImport('${tpl}')" style="display:none">
+        ✅ تأكيد الاستيراد
+      </button>
+      <button class="btn btn-ghost" onclick="closeModal()">إغلاق</button>
+    </div>
+    </div>`,null,'720px'));
+}
+
+function downloadExcelTemplate(tplKey){
+  if(typeof XLSX==='undefined'){alert('مكتبة Excel تحمّل، حاول مرة أخرى');return;}
+  const t   = EXCEL_TEMPLATES[tplKey];
+  const data= [t.headers, ...t.sample];
+  const ws  = XLSX.utils.aoa_to_sheet(data);
+  // Style header row
+  const wb  = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'بيانات');
+  XLSX.writeFile(wb, `template-${tplKey}-${today()}.xlsx`);
+  showNotif&&showNotif(`✅ تم تحميل قالب ${t.label}`,'success');
+}
+
+window._xlParsed = [];
+function previewExcelImport(input, tplKey){
+  const file = input.files?.[0]; if(!file) return;
+  const t    = EXCEL_TEMPLATES[tplKey];
+  const reader = new FileReader();
+  const isCsv = file.name.toLowerCase().endsWith('.csv');
+
+  reader.onload = function(ev){
+    try{
+      let rows;
+      if(isCsv){
+        const text = ev.target.result;
+        rows = text.split('\n').filter(r=>r.trim()).map(r=>r.split(',').map(c=>c.replace(/^"|"$/g,'').trim()));
+      } else {
+        if(typeof XLSX==='undefined'){alert('مكتبة Excel تحمّل');return;}
+        const wb   = XLSX.read(ev.target.result, {type:'binary'});
+        const ws   = wb.Sheets[wb.SheetNames[0]];
+        rows       = XLSX.utils.sheet_to_json(ws, {header:1,defval:''});
+      }
+      if(!rows.length){alert('الملف فارغ');return;}
+
+      // Header row (first row)
+      const headers = rows[0].map(h=>String(h).trim());
+      const dataRows = rows.slice(1).filter(r=>r.some(c=>String(c).trim()));
+
+      // Map and validate
+      const valid=[], invalid=[];
+      dataRows.forEach((row,i)=>{
+        try{
+          const mapped = t.mapper(row, headers);
+          if(mapped) valid.push(mapped);
+          else invalid.push({row:i+2, reason:'حقل إلزامي فارغ'});
+        }catch(e){ invalid.push({row:i+2, reason:e.message}); }
+      });
+
+      window._xlParsed = valid;
+
+      const prevEl = document.getElementById('xl-preview');
+      if(prevEl){
+        const previewCols = Object.keys(valid[0]||{}).slice(0,5);
+        prevEl.innerHTML = `
+          <div style="padding:10px;background:${valid.length?'rgba(46,160,67,.06)':'rgba(248,81,73,.06)'};border-radius:8px;margin-bottom:10px;font-size:12px">
+            <strong>${valid.length} صف صالح</strong> جاهز للاستيراد
+            ${invalid.length?` | <span style="color:var(--red)">${invalid.length} صف بأخطاء</span>`:''}
+          </div>
+          ${valid.slice(0,5).length?`<div style="overflow-x:auto;font-size:11px;max-height:180px;overflow-y:auto">
+            ${tbl(previewCols, valid.slice(0,5).map(r=>tr(...previewCols.map(k=>escapeHtml(String(r[k]||'—').slice(0,20))))),'tbl_xl_prev')}
+          </div>`:''}
+          ${invalid.length?`<div style="font-size:11px;color:var(--red);margin-top:6px">
+            أخطاء: ${invalid.slice(0,3).map(e=>`صف ${e.row}: ${e.reason}`).join(' | ')}
+          </div>`:''}`;
+      }
+      const btn = document.getElementById('xl-confirm-btn');
+      if(btn) btn.style.display = valid.length ? 'inline-flex' : 'none';
+    }catch(e){
+      alert('خطأ في قراءة الملف: '+e.message);
+    }
+  };
+  isCsv ? reader.readAsText(file,'UTF-8') : reader.readAsBinaryString(file);
+}
+
+function confirmExcelImport(tplKey){
+  const rows = window._xlParsed||[];
+  if(!rows.length){alert('لا بيانات للاستيراد');return;}
+  const tableMap = {products:'products',materials:'materials',employees:'employees',expenses:'expenses'};
+  const table = tableMap[tplKey];
+  if(!table){alert('جدول غير معروف');return;}
+
+  // Check for duplicates
+  const existing = getAll(table)||[];
+  let inserted=0, skipped=0;
+  rows.forEach(row=>{
+    const dup = existing.find(e=>
+      (e.name && row.name && e.name.trim()===row.name.trim()) ||
+      (e.nationalId && row.nationalId && e.nationalId===row.nationalId)
+    );
+    if(dup){ skipped++; return; }
+    if(table==='expenses' && row.amount){
+      insert('expenses', row);
+      // Auto-journal for expenses
+      if(row.accountCode && row.paymentAccount){
+        autoJournalEntry(row.description,
+          [{accountCode:row.accountCode,debit:row.amount,credit:0},
+           {accountCode:row.paymentAccount,debit:0,credit:row.amount}],
+          row.reference||null,'manual');
+      }
+    } else {
+      insert(table, row);
+    }
+    inserted++;
+  });
+
+  closeModal();
+  showNotif&&showNotif(`✅ تم استيراد ${inserted} سجل${skipped?` | تجاهل ${skipped} مكرر`:''}`, 'success');
+  // Navigate to relevant page
+  const pageMap={products:'products',materials:'materials',employees:'employees',expenses:'expenses'};
+  go(pageMap[tplKey]||'dashboard');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// B. Bank CSV + Auto-Match التحسين
+// ══════════════════════════════════════════════════════════════════
+
+function showBankImport(){
+  showModal(modal('🏦 استيراد كشف بنكي',`
+    <div style="max-height:80vh;overflow-y:auto;padding-right:4px">
+    <div style="padding:10px;background:rgba(56,139,253,.06);border:1px solid rgba(56,139,253,.2);border-radius:8px;margin-bottom:12px;font-size:12px">
+      🏦 يدعم: CIB | NBE | QNB | HSBC Egypt | Banque Misr | Alex Bank<br>
+      الصيغة: <code>تاريخ, وصف, مدين, دائن</code> — أو اختر صيغة البنك
+    </div>
+
+    <div class="form-row">
+      ${fg('صيغة البنك', `<select id="bank-format" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        <option value="standard">قياسي: تاريخ,وصف,مدين,دائن</option>
+        <option value="cib">CIB: Date,Description,Debit,Credit,Balance</option>
+        <option value="nbe">NBE: التاريخ,البيان,السحب,الإيداع,الرصيد</option>
+        <option value="qnb">QNB: Date,Narration,Withdrawals,Deposits</option>
+      </select>`)}
+      ${fg('حساب البنك', `<select id="csv-bank-acc" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
+        ${(getAll('accounts')||[]).filter(a=>a.code.startsWith('11')).map(a=>`<option value="${a.code}">${a.code} — ${escapeHtml(a.name)}</option>`).join('')}
+      </select>`)}
+    </div>
+
+    ${fg('ملف CSV', `<input type="file" id="csv-file" accept=".csv,.txt"
+      style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)"
+      onchange="previewBankCSV()">`)}
+
+    <div id="csv-preview" style="margin-top:12px"></div>
+
+    <!-- خيارات المطابقة التلقائية -->
+    <div id="auto-match-section" style="display:none;margin-top:12px;padding:10px;background:var(--hover);border-radius:8px">
+      <div style="font-weight:700;font-size:12px;margin-bottom:8px">🤖 المطابقة التلقائية — Auto-Match</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">
+        النظام يحاول مطابقة كل حركة بموزع أو مورد بناءً على الاسم في وصف الحركة
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px">
+        <input type="checkbox" id="auto-match-enable" checked>
+        تفعيل المطابقة التلقائية
+      </label>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-white" onclick="previewBankCSV()">🔍 معاينة</button>
+      <button class="btn btn-green" onclick="importBankCSV()">📥 استيراد وترحيل</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>
+    </div>`,null,'680px'));
+}
+
+function _parseBankCSV(text, format){
+  const lines = text.split('\n').filter(l=>l.trim());
+  const rows  = [];
+  const colMap = {
+    standard: {date:0,desc:1,debit:2,credit:3},
+    cib:      {date:0,desc:1,debit:2,credit:3,bal:4},
+    nbe:      {date:0,desc:1,debit:2,credit:3,bal:4},
+    qnb:      {date:0,desc:1,debit:2,credit:3},
+  }[format]||{date:0,desc:1,debit:2,credit:3};
+
+  lines.slice(1).forEach(line=>{
+    const cols = line.split(',').map(c=>c.replace(/^"|"$/g,'').trim());
+    if(cols.length < 3) return;
+    const debit  = parseFloat((cols[colMap.debit]||'').replace(/,/g,''))||0;
+    const credit = parseFloat((cols[colMap.credit]||'').replace(/,/g,''))||0;
+    if(!debit && !credit) return;
+    rows.push({ date:cols[colMap.date]||'', desc:cols[colMap.desc]||'', debit, credit });
+  });
+  return rows;
+}
+
+function _autoMatchBank(desc){
+  // Match against distributors, suppliers
+  const dists= getAll('distributors')||[];
+  const pos  = getAll('purchaseOrders')||[];
+  const dl   = desc.toLowerCase();
+
+  // Distributor match
+  for(const d of dists){
+    if(d.name && dl.includes(d.name.toLowerCase().split(' ')[0])){
+      return {entity:'distributor',id:d.id,name:d.name,creditAccount:'1201',debitAccount:'1102'};
+    }
+  }
+  // Supplier match (from POs)
+  const suppliers = [...new Set(pos.map(p=>p.supplier||p.supplierName).filter(Boolean))];
+  for(const s of suppliers){
+    if(s && dl.includes(s.toLowerCase().split(' ')[0])){
+      return {entity:'supplier',name:s,creditAccount:'1102',debitAccount:'2101'};
+    }
+  }
+  // Pattern matching
+  if(/مرتب|راتب|salary|payroll/i.test(desc)) return {entity:'payroll',name:'رواتب',creditAccount:'1102',debitAccount:'2301'};
+  if(/ضريبة|tax|vat/i.test(desc))            return {entity:'tax',name:'ضرائب',creditAccount:'1102',debitAccount:'2201'};
+  if(/تأمين|insurance/i.test(desc))           return {entity:'insurance',name:'تأمينات',creditAccount:'1102',debitAccount:'2304'};
+  if(/إيجار|rent/i.test(desc))               return {entity:'rent',name:'إيجار',creditAccount:'1102',debitAccount:'5503'};
+  if(/كهرباء|electric/i.test(desc))          return {entity:'utility',name:'كهرباء',creditAccount:'1102',debitAccount:'5202'};
+
+  return null; // No match
+}
+
+window._bankParsed = [];
+function previewBankCSV(){
+  const file   = document.getElementById('csv-file')?.files?.[0];
+  const format = document.getElementById('bank-format')?.value||'standard';
+  if(!file){alert('اختر ملف CSV');return;}
+
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    const rows = _parseBankCSV(ev.target.result, format);
+    window._bankParsed = rows;
+
+    // Run auto-match
+    const autoMatch = document.getElementById('auto-match-enable')?.checked;
+    const matched   = rows.map(r=>({...r, match: autoMatch ? _autoMatchBank(r.desc) : null}));
+    window._bankParsed = matched;
+
+    const matchCount = matched.filter(r=>r.match).length;
+    const prev = document.getElementById('csv-preview');
+    if(!prev) return;
+
+    prev.innerHTML = `
+      <div style="padding:8px;background:var(--hover);border-radius:6px;margin-bottom:8px;font-size:12px">
+        <strong>${rows.length} حركة</strong>
+        ${autoMatch?` | <span style="color:var(--green-light)">✅ تطابق تلقائي: ${matchCount} حركة</span>`:''}
+        | إجمالي دائن: ${fmtC(rows.reduce((s,r)=>s+r.credit,0))}
+        | إجمالي مدين: ${fmtC(rows.reduce((s,r)=>s+r.debit,0))}
+      </div>
+      <div style="max-height:220px;overflow-y:auto;font-size:11px">
+        ${matched.slice(0,10).map(r=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border-bottom:1px solid var(--border);gap:8px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:11px">${r.date} — ${escapeHtml(r.desc.slice(0,40))}</div>
+            ${r.match?`<div style="font-size:10px;color:var(--green-light)">✅ ${r.match.name}</div>`:`<div style="font-size:10px;color:var(--muted)">— غير محدد</div>`}
+          </div>
+          <div style="font-size:11px;white-space:nowrap;font-weight:700">
+            ${r.debit?`<span style="color:var(--red)">-${fmtC(r.debit)}</span>`:''}
+            ${r.credit?`<span style="color:var(--green-light)">+${fmtC(r.credit)}</span>`:''}
+          </div>
+        </div>`).join('')}
+      </div>`;
+
+    document.getElementById('auto-match-section').style.display='block';
+  };
+  reader.readAsText(file,'UTF-8');
+}
+
+function importBankCSV(){
+  const bankCode= document.getElementById('csv-bank-acc')?.value||'1102';
+  const rows    = window._bankParsed||[];
+  if(!rows.length){alert('لا بيانات — اضغط معاينة أولاً');return;}
+  let count=0;
+  rows.forEach(r=>{
+    const match = r.match;
+    let lines;
+    if(r.credit > 0){ // إيداع → خزينة مدين
+      const cr = match?.creditAccount||'1201';
+      lines=[{accountCode:bankCode,debit:r.credit,credit:0},{accountCode:cr,debit:0,credit:r.credit}];
+    } else { // سحب → مصروف أو دفع
+      const dr = match?.debitAccount||'5509';
+      lines=[{accountCode:dr,debit:r.debit,credit:0},{accountCode:bankCode,debit:0,credit:r.debit}];
+    }
+    autoJournalEntry(r.desc||'حركة بنكية', lines, 'BANK-'+r.date, 'bank_import');
+    count++;
+  });
+  closeModal();
+  showNotif&&showNotif(`✅ تم ترحيل ${count} حركة بنكية في اليومية`, 'success');
+  go('journal');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// C. PWA — إضافة manifest + install button
+// ══════════════════════════════════════════════════════════════════
+
+// Inject manifest dynamically
+(function injectPWAManifest(){
+  if(document.querySelector('link[rel="manifest"]')) return;
+  const manifest = {
+    name: 'ميديسنيا — ERP دوائي',
+    short_name: 'ميديسنيا',
+    description: 'نظام إدارة شركات الأدوية المصرية',
+    start_url: './',
+    display: 'standalone',
+    background_color: '#0d1117',
+    theme_color: '#2ea043',
+    orientation: 'any',
+    icons: [
+      {src:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="%232ea043"/><text y=".9em" font-size="80" x="50%" text-anchor="middle">💊</text></svg>',
+       sizes:'512x512', type:'image/svg+xml', purpose:'any maskable'},
+    ],
+  };
+  try{
+    const blob = new Blob([JSON.stringify(manifest)],{type:'application/manifest+json'});
+    const url  = URL.createObjectURL(blob);
+    const link = document.createElement('link');
+    link.rel='manifest'; link.href=url;
+    document.head.appendChild(link);
+  }catch(e){}
+})();
+
+// Install button
+let _pwaPrompt = null;
+window.addEventListener('beforeinstallprompt', e=>{
+  e.preventDefault();
+  _pwaPrompt = e;
+  // Show install button in top bar
+  const btn = document.getElementById('pwa-install-btn');
+  if(btn) btn.style.display='inline-flex';
+});
+
+window.addEventListener('appinstalled',()=>{
+  _pwaPrompt=null;
+  const btn=document.getElementById('pwa-install-btn');
+  if(btn) btn.style.display='none';
+  showNotif&&showNotif('✅ تم تثبيت التطبيق! يمكنك فتحه من الشاشة الرئيسية','success');
+});
+
+function triggerPWAInstall(){
+  if(!_pwaPrompt){ alert('المتصفح لا يدعم التثبيت المباشر. يمكنك استخدام خيار "إضافة إلى الشاشة الرئيسية" في قائمة المتصفح.'); return; }
+  _pwaPrompt.prompt();
+  _pwaPrompt.userChoice.then(r=>{
+    if(r.outcome==='accepted') showNotif&&showNotif('✅ جاري تثبيت التطبيق...','success');
+    _pwaPrompt=null;
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// D. Keyboard Shortcuts — إضافة F1 + تحسينات
+// ══════════════════════════════════════════════════════════════════
+
+(function enhanceKeyboard(){
+  if(window._keyboardEnhanced) return;
+  window._keyboardEnhanced = true;
+  document.addEventListener('keydown', function(e){
+    // F1 — help panel
+    if(e.key==='F1'){
+      e.preventDefault();
+      showKeyboardHelp();
+      return;
+    }
+    // Ctrl+N — new record (open add form on current page)
+    if(e.ctrlKey && e.key==='n'){
+      e.preventDefault();
+      const addBtn = document.querySelector('.btn-green');
+      if(addBtn && addBtn.textContent.includes('+')) addBtn.click();
+      return;
+    }
+    // Ctrl+B — backup
+    if(e.ctrlKey && e.key==='b'){
+      e.preventDefault();
+      if(typeof exportBackup==='function') exportBackup();
+      return;
+    }
+    // Ctrl+D — toggle dark/light
+    if(e.ctrlKey && e.key==='d'){
+      e.preventDefault();
+      const s  = (getAll('appSettings')||[])[0];
+      const cur= s?.theme || localStorage.getItem('_erp_theme') || 'dark';
+      const nxt= cur==='dark'?'light':'dark';
+      if(typeof applyTheme==='function') applyTheme(nxt);
+      if(typeof saveAppSettings==='function' && s) saveAppSettings({...s,theme:nxt});
+      else try{ localStorage.setItem('_erp_theme',nxt); }catch(e){}
+      return;
+    }
+  });
+})();
+
+function showKeyboardHelp(){
+  showModal(modal('⌨️ اختصارات لوحة المفاتيح',`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
+      ${[
+        ['Ctrl + K / F','🔍 فتح البحث الشامل'],
+        ['Ctrl + S',    '💾 حفظ النموذج الحالي'],
+        ['Ctrl + N',    '➕ إضافة سجل جديد'],
+        ['Ctrl + P',    '🖨️ طباعة'],
+        ['Ctrl + B',    '💾 نسخة احتياطية'],
+        ['Ctrl + D',    '🌙 تبديل الوضع الليلي/النهاري'],
+        ['F1',          '❓ عرض هذه المساعدة'],
+        ['Esc',         '❌ إغلاق النافذة الحالية'],
+        ['Alt + 1',     '📊 الصفحة الأولى في القائمة'],
+        ['Alt + 2',     '📋 الصفحة الثانية'],
+        ['Alt + 3-9',   '📄 الصفحات 3-9 في القائمة'],
+      ].map(([k,d])=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--hover);border-radius:6px">
+        <code style="background:var(--bg);border:1px solid var(--border);padding:2px 8px;border-radius:4px;font-size:12px;white-space:nowrap">${k}</code>
+        <span style="font-size:12px;color:var(--muted)">${d}</span>
+      </div>`).join('')}
+    </div>
+    <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">إغلاق</button></div>`));
+}
+
+// ══════════════════════════════════════════════════════════════════
+// E. البحث الشامل — توسيع للجداول الإضافية
+// ══════════════════════════════════════════════════════════════════
+
+function runGlobalSearch(q){
+  q = q.toLowerCase();
+  const results = [];
+
+  const push=(type,icon,label,sub,page,id)=>{
+    if(results.length<15) results.push({type,icon,label:String(label||''),sub:String(sub||''),page,id});
+  };
+
+  // المنتجات
+  getAll('products').forEach(p=>{
+    if((p.name||'').toLowerCase().includes(q)||(p.scientificName||'').toLowerCase().includes(q)||(p.registrationNo||'').includes(q))
+      push('منتج','💊',p.name,`${p.dosageForm||''} ${p.strength||''}`.trim(),'products',p.id);
+  });
+  // المواد الخام
+  getAll('materials').forEach(m=>{
+    if((m.name||'').toLowerCase().includes(q)||(m.casNumber||'').includes(q)||(m.supplier||'').toLowerCase().includes(q))
+      push('مادة','🧪',m.name,`مخزون: ${fmtN(m.currentStock||0)} ${m.unit||''}`,'materials',m.id);
+  });
+  // الموزعون
+  getAll('distributors').forEach(d=>{
+    if((d.name||'').toLowerCase().includes(q)||(d.taxRegNo||'').includes(q)||(d.edaLicenseNo||'').toLowerCase().includes(q))
+      push('موزع','🤝',d.name,`${d.region||''} | ${d.paymentTerms||''}`,'distributors',d.id);
+  });
+  // الموظفون
+  getAll('employees').forEach(e=>{
+    if((e.name||'').toLowerCase().includes(q)||(e.nationalId||'').includes(q)||(e.position||'').toLowerCase().includes(q))
+      push('موظف','👤',e.name,`${e.department||''} — ${e.position||''}`,'employees',e.id);
+  });
+  // الفواتير
+  getAll('salesInvoices').forEach(inv=>{
+    const n='INV-'+String(inv.id).padStart(6,'0');
+    if(n.includes(q.toUpperCase())||(inv.customerName||'').toLowerCase().includes(q)||(inv.etaUUID||'').toLowerCase().includes(q))
+      push('فاتورة','📄',n,`${inv.customerName||''} — ${fmtC(inv.totalAmount||0)}`,'salesinvoices',inv.id);
+  });
+  // أوامر البيع
+  getAll('salesOrders').forEach(o=>{
+    if(`SO-${o.id}`.includes(q.toUpperCase())||(o.customerName||'').toLowerCase().includes(q))
+      push('أمر بيع','📋',`SO-${String(o.id).padStart(5,'0')}`,`${o.customerName||''} — ${fmtC(o.totalAmount||0)}`,'salesorders',o.id);
+  });
+  // المصروفات
+  getAll('expenses').forEach(e=>{
+    if((e.description||'').toLowerCase().includes(q)||(e.category||'').toLowerCase().includes(q))
+      push('مصروف','💸',e.description,`${fmtC(e.amount||0)} — ${e.category||''}`,'expenses',e.id);
+  });
+  // الأصول
+  getAll('assets').forEach(a=>{
+    if((a.name||'').toLowerCase().includes(q)||(a.category||'').toLowerCase().includes(q))
+      push('أصل','🏗️',a.name,`${a.category||''} — ${fmtC(a.purchaseCost||0)}`,'assets',a.id);
+  });
+  // مصانع CMO
+  getAll('cmos').forEach(c=>{
+    if((c.name||'').toLowerCase().includes(q))
+      push('مصنع','🏭',c.name,c.licenseNumber||'','cmos',c.id);
+  });
+  // أوامر الإنتاج
+  getAll('productionOrders').forEach(o=>{
+    const p=getById('products',o.productId);
+    if(`PO-${o.id}`.includes(q.toUpperCase())||(p?.name||'').toLowerCase().includes(q))
+      push('تشغيلة','⚙️',`PO-${o.id}`,p?.name||'—','production',o.id);
+  });
+  // العقود
+  (getAll('contracts')||[]).forEach(c=>{
+    if((c.title||c.name||'').toLowerCase().includes(q)||(c.party||'').toLowerCase().includes(q))
+      push('عقد','📝',c.title||c.name||'—',c.party||'','contracts',c.id);
+  });
+  // قيود اليومية
+  getAll('journalEntries').forEach(e=>{
+    if((e.description||'').toLowerCase().includes(q)||(e.reference||'').toLowerCase().includes(q))
+      push('قيد','📒',`JE-${String(e.id).padStart(6,'0')}`,e.description||'','journal',e.id);
+  });
+
+  // قيود اليومية
+  (getAll('journalEntries')||[]).forEach(e=>{
+    if((e.description||'').toLowerCase().includes(q)||(e.reference||'').toLowerCase().includes(q)){
+      push('قيد يومية','📒','JE-'+String(e.id).padStart(6,'0'),e.description||'—','journal',e.id);
+    }
+  });
+  // مسير الرواتب
+  (getAll('payrollRuns')||[]).forEach(r=>{
+    if((r.period||'').includes(q)){
+      push('مسير رواتب','💸',r.period||'—','صرف '+r.employeeCount+' موظف','payroll',r.id);
+    }
+  });
+
+  showSearchResults(results, q);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// F. Import/Export shortcuts from toolbar
+// ══════════════════════════════════════════════════════════════════
+
+// Add import button to relevant pages
+function addImportBtn(page){
+  const importPages = {
+    products:   ()=>{ window._importTemplate='products';  showImportExcel(); },
+    materials:  ()=>{ window._importTemplate='materials'; showImportExcel(); },
+    employees:  ()=>{ window._importTemplate='employees'; showImportExcel(); },
+    expenses:   ()=>{ window._importTemplate='expenses';  showImportExcel(); },
+    journal:    ()=>showBankImport(),
+  };
+  return importPages[page] ? `<button class="btn btn-white btn-sm" onclick="(${importPages[page].toString()})()">📥 استيراد</button>` : '';
+}
+
+
+// renderNav/go called by coEnter() after company is selected
+
+PAGES.auditlog = function(){
+  const logs = ((DB.auditLogs||[]).slice()).reverse();
+  const filterAction = window._auditFilter||'all';
+  const filtered = filterAction==='all' ? logs : logs.filter(l=>l.action===filterAction);
+  const actionCls  = {'إضافة':'b-green','تعديل':'b-blue','حذف':'b-red','BACKUP_EXPORT':'b-purple','BACKUP_IMPORT':'b-amber'};
+
+  setPage('📋 سجل التدقيق — Audit Log',
+    `${logs.length} سجل | قانون المحاسبة 127/1981`,
+    `<div style="display:flex;gap:8px">
+      <button class="btn btn-white" onclick="go('settings')">← الإعدادات</button>
+      <button class="btn btn-white" onclick="exportAuditCSV()">📊 تصدير CSV</button>
+    </div>`,
+    `<div style="display:flex;gap:6px;margin-bottom:12px">
+      ${['all','إضافة','تعديل','حذف'].map(f=>`
+      <button class="btn btn-sm ${filterAction===f?'btn-green':'btn-white'}" onclick="window._auditFilter='${f}';go('auditlog')">
+        ${f==='all'?'الكل ('+logs.length+')':f+' ('+logs.filter(l=>l.action===f).length+')'}
+      </button>`).join('')}
+    </div>
+    <div class="card">${tbl(
+      ['التاريخ والوقت','الإجراء','الجدول','رقم السجل','التفاصيل','المستخدم'],
+      filtered.slice(0,200).map(l=>tr(
+        `<span style="font-size:10px;direction:ltr">${l.at?.slice(0,19)?.replace('T',' ')||'—'}</span>`,
+        `<span class="badge ${actionCls[l.action]||'b-gray'}" style="font-size:10px">${l.action||'—'}</span>`,
+        `<code style="font-size:10px">${escapeHtml(l.table||'—')}</code>`,
+        l.recordId ? `<code style="font-size:10px">#${l.recordId}</code>` : '—',
+        `<span style="font-size:11px">${escapeHtml((l.description||'—').slice(0,60))}</span>`,
+        escapeHtml(l.by||'—')
+      ))
+    ,'tbl_audit')}</div>`
+  );
+};
+
+function exportAuditCSV(){
+  const logs = ((DB.auditLogs||[]).slice()).reverse();
+  const header = ['التاريخ','الوقت','الإجراء','الجدول','رقم السجل','التفاصيل','المستخدم'];
+  const rows = logs.map(l=>[
+    l.at?.slice(0,10)||'', l.at?.slice(11,19)||'',
+    l.action||'', l.table||'', l.recordId||'',
+    (l.description||'').replace(/,/g,' '), l.by||''
+  ]);
+  const bom='\uFEFF';
+  const csv=[header.join(','),...rows.map(r=>r.join(','))].join('\n');
+  const blob=new Blob([bom+csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url;
+  a.download='audit-log-'+today()+'.csv';
+  a.click(); URL.revokeObjectURL(url);
+}
+
 // renderNav/go called by coEnter() after company is selected
 
 </script>
@@ -21235,6 +21787,19 @@ function exportAuditCSV(){
     <button class="ai-send-btn" onclick="sendAIMessage()">إرسال</button>
   </div>
 </div>
+
+
+<style>
+#pwa-install-btn {
+  display:none;position:fixed;bottom:20px;left:20px;z-index:999;
+  background:linear-gradient(135deg,#2ea043,#1a7a3c);color:#fff;
+  border:none;border-radius:12px;padding:10px 16px;cursor:pointer;
+  font-size:13px;font-family:Cairo,sans-serif;font-weight:700;
+  box-shadow:0 4px 15px rgba(46,160,67,.4);transition:all .2s;
+}
+#pwa-install-btn:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(46,160,67,.5)}
+</style>
+<button id="pwa-install-btn" onclick="triggerPWAInstall()">📱 تثبيت كتطبيق</button>
 
 </body>
 </html>
