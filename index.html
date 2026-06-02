@@ -1402,6 +1402,632 @@ async function initApp(){
   go('dashboard');
 }
 
+// ══════════════════════════════════════════
+// SECTION 10 — PHASE 3: المنتجات ووصفة الإنتاج
+// ══════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════════════════
+// SECTION 10 — PHASE 3: المنتجات ووصفة الإنتاج (BOM)
+// products, bom
+// ══════════════════════════════════════════════════════════════════
+
+const PROD_CATEGORIES = [
+  {v:'antibiotic',      l:'🦠 مضادات حيوية (Antibiotics)'},
+  {v:'analgesic',       l:'💊 مسكنات ومضادات التهاب (Analgesics/NSAIDs)'},
+  {v:'cardiovascular',  l:'❤️ قلب وأوعية دموية (Cardiovascular)'},
+  {v:'respiratory',     l:'🫁 جهاز تنفسي (Respiratory)'},
+  {v:'vitamins',        l:'🌿 فيتامينات ومكملات (Vitamins/Supplements)'},
+  {v:'dermatological',  l:'🧴 جلدية (Dermatological)'},
+  {v:'antidiabetic',    l:'🩸 سكري (Antidiabetic)'},
+  {v:'antiviral',       l:'🦠 مضادات فيروسية (Antiviral)'},
+  {v:'antifungal',      l:'🍄 مضادات فطرية (Antifungal)'},
+  {v:'gastrointestinal',l:'🫀 جهاز هضمي (Gastrointestinal)'},
+  {v:'neurological',    l:'🧠 جهاز عصبي (Neurological)'},
+  {v:'hormonal',        l:'⚗️ هرمونية (Hormonal)'},
+  {v:'ophthalmic',      l:'👁️ عيون (Ophthalmic)'},
+  {v:'pediatric',       l:'👶 أطفال (Pediatric)'},
+  {v:'oncology',        l:'🔬 أورام (Oncology)'},
+  {v:'other',           l:'📋 أخرى'},
+];
+
+const PROD_STATUS = [
+  {v:'development',  l:'🔬 قيد التطوير (R&D)',    cls:'bg-b'},
+  {v:'registered',   l:'📋 مسجل جديد',             cls:'bg-p'},
+  {v:'active',       l:'✅ نشط وفي الإنتاج',       cls:'bg-g'},
+  {v:'discontinued', l:'⏹️ متوقف عن الإنتاج',     cls:'bg-m'},
+  {v:'suspended',    l:'⏸️ موقوف مؤقتاً',          cls:'bg-a'},
+];
+
+const BOM_COMP_TYPES = [
+  {v:'active',      l:'🧬 مادة فعالة (API)'},
+  {v:'excipient',   l:'⚗️ سواغ (Excipient)'},
+  {v:'coating',     l:'🎨 مادة طلاء (Coating)'},
+  {v:'packaging',   l:'📦 تغليف أولي (Primary Pkg)'},
+  {v:'secondary',   l:'📫 تغليف ثانوي (Secondary Pkg)'},
+  {v:'lubricant',   l:'🔧 مادة تزليق (Lubricant)'},
+  {v:'disintegrant',l:'💧 مفكك (Disintegrant)'},
+  {v:'binder',      l:'🔗 رابط (Binder)'},
+  {v:'filler',      l:'🫙 حشو (Filler)'},
+  {v:'other',       l:'📋 أخرى'},
+];
+
+// ─────────────────────────────────────────────────────────────────
+// P10. PRODUCTS — المنتجات الدوائية
+// ─────────────────────────────────────────────────────────────────
+PAGES['products'] = async function(){
+  const prods = await dbAll('products');
+  const boms  = await dbAll('productBOM');
+  const regs  = await dbAll('drugRegistrations');
+
+  const active  = prods.filter(p=>p.status==='active').length;
+  const dev     = prods.filter(p=>p.status==='development').length;
+  const withBOM = prods.filter(p=>boms.some(b=>b.productId===p.id)).length;
+
+  setPage(`
+    <div class="ph">
+      <div><h1>💊 المنتجات الدوائية</h1>
+        <p>إدارة المنتجات المرخصة والمطوّرة — ${Object.keys(DOSAGE_FORMS).length} شكل دوائي</p></div>
+      <div class="ph-act">
+        <button class="btn bs" onclick="go('bom')">📐 وصفات الإنتاج</button>
+        <button class="btn bp" onclick="openProduct()">+ إضافة منتج</button>
+      </div>
+    </div>
+    <div class="sg sg4" style="margin-bottom:14px">
+      <div class="sc"><div class="lb">إجمالي المنتجات</div><div class="vl tc">${prods.length}</div></div>
+      <div class="sc"><div class="lb">نشطة وفي الإنتاج</div><div class="vl tc">${active}</div></div>
+      <div class="sc"><div class="lb" style="color:var(--blue)">قيد التطوير</div><div class="vl" style="color:var(--blue)">${dev}</div></div>
+      <div class="sc"><div class="lb">لديها BOM</div><div class="vl">${withBOM}</div></div>
+    </div>
+    <div class="card">
+      <div class="flex jb ac mb12">
+        <div class="ct" style="margin-bottom:0">قائمة المنتجات</div>
+        <div class="flex g8">
+          <input id="prod-search" class="inp" placeholder="🔍 بحث بالاسم..." style="width:200px"
+            oninput="filterProds(this.value)">
+          <select id="prod-filter-form" class="inp" style="width:150px"
+            onchange="filterProds(document.getElementById('prod-search').value)">
+            <option value="">كل الأشكال</option>
+            ${Object.entries(DOSAGE_FORMS).map(([k,v])=>`<option value="${k}">${v.i} ${v.l}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      ${!prods.length
+        ? `<div class="empty"><div class="em">💊</div><h3>لا توجد منتجات مسجلة</h3>
+           <p>ابدأ بإضافة منتجاتك الدوائية</p>
+           <button class="btn bp" style="margin-top:12px" onclick="openProduct()">+ إضافة أول منتج</button></div>`
+        : `<div class="tw"><table id="prod-tbl">
+            <thead><tr>
+              <th>المنتج</th><th>الشكل الدوائي</th><th>التصنيف العلاجي</th>
+              <th>التركيز</th><th>رقم التسجيل</th><th>BOM</th><th>الحالة</th><th>إجراءات</th>
+            </tr></thead>
+            <tbody id="prod-tbody">
+              ${prods.map(p=>{
+                const df = DOSAGE_FORMS[p.dosageForm]||{};
+                const reg = regs.find(r=>r.productId===p.id&&r.status==='active');
+                const hasBOM = boms.some(b=>b.productId===p.id);
+                const stObj = PROD_STATUS.find(s=>s.v===p.status)||PROD_STATUS[2];
+                const catObj = PROD_CATEGORIES.find(c=>c.v===p.category);
+                return `<tr data-name="${(p.name||'').toLowerCase()}" data-form="${p.dosageForm||''}">
+                  <td><div>
+                    <strong>${df.i||'💊'} ${esc(p.name)}</strong>
+                    ${p.nameLatin?`<div class="f11 tm">${esc(p.nameLatin)}</div>`:''}
+                  </div></td>
+                  <td><span class="bge bg-b f11">${esc(df.l||p.dosageForm||'—')}</span></td>
+                  <td class="f12">${catObj?catObj.l.replace(/^[^\w]*/,'').split('(')[0].trim():'—'}</td>
+                  <td class="f12">${esc(p.strength||'—')}</td>
+                  <td>${reg?`<code class="f11">${esc(reg.registrationNumber)}</code>`:'<span class="tm f11">—</span>'}</td>
+                  <td>${hasBOM
+                    ?`<span class="bge bg-g f11">✅ مكتمل</span>`
+                    :`<button class="btn bs bsm" onclick="go('bom')">+ أضف</button>`}</td>
+                  <td><span class="bge ${stObj.cls}">${stObj.l}</span></td>
+                  <td><div class="flex g6">
+                    <button class="btn bs bsm" onclick="openProduct(${p.id})" title="تعديل">✏️</button>
+                    <button class="btn bs bsm" onclick="viewProductBOM(${p.id})" title="BOM">📐</button>
+                    <button class="btn bd bsm" onclick="deleteProd(${p.id})" title="حذف">🗑️</button>
+                  </div></td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table></div>`
+      }
+    </div>`);
+};
+
+function filterProds(q){
+  const form = document.getElementById('prod-filter-form')?.value||'';
+  const query=(q||'').toLowerCase();
+  document.querySelectorAll('#prod-tbody tr').forEach(tr=>{
+    const name=tr.dataset.name||'';
+    const f=tr.dataset.form||'';
+    tr.style.display=(name.includes(query)&&(!form||f===form))?'':'none';
+  });
+}
+
+async function openProduct(id){
+  const p = id ? await dbGet('products',id) : {};
+  const regs = await dbAll('drugRegistrations');
+  const df = p.dosageForm||'tablet';
+
+  openModal(id?'✏️ تعديل منتج':'💊 إضافة منتج جديد', `
+    <div style="max-height:75vh;overflow-y:auto;padding-left:4px">
+    <div class="tabs">
+      <button class="tab on" data-t="pf-basic">📋 الأساسية</button>
+      <button class="tab" data-t="pf-pharma">💊 الدوائية</button>
+      <button class="tab" data-t="pf-reg">📋 التسجيل</button>
+      <button class="tab" data-t="pf-pkg">📦 التغليف</button>
+    </div>
+
+    <div id="pf-basic" class="tp on">
+      <div class="fgr">
+        <div class="fg"><label>اسم المنتج <span class="req">*</span></label>
+          <input id="p-name" class="inp" value="${esc(p.name||'')}" placeholder="مثال: أموكسيسيلين 500 مجم كبسولات"></div>
+        <div class="fg"><label>الاسم اللاتيني (LATIN) <span class="req">*</span></label>
+          <input id="p-latin" class="inp" value="${esc(p.nameLatin||'')}" placeholder="Amoxicillin Capsules 500mg"></div>
+        <div class="fg"><label>الشكل الدوائي <span class="req">*</span></label>
+          <select id="p-form" class="inp" onchange="updateProdForm(this.value)">
+            ${Object.entries(DOSAGE_FORMS).map(([k,v])=>`<option value="${k}" ${df===k?'selected':''}>${v.i} ${v.l}</option>`).join('')}
+          </select></div>
+        <div class="fg"><label>التصنيف العلاجي</label>
+          <select id="p-cat" class="inp">
+            ${PROD_CATEGORIES.map(c=>`<option value="${c.v}" ${p.category===c.v?'selected':''}>${c.l}</option>`).join('')}
+          </select></div>
+        <div class="fg"><label>التركيز / القوة (Strength) <span class="req">*</span></label>
+          <input id="p-strength" class="inp" value="${esc(p.strength||'')}" placeholder="مثال: 500mg أو 125mg/5ml"></div>
+        <div class="fg"><label>الوحدة الأساسية</label>
+          <input id="p-unit" class="inp" value="${esc(p.unit||DOSAGE_FORMS[df]?.u||'قرص')}"></div>
+        <div class="fg"><label>عدد الوحدات في العبوة</label>
+          <input id="p-unitpk" class="inp" type="number" value="${p.unitsPerPack||10}"></div>
+        <div class="fg"><label>حجم دفعة الإنتاج (Batch Size)</label>
+          <input id="p-batch" class="inp" type="number" value="${p.batchSize||100000}" placeholder="مثال: 100000 قرص"></div>
+        <div class="fg"><label>سعر التكلفة المرجعي (ج.م)</label>
+          <input id="p-cost" class="inp" type="number" value="${p.targetCost||''}"></div>
+        <div class="fg"><label>سعر البيع (ج.م)</label>
+          <input id="p-price" class="inp" type="number" value="${p.sellingPrice||''}"></div>
+        <div class="fg"><label>الحالة</label>
+          <select id="p-status" class="inp">
+            ${PROD_STATUS.map(s=>`<option value="${s.v}" ${(p.status||'development')===s.v?'selected':''}>${s.l}</option>`).join('')}
+          </select></div>
+        <div class="fg"><label>كود المنتج الداخلي</label>
+          <input id="p-code" class="inp" value="${esc(p.internalCode||'')}"></div>
+      </div>
+    </div>
+
+    <div id="pf-pharma" class="tp">
+      <div class="fgr">
+        <div class="fg"><label>المواد الفعالة (APIs)</label>
+          <input id="p-apis" class="inp" value="${esc(p.activeIngredients||'')}" placeholder="مثال: Amoxicillin 500mg"></div>
+        <div class="fg"><label>طريقة الإعطاء (Route)</label>
+          <select id="p-route" class="inp">
+            ${['فموي (Oral)','حقن وريدي (IV)','حقن عضلي (IM)','تحت الجلد (SC)','موضعي (Topical)','استنشاق (Inhalation)','مهبلي (Vaginal)','شرجي (Rectal)','عيني (Ophthalmic)','أذني (Otic)'].map(r=>`<option ${p.routeOfAdmin===r?'selected':''}>${r}</option>`).join('')}
+          </select></div>
+        <div class="fg"><label>درجة حرارة التخزين</label>
+          <select id="p-storage" class="inp">
+            ${STORAGE_CONDS.map(s=>`<option value="${s.v}" ${p.storageCond===s.v?'selected':''}>${s.l}</option>`).join('')}
+          </select></div>
+        <div class="fg"><label>فترة الصلاحية (أشهر)</label>
+          <input id="p-shelf" class="inp" type="number" value="${p.shelfLifeMonths||24}"></div>
+        <div class="fg"><label>Overage% (زيادة للتعويض)</label>
+          <input id="p-overage" class="inp" type="number" step="0.1" value="${p.overage||0}" placeholder="مثال: 2 تعني 2%"></div>
+        <div class="fg"><label>هل يحتاج Cold Chain؟</label>
+          <select id="p-cold" class="inp">
+            <option value="no" ${!p.coldChain||p.coldChain==='no'?'selected':''}>لا</option>
+            <option value="yes" ${p.coldChain==='yes'?'selected':''}>نعم</option>
+          </select></div>
+        <div class="fg"><label>خاضع للرقابة (Controlled)</label>
+          <select id="p-controlled" class="inp">
+            <option value="no" ${!p.controlled||p.controlled==='no'?'selected':''}>لا</option>
+            <option value="yes" ${p.controlled==='yes'?'selected':''}>نعم — خاضع للرقابة</option>
+          </select></div>
+        <div class="fg"><label>تعليمات خاصة للمريض</label>
+          <input id="p-instructions" class="inp" value="${esc(p.patientInstructions||'')}"></div>
+      </div>
+    </div>
+
+    <div id="pf-reg" class="tp">
+      <div class="fgr">
+        <div class="fg"><label>رقم تسجيل EDA</label>
+          <input id="p-regno" class="inp" value="${esc(p.registrationNumber||'')}" placeholder="مثال: 30/12345"></div>
+        <div class="fg"><label>تاريخ تسجيل EDA</label>
+          <input id="p-regdate" class="inp" type="date" value="${p.registrationDate||''}"></div>
+        <div class="fg"><label>تاريخ انتهاء التسجيل</label>
+          <input id="p-regexp" class="inp" type="date" value="${p.registrationExpiry||''}"></div>
+        <div class="fg"><label>رقم الملف الفني (Dossier)</label>
+          <input id="p-dossier" class="inp" value="${esc(p.dossierNo||'')}"></div>
+        <div class="fg"><label>النظير العلمي / Reference Product</label>
+          <input id="p-reference" class="inp" value="${esc(p.referenceProduct||'')}" placeholder="مثال: Amoxil 500mg (Pfizer)"></div>
+        <div class="fg"><label>تصنيف الوصفة الطبية</label>
+          <select id="p-rx" class="inp">
+            <option value="rx" ${(p.prescriptionType||'rx')==='rx'?'selected':''}>💊 يصرف بوصفة طبية (Rx)</option>
+            <option value="otc" ${p.prescriptionType==='otc'?'selected':''}>🏪 يصرف بدون وصفة (OTC)</option>
+            <option value="controlled" ${p.prescriptionType==='controlled'?'selected':''}>🔒 مخدرات/خاضع رقابة خاصة</option>
+          </select></div>
+      </div>
+      <div class="fg" style="margin-top:10px"><label>ملاحظات تنظيمية</label>
+        <textarea id="p-regnotes" class="inp">${esc(p.regulatoryNotes||'')}</textarea></div>
+    </div>
+
+    <div id="pf-pkg" class="tp">
+      <div class="fgr">
+        <div class="fg"><label>نوع التغليف الأولي</label>
+          <select id="p-pkg1" class="inp">
+            ${['Blister (PVC/Alu)','Blister (PVDC/Alu)','Strip (Alu/Alu)','زجاجة HDPE','زجاجة زجاجية','أمبولة زجاجية','فيال زجاجي','ساشيه ألومنيوم','أنبوب لامينيت','أنبوب ألومنيوم','أخرى'].map(v=>`<option ${p.primaryPkg===v?'selected':''}>${v}</option>`).join('')}
+          </select></div>
+        <div class="fg"><label>التغليف الثانوي</label>
+          <input id="p-pkg2" class="inp" value="${esc(p.secondaryPkg||'علبة كرتون')}" placeholder="علبة كرتون مع نشرة داخلية"></div>
+        <div class="fg"><label>رمز الباركود (EAN-13)</label>
+          <input id="p-barcode" class="inp" value="${esc(p.barcode||'')}" placeholder="6xxxxxxxxxx12"></div>
+        <div class="fg"><label>GTIN (GS1)</label>
+          <input id="p-gtin" class="inp" value="${esc(p.gtin||'')}"></div>
+        <div class="fg"><label>طريقة الطباعة (الملصق)</label>
+          <select id="p-print" class="inp">
+            ${['طباعة مباشرة على الكرتون','ملصق مطبوع (Label)','كليهما'].map(v=>`<option ${p.printMethod===v?'selected':''}>${v}</option>`).join('')}
+          </select></div>
+        <div class="fg"><label>عدد العبوات في الكرتون</label>
+          <input id="p-cartonqty" class="inp" type="number" value="${p.packsPerCarton||12}"></div>
+      </div>
+      <div class="fg" style="margin-top:10px"><label>ملاحظات التغليف</label>
+        <textarea id="p-pkgnotes" class="inp">${esc(p.packagingNotes||'')}</textarea></div>
+    </div>
+    </div>`, [{l:id?'💾 تحديث':'+ إضافة منتج',c:'bp',fn:`saveProduct(${id||''})`}], 'mlg');
+}
+
+async function saveProduct(id){
+  const name = document.getElementById('p-name')?.value?.trim();
+  if(!name){ notif('يرجى كتابة اسم المنتج','error'); return; }
+  const form = document.getElementById('p-form')?.value||'tablet';
+  const d = {
+    name,
+    nameLatin:          document.getElementById('p-latin')?.value?.trim()||'',
+    dosageForm:         form,
+    category:           document.getElementById('p-cat')?.value||'other',
+    strength:           document.getElementById('p-strength')?.value?.trim()||'',
+    unit:               document.getElementById('p-unit')?.value||DOSAGE_FORMS[form]?.u||'قرص',
+    unitsPerPack:       +document.getElementById('p-unitpk')?.value||10,
+    batchSize:          +document.getElementById('p-batch')?.value||100000,
+    targetCost:         +document.getElementById('p-cost')?.value||0,
+    sellingPrice:       +document.getElementById('p-price')?.value||0,
+    status:             document.getElementById('p-status')?.value||'development',
+    internalCode:       document.getElementById('p-code')?.value?.trim()||'',
+    activeIngredients:  document.getElementById('p-apis')?.value?.trim()||'',
+    routeOfAdmin:       document.getElementById('p-route')?.value||'',
+    storageCond:        document.getElementById('p-storage')?.value||'room_temp',
+    shelfLifeMonths:    +document.getElementById('p-shelf')?.value||24,
+    overage:            +document.getElementById('p-overage')?.value||0,
+    coldChain:          document.getElementById('p-cold')?.value||'no',
+    controlled:         document.getElementById('p-controlled')?.value||'no',
+    patientInstructions:document.getElementById('p-instructions')?.value?.trim()||'',
+    registrationNumber: document.getElementById('p-regno')?.value?.trim()||'',
+    registrationDate:   document.getElementById('p-regdate')?.value||'',
+    registrationExpiry: document.getElementById('p-regexp')?.value||'',
+    dossierNo:          document.getElementById('p-dossier')?.value?.trim()||'',
+    referenceProduct:   document.getElementById('p-reference')?.value?.trim()||'',
+    prescriptionType:   document.getElementById('p-rx')?.value||'rx',
+    regulatoryNotes:    document.getElementById('p-regnotes')?.value?.trim()||'',
+    primaryPkg:         document.getElementById('p-pkg1')?.value||'',
+    secondaryPkg:       document.getElementById('p-pkg2')?.value||'',
+    barcode:            document.getElementById('p-barcode')?.value?.trim()||'',
+    gtin:               document.getElementById('p-gtin')?.value?.trim()||'',
+    printMethod:        document.getElementById('p-print')?.value||'',
+    packsPerCarton:     +document.getElementById('p-cartonqty')?.value||12,
+    packagingNotes:     document.getElementById('p-pkgnotes')?.value?.trim()||'',
+  };
+  if(id){ await dbUpd('products',{...d,id}); }
+  else   { await dbIns('products',d); }
+  await logAudit(id?'تعديل':'إضافة','products',id||null,name);
+  closeModal(); notif('✅ تم الحفظ','success');
+  PAGES['products']();
+}
+
+async function deleteProd(id){
+  const boms = await dbAll('productBOM');
+  const orders = await dbAll('productionOrders');
+  if(boms.some(b=>b.productId===id)){
+    notif('❌ يوجد BOM مرتبط — احذف الـ BOM أولاً','error'); return;
+  }
+  if(orders.some(o=>o.productId===id)){
+    notif('❌ يوجد أوامر إنتاج مرتبطة','error'); return;
+  }
+  if(!confirm('حذف هذا المنتج؟')) return;
+  await dbDel('products',id);
+  await logAudit('حذف','products',id,'');
+  notif('✅ تم الحذف','success');
+  PAGES['products']();
+}
+
+async function viewProductBOM(productId){
+  const p = await dbGet('products',productId);
+  const boms = await dbAll('productBOM');
+  const prodBOM = boms.filter(b=>b.productId===productId);
+  const mats = await dbAll('materials');
+
+  openModal(`📐 وصفة الإنتاج — ${esc(p?.name||'—')}`, `
+    <div class="flex jb ac mb12">
+      <span class="f12 tm">حجم الدفعة: <strong>${fmt(p?.batchSize||100000)}</strong> ${esc(p?.unit||'وحدة')}</span>
+      <button class="btn bp bsm" onclick="closeModal();go('bom')">+ إضافة مكوّن</button>
+    </div>
+    ${!prodBOM.length
+      ? `<div class="empty"><div class="em">📐</div><h3>لا توجد وصفة إنتاج</h3>
+         <p>أضف مكونات الوصفة من صفحة BOM</p></div>`
+      : `<div class="tw"><table>
+          <thead><tr><th>المادة</th><th>النوع</th><th>الكمية/وحدة</th>
+            <th>Assay%</th><th>LOD%</th><th>Overage%</th><th>الكمية المصححة/دفعة</th><th>مرحلة الإضافة</th><th>إجراءات</th></tr></thead>
+          <tbody>
+            ${prodBOM.map(b=>{
+              const mat=mats.find(m=>m.id===b.materialId);
+              const ct=BOM_COMP_TYPES.find(c=>c.v===b.componentType)||{l:b.componentType||'—'};
+              const corrected = calcBOMCorrected(b.qtyPerUnit, b.assay, b.lod, b.overage);
+              const perBatch = corrected * (p?.batchSize||100000);
+              const stage=PROD_STAGES.find(s=>s.id===b.additionStage)||{l:b.additionStage||'—'};
+              return `<tr>
+                <td><strong>${esc(mat?.name||b.materialName||'—')}</strong></td>
+                <td><span class="bge bg-b f11">${esc(ct.l.replace(/^[^\w]*/,'').split('(')[0].trim())}</span></td>
+                <td>${fmt(b.qtyPerUnit,4)} ${esc(b.unit||'جم')}</td>
+                <td class="tc">${b.assay||100}%</td>
+                <td class="ta">${b.lod||0}%</td>
+                <td style="color:var(--purple)">${b.overage||0}%</td>
+                <td><strong class="tc">${fmt(perBatch,2)} ${esc(b.unit||'جم')}</strong></td>
+                <td class="f12">${esc(stage.l)}</td>
+                <td><button class="btn bd bsm" onclick="deleteBOM(${b.id})">🗑️</button></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table></div>`
+    }
+  `, [], 'mlg');
+}
+
+// تصحيح الكمية بناءً على Assay/LOD/Overage
+function calcBOMCorrected(qty, assay, lod, overage){
+  const q = +qty||0;
+  const a = (+assay||100)/100;
+  const l = (+lod||0)/100;
+  const o = (+overage||0)/100;
+  // الكمية النظرية المصححة = qty ÷ assay × (1/(1-LOD)) × (1+Overage)
+  if(a<=0) return q;
+  return q / a * (1/(1-l)) * (1+o);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// P11. BOM — وصفة الإنتاج
+// ─────────────────────────────────────────────────────────────────
+PAGES['bom'] = async function(){
+  const prods = await dbAll('products');
+  const boms  = await dbAll('productBOM');
+  const mats  = await dbAll('materials');
+
+  setPage(`
+    <div class="ph">
+      <div><h1>📐 وصفة الإنتاج (BOM)</h1>
+        <p>Bill of Materials — تحديد مكونات كل منتج مع تصحيح Assay% / LOD% / Overage%</p></div>
+      <div class="ph-act">
+        <button class="btn bp" onclick="openBOMEntry()">+ إضافة وصفة</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="flex jb ac mb12">
+        <div class="ct" style="margin-bottom:0">وصفات الإنتاج</div>
+        <select id="bom-filter-prod" class="inp" style="width:220px"
+          onchange="filterBOM(this.value)">
+          <option value="">كل المنتجات</option>
+          ${prods.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}
+        </select>
+      </div>
+      ${!boms.length
+        ? `<div class="empty"><div class="em">📐</div><h3>لا توجد وصفات إنتاج</h3>
+           <p>أضف مكونات المنتجات لبدء الإنتاج</p>
+           <button class="btn bp" style="margin-top:12px" onclick="openBOMEntry()">+ إضافة وصفة</button></div>`
+        : `<div class="tw"><table id="bom-tbl">
+            <thead><tr>
+              <th>المنتج</th><th>المادة الخام</th><th>نوع المكوّن</th>
+              <th>الكمية النظرية/وحدة</th><th>Assay%</th><th>LOD%</th><th>Overage%</th>
+              <th>الكمية المصححة/وحدة</th><th>الكمية/دفعة</th><th>مرحلة الإضافة</th><th>إجراءات</th>
+            </tr></thead>
+            <tbody id="bom-tbody">
+              ${boms.map(b=>{
+                const prod=prods.find(p=>p.id===b.productId);
+                const mat=mats.find(m=>m.id===b.materialId);
+                const ct=BOM_COMP_TYPES.find(c=>c.v===b.componentType)||{l:'—'};
+                const corrected=calcBOMCorrected(b.qtyPerUnit,b.assay,b.lod,b.overage);
+                const batchSize=prod?.batchSize||100000;
+                const perBatch=corrected*batchSize;
+                const stage=PROD_STAGES.find(s=>s.id===b.additionStage)||{l:b.additionStage||'—'};
+                return `<tr data-prod="${b.productId}">
+                  <td><strong>${esc(prod?.name||'—')}</strong></td>
+                  <td><strong>${esc(mat?.name||b.materialName||'—')}</strong></td>
+                  <td><span class="bge bg-b f11">${esc(ct.l.replace(/^[^\w]*/,'').split('(')[0].trim())}</span></td>
+                  <td>${fmt(b.qtyPerUnit,4)} ${esc(b.unit||'جم')}</td>
+                  <td class="tc">${b.assay||100}%</td>
+                  <td class="ta">${b.lod||0}%</td>
+                  <td style="color:var(--purple)">${b.overage||0}%</td>
+                  <td><strong class="tc">${fmt(corrected,4)} ${esc(b.unit||'جم')}</strong></td>
+                  <td class="fw7" style="color:var(--blue)">${fmt(perBatch,2)} ${esc(b.unit||'جم')}</td>
+                  <td class="f12">${esc(stage.l)}</td>
+                  <td><div class="flex g6">
+                    <button class="btn bs bsm" onclick="openBOMEntry(${b.id})" title="تعديل">✏️</button>
+                    <button class="btn bd bsm" onclick="deleteBOM(${b.id})" title="حذف">🗑️</button>
+                  </div></td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table></div>`
+      }
+    </div>
+
+    <div class="card">
+      <div class="ct">💡 شرح حسابات BOM</div>
+      <div class="fg2" style="font-size:12px;color:var(--muted)">
+        <div>
+          <div class="mb8"><strong class="tc">الكمية المصححة = الكمية النظرية ÷ Assay% × 1/(1−LOD%) × (1+Overage%)</strong></div>
+          <div>• <strong>Assay%</strong>: نسبة النقاء الفعلية للمادة الفعالة</div>
+          <div>• <strong>LOD%</strong>: نسبة الرطوبة المفقودة عند التجفيف</div>
+          <div>• <strong>Overage%</strong>: زيادة احتياطية لتعويض الفقد أثناء التصنيع</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:8px;padding:12px">
+          <div class="mb8 fw7">مثال:</div>
+          <div>مادة Assay=98%, LOD=0.5%, Overage=2%</div>
+          <div>الكمية النظرية = 500 مجم</div>
+          <div class="tc fw7">الكمية المصححة = 500 ÷ 0.98 × (1/0.995) × 1.02 = 523.5 مجم</div>
+        </div>
+      </div>
+    </div>`);
+};
+
+function filterBOM(prodId){
+  document.querySelectorAll('#bom-tbody tr').forEach(tr=>{
+    tr.style.display=(!prodId||tr.dataset.prod===prodId)?'':'none';
+  });
+}
+
+async function openBOMEntry(id){
+  const b = id ? await dbGet('productBOM',id) : {};
+  const prods = await dbAll('products');
+  const mats  = await dbAll('materials');
+
+  openModal(id?'✏️ تعديل مكوّن BOM':'📐 إضافة مكوّن لوصفة الإنتاج', `
+    <div class="fgr">
+      <div class="fg"><label>المنتج <span class="req">*</span></label>
+        <select id="b-prod" class="inp" ${id?'disabled':''}>
+          <option value="">اختر منتج...</option>
+          ${prods.map(p=>`<option value="${p.id}" ${b.productId===p.id?'selected':''}>${esc(p.name)} — دفعة: ${fmt(p.batchSize||100000)} ${p.unit||''}</option>`).join('')}
+        </select></div>
+      <div class="fg"><label>المادة الخام / التغليف <span class="req">*</span></label>
+        <select id="b-mat" class="inp" onchange="bomCalcPreview()">
+          <option value="">اختر مادة...</option>
+          <optgroup label="🧪 مواد خام">
+            ${mats.filter(m=>m.matType!=='packaging').map(m=>`<option value="${m.id}" data-unit="${m.unit||'جم'}" data-assay="${m.assayMin||98}" data-lod="${m.lodMax||0}" ${b.materialId===m.id?'selected':''}>${esc(m.name)} (${m.unit||'جم'})</option>`).join('')}
+          </optgroup>
+          <optgroup label="📦 مواد تغليف">
+            ${mats.filter(m=>m.matType==='packaging').map(m=>`<option value="${m.id}" data-unit="${m.unit||'قطعة'}" data-assay="100" data-lod="0" ${b.materialId===m.id?'selected':''}>${esc(m.name)} (${m.unit||'قطعة'})</option>`).join('')}
+          </optgroup>
+        </select></div>
+      <div class="fg"><label>نوع المكوّن</label>
+        <select id="b-comptype" class="inp">
+          ${BOM_COMP_TYPES.map(c=>`<option value="${c.v}" ${b.componentType===c.v?'selected':''}>${c.l}</option>`).join('')}
+        </select></div>
+      <div class="fg"><label>الكمية النظرية لكل وحدة <span class="req">*</span></label>
+        <input id="b-qty" class="inp" type="number" step="0.0001" value="${b.qtyPerUnit||''}"
+          oninput="bomCalcPreview()" placeholder="مثال: 500 (مجم)"></div>
+      <div class="fg"><label>وحدة الكمية</label>
+        <select id="b-unit" class="inp" onchange="bomCalcPreview()">
+          ${['مجم','جم','كجم','مل','لتر','قطعة','ورقة','لفافة'].map(u=>`<option ${(b.unit||'مجم')===u?'selected':''}>${u}</option>`).join('')}
+        </select></div>
+      <div class="fg"><label>Assay% (نقاء المادة)</label>
+        <input id="b-assay" class="inp" type="number" step="0.01" value="${b.assay||98}"
+          oninput="bomCalcPreview()"></div>
+      <div class="fg"><label>LOD% (رطوبة عند التجفيف)</label>
+        <input id="b-lod" class="inp" type="number" step="0.01" value="${b.lod||0}"
+          oninput="bomCalcPreview()"></div>
+      <div class="fg"><label>Overage% (زيادة احتياطية)</label>
+        <input id="b-overage" class="inp" type="number" step="0.01" value="${b.overage||0}"
+          oninput="bomCalcPreview()"></div>
+      <div class="fg"><label>مرحلة الإضافة</label>
+        <select id="b-stage" class="inp">
+          ${PROD_STAGES.map(s=>`<option value="${s.id}" ${(b.additionStage||'dispensing')===s.id?'selected':''}>${s.l}</option>`).join('')}
+        </select></div>
+      <div class="fg"><label>ترتيب الإضافة</label>
+        <input id="b-order" class="inp" type="number" value="${b.additionOrder||1}"></div>
+    </div>
+    <div id="bom-preview" style="background:rgba(0,200,150,.08);border:1px solid rgba(0,200,150,.2);border-radius:9px;padding:12px;margin-top:12px;font-size:12px;display:none">
+      <div class="fw7 tc mb8">📊 معاينة الحساب</div>
+      <div id="bom-preview-content"></div>
+    </div>
+  `, [{l:id?'💾 تحديث':'+ إضافة',c:'bp',fn:`saveBOM(${id||''})`}], 'mlg');
+
+  // تعبئة تلقائية من المادة المختارة
+  if(b.materialId){
+    setTimeout(()=>{
+      const sel = document.getElementById('b-mat');
+      if(sel){
+        const opt = sel.options[sel.selectedIndex];
+        if(opt){
+          document.getElementById('b-unit').value = opt.dataset.unit||'مجم';
+          if(!b.assay) document.getElementById('b-assay').value = opt.dataset.assay||98;
+          if(!b.lod)   document.getElementById('b-lod').value   = opt.dataset.lod||0;
+        }
+      }
+      bomCalcPreview();
+    }, 80);
+  }
+}
+
+function bomCalcPreview(){
+  const qty    = +document.getElementById('b-qty')?.value||0;
+  const assay  = +document.getElementById('b-assay')?.value||100;
+  const lod    = +document.getElementById('b-lod')?.value||0;
+  const overage= +document.getElementById('b-overage')?.value||0;
+  const unit   = document.getElementById('b-unit')?.value||'مجم';
+  const prodId = +document.getElementById('b-prod')?.value||0;
+  const preview= document.getElementById('bom-preview');
+  const content= document.getElementById('bom-preview-content');
+  if(!qty||!preview||!content) return;
+
+  const corrected = calcBOMCorrected(qty, assay, lod, overage);
+
+  // تحقق من حجم الدفعة
+  let batchInfo = '';
+  if(prodId){
+    const prodSel = document.getElementById('b-prod');
+    const batchMatch = prodSel?.options[prodSel.selectedIndex]?.text?.match(/دفعة: ([\d,]+)/);
+    const batchSize = batchMatch ? +batchMatch[1].replace(/,/g,'') : 0;
+    if(batchSize>0){
+      batchInfo = `<div>كمية الدفعة الكاملة: <strong class="tc">${fmt(corrected*batchSize,2)} ${unit}</strong> = <strong class="tc">${fmt((corrected*batchSize)/1000,4)} كجم</strong></div>`;
+    }
+  }
+
+  content.innerHTML = `
+    <div class="fg2">
+      <div>الكمية النظرية / وحدة: <strong>${fmt(qty,4)} ${unit}</strong></div>
+      <div>Assay: <strong class="tc">${assay}%</strong> | LOD: <strong class="ta">${lod}%</strong> | Overage: <strong style="color:var(--purple)">${overage}%</strong></div>
+    </div>
+    <div class="mt8" style="margin-top:8px">الكمية المصححة / وحدة: <strong class="tc fw7" style="font-size:14px">${fmt(corrected,4)} ${unit}</strong></div>
+    ${batchInfo}`;
+  preview.style.display='block';
+
+  // تعبئة تلقائية من المادة
+  const matSel=document.getElementById('b-mat');
+  if(matSel?.value){
+    const opt=matSel.options[matSel.selectedIndex];
+    if(opt?.dataset.unit) document.getElementById('b-unit').value=opt.dataset.unit;
+  }
+}
+
+async function saveBOM(id){
+  const prodId = +document.getElementById('b-prod')?.value||0;
+  const matId  = +document.getElementById('b-mat')?.value||0;
+  const qty    = +document.getElementById('b-qty')?.value||0;
+  if(!prodId||!matId||!qty){ notif('يرجى: اختيار المنتج + المادة + الكمية','error'); return; }
+
+  const mat = await dbGet('materials',matId);
+  const d = {
+    productId:     prodId,
+    materialId:    matId,
+    materialName:  mat?.name||'',
+    componentType: document.getElementById('b-comptype')?.value||'excipient',
+    qtyPerUnit:    qty,
+    unit:          document.getElementById('b-unit')?.value||'مجم',
+    assay:         +document.getElementById('b-assay')?.value||100,
+    lod:           +document.getElementById('b-lod')?.value||0,
+    overage:       +document.getElementById('b-overage')?.value||0,
+    additionStage: document.getElementById('b-stage')?.value||'dispensing',
+    additionOrder: +document.getElementById('b-order')?.value||1,
+  };
+  if(id){ await dbUpd('productBOM',{...d,id}); }
+  else   { await dbIns('productBOM',d); }
+  await logAudit(id?'تعديل':'إضافة','productBOM',id||null,`BOM: ${mat?.name||matId}`);
+  closeModal(); notif('✅ تم الحفظ','success');
+  PAGES['bom']();
+}
+
+async function deleteBOM(id){
+  if(!confirm('حذف هذا المكوّن من الوصفة؟')) return;
+  await dbDel('productBOM',id);
+  await logAudit('حذف','productBOM',id,'');
+  notif('✅ تم الحذف','success');
+  PAGES['bom']();
+}
+
+
 // Boot
 (function boot(){
   document.getElementById('co-sc').classList.add('show');
