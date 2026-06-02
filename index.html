@@ -1092,6 +1092,20 @@ PAGES['company-info'] = async function(){
       </div>
     </div>
 
+
+    <div class="card"><div class="ct">📁 رفع المستندات الرسمية</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        ${renderCoDocRow('السجل التجاري',            'commercial-reg')}
+        ${renderCoDocRow('البطاقة الضريبية',          'tax-card')}
+        ${renderCoDocRow('رقم التسجيل الضريبي (TRN)', 'trn-cert')}
+        ${renderCoDocRow('نموذج التأمينات',            'social-ins')}
+        ${renderCoDocRow('صحيفة الاستثمار',           'investment-rec')}
+        ${renderCoDocRow('عقد التأسيس / النظام الأساسي','articles')}
+        ${renderCoDocRow('عقد تعديل النظام الأساسي',   'articles-amend')}
+        ${renderCoDocRow('محضر الجمعية العامة',         'gen-assembly')}
+      </div>
+    </div>
+
     <!-- ══ تبويب 3: الشركاء والمديرون ══════════════════════════════ -->
     <div id="ci-partners" class="tp">
       <div class="card">
@@ -1195,7 +1209,16 @@ PAGES['company-info'] = async function(){
         </div>
       </div>
 
-      <!-- Toll: المصانع المتعاقدة -->
+  
+    <div class="card"><div class="ct">📁 مستندات EDA والترخيص الدوائي</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        ${renderCoDocRow('ترخيص EDA / بطاقة Toll', 'eda-lic')}
+        ${renderCoDocRow('شهادة GMP',               'gmp-cert')}
+        ${renderCoDocRow('بطاقة Toll Manufacturer',  'toll-card')}
+      </div>
+    </div>
+
+    <!-- Toll: المصانع المتعاقدة -->
       <div id="ci-toll-section" style="display:${mtype==='toll'||mtype==='both'?'block':'none'}">
         <div class="card">
           <div class="flex jb ac mb12">
@@ -1316,6 +1339,14 @@ PAGES['company-info'] = async function(){
         </div>
       </div>
 
+
+        <div class="card"><div class="ct">📁 مستندات المصنع</div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            ${renderCoDocRow('رخصة المصنع من EDA',  'factory-lic')}
+            ${renderCoDocRow('شهادة GMP للمصنع',    'factory-gmp')}
+          </div>
+        </div>
+
       <div id="ci-no-factory-msg" style="display:${mtype==='toll'?'block':'none'}">
         <div class="card" style="text-align:center;padding:32px">
           <div style="font-size:36px;margin-bottom:12px">🤝</div>
@@ -1368,6 +1399,7 @@ PAGES['company-info'] = async function(){
   _prodLines    = _s0.productionLines||[];
   // Init tabs
   setTimeout(()=>{
+    loadCoDocRows();
     document.querySelectorAll('#ci-tabs .tab').forEach(tab=>{
       tab.onclick=()=>{
         document.querySelectorAll('#ci-tabs .tab').forEach(t=>t.classList.remove('on'));
@@ -1969,6 +2001,7 @@ async function openProduct(id){
         <textarea id="p-pkgnotes" class="inp">${esc(p.packagingNotes||'')}</textarea></div>
     </div>
     </div>`, [{l:id?'💾 تحديث':'+ إضافة منتج',c:'bp',fn:`saveProduct(${id||''})`}], 'mlg');
+  addInlineDocs('product', id?String(id):null, p?.name||'');
   // Inject inline docs section
   setTimeout(()=>{
     const mb=document.getElementById('m-body');
@@ -2962,7 +2995,8 @@ async function processIDU(file){
     notif('✅ "'+name+'" — '+saved,'success');
     setTimeout(async()=>{
       closeModal();
-      await loadInlineDocs(ctx.entityType,ctx.entityId,ctx.entityName);
+      await refreshIDocs();
+      loadCoDocRows();
     },1200);
   }catch(err){
     if(bar)bar.style.width='0%';
@@ -2977,6 +3011,127 @@ async function inlineDelDoc(id,entityType,entityId,entityName){
   await dbDel('documents',id);
   notif('✅ تم الحذف','success');
   await loadInlineDocs(entityType,entityId,entityName);
+}
+
+
+// ── Inline Docs في كل modal ───────────────────────────────────
+function addInlineDocs(etype, eid, ename){
+  const mb=document.getElementById('m-body');
+  if(!mb||mb.querySelector('#idocs-wrap')) return;
+  // Add separator
+  const hr=document.createElement('hr');
+  hr.style.cssText='border-color:var(--border);margin:14px 0';
+  mb.appendChild(hr);
+  // Add wrapper
+  const wrap=document.createElement('div');
+  wrap.id='idocs-wrap';
+  mb.appendChild(wrap);
+  // Store context on wrapper
+  wrap.dataset.etype=etype||'';
+  wrap.dataset.eid=eid||'';
+  wrap.dataset.ename=ename||'';
+  // Render
+  renderIDocs(wrap,etype,eid,ename);
+}
+
+async function renderIDocs(wrap,etype,eid,ename){
+  if(!wrap) return;
+  const hasId=eid&&eid!=='null'&&eid!=='undefined';
+  const docs=hasId?await getEntityDocs(etype,String(eid)):[];
+  let h='<div class="flex jb ac mb8">';
+  h+='<span class="fw7 f12">📎 المستندات المرفقة';
+  if(docs.length) h+=' <span class="bge bg-b" style="font-size:9px">'+docs.length+'</span>';
+  h+='</span>';
+  if(hasId){
+    h+='<button class="btn bp bsm" id="idocs-upload-btn">+ رفع مستند</button>';
+  } else {
+    h+='<span class="tm f12">احفظ البيانات أولاً</span>';
+  }
+  h+='</div>';
+  if(!docs.length){
+    h+='<div class="tm f12" style="padding:6px 0">لا توجد مستندات مرفقة بعد</div>';
+  } else {
+    docs.forEach(function(d){
+      const cfg=DOC_TYPES[d.docType]||DOC_TYPES.other;
+      const isImg=d.fileType&&d.fileType.startsWith('image/');
+      const ratio=d.originalSize>0?Math.round((1-d.compressedSize/d.originalSize)*100):0;
+      h+='<div class="flex ac g8" style="padding:6px 0;border-bottom:1px solid var(--border)">';
+      h+=isImg?'<img src="'+d.data+'" style="width:28px;height:28px;object-fit:cover;border-radius:4px;flex-shrink:0">'
+              :'<span style="font-size:18px;flex-shrink:0">'+cfg.icon+'</span>';
+      h+='<div style="flex:1;min-width:0">';
+      h+='<div class="fw7 f12" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(d.name)+'</div>';
+      h+='<div class="tm" style="font-size:10px">'+fmtBytes(d.compressedSize)+(ratio>5?' −'+ratio+'%':'')+(d.expiryDate?' '+expBadge(d.expiryDate):'')+' • '+esc(d.fileName)+'</div>';
+      h+='</div>';
+      h+='<div class="flex g6" style="flex-shrink:0">';
+      h+='<button class="btn bs bsm idocs-view" data-id="'+d.id+'">👁️</button>';
+      h+='<button class="btn bd bsm idocs-del" data-id="'+d.id+'">🗑️</button>';
+      h+='</div></div>';
+    });
+  }
+  wrap.innerHTML=h;
+  // Attach events
+  wrap.querySelector('#idocs-upload-btn')?.addEventListener('click',function(){
+    inlineDocUpload(etype,eid,ename);
+  });
+  wrap.querySelectorAll('.idocs-view').forEach(function(btn){
+    btn.addEventListener('click',function(){ viewDoc(+btn.dataset.id); });
+  });
+  wrap.querySelectorAll('.idocs-del').forEach(function(btn){
+    btn.addEventListener('click',async function(){
+      const d=await dbGet('documents',+btn.dataset.id);
+      if(!confirm('حذف "'+( d?.name||'المستند')+'"؟')) return;
+      await dbDel('documents',+btn.dataset.id);
+      notif('✅ تم الحذف','success');
+      renderIDocs(wrap,etype,eid,ename);
+    });
+  });
+}
+
+// بعد رفع مستند inline — نحدث الـ wrapper
+async function refreshIDocs(){
+  const wrap=document.getElementById('idocs-wrap');
+  if(!wrap) return;
+  await renderIDocs(wrap,wrap.dataset.etype,wrap.dataset.eid,wrap.dataset.ename);
+}
+
+
+function renderCoDocRow(label, subId){
+  return '<div class="flex ac jb" style="padding:6px 0;border-bottom:1px solid var(--border)">' +
+    '<span class="f12 fw7">'+esc(label)+'</span>' +
+    '<div class="flex g6" id="cdr-'+subId+'">' +
+    '<button class="btn bp bsm" onclick="uploadCoDocRow(\''+subId+'\',\''+label+'\')">📎 رفع</button>' +
+    '<button class="btn bg bsm" onclick="viewCoDocRow(\''+subId+'\')" style="display:none">📁 عرض</button>' +
+    '</div></div>';
+}
+
+function uploadCoDocRow(subId, label){
+  window._inlineCtx={entityType:'company',entityId:subId,entityName:label};
+  inlineDocUpload('company',subId,label);
+}
+
+async function viewCoDocRow(subId){
+  const all=await dbAll('documents');
+  const docs=all.filter(d=>d.entityType==='company'&&d.entityId===subId);
+  if(!docs.length){notif('لا توجد مستندات بعد','info');return;}
+  showDocsPanel('company',subId,docs[0].entityName||subId);
+}
+
+async function loadCoDocRows(){
+  const all=await dbAll('documents');
+  const coDocs=all.filter(d=>d.entityType==='company');
+  const map={};
+  coDocs.forEach(d=>{ if(!map[d.entityId]) map[d.entityId]=[]; map[d.entityId].push(d); });
+  Object.entries(map).forEach(([subId,docs])=>{
+    const row=document.getElementById('cdr-'+subId);
+    if(!row) return;
+    const last=docs[docs.length-1];
+    const ratio=last.originalSize>0?Math.round((1-last.compressedSize/last.originalSize)*100):0;
+    row.innerHTML=
+      '<span class="bge bg-g f11">✅ '+fmtBytes(last.compressedSize)+(ratio>5?' −'+ratio+'%':'')+
+      (last.expiryDate?'</span> '+expBadge(last.expiryDate):'</span>')+
+      ' <button class="btn bs bsm" onclick="uploadCoDocRow(\''+subId+'\',\''+esc(last.entityName||subId)+'\')">🔄</button>'+
+      ' <button class="btn bg bsm" onclick="viewCoDocRow(\''+subId+'\')">📁</button>';
+  });
 }
 
 // Boot
@@ -3259,6 +3414,7 @@ async function openMat(id){
       </div>
     </div>
     </div>`, [{l:id?'💾 تحديث':'+ إضافة مادة',c:'bp',fn:`saveMat(${id||''})`}], 'mlg');
+  addInlineDocs('material', id?String(id):null, m?.name||'');
   // Inject inline docs section
   setTimeout(()=>{
     const mb=document.getElementById('m-body');
@@ -3479,6 +3635,7 @@ async function openGRN(matId, editId){
     <div class="fg" style="margin-top:10px"><label>ملاحظات الاستلام</label>
       <textarea id="grn-notes" class="inp">${esc(existing.notes||'')}</textarea></div>
   `, [{l:editId?'💾 تحديث':'📦 تسجيل الاستلام',c:'bp',fn:`saveGRN(${editId||''})`}], 'mlg');
+  addInlineDocs('materialReceipt', editId?String(editId):null, existing?.batchNumber||'');
   // Inject inline docs section
   setTimeout(()=>{
     const mb=document.getElementById('m-body');
@@ -3803,6 +3960,7 @@ async function openSupplier(id){
         <input id="sup-notes" class="inp" value="${esc(s.notes||'')}"></div>
     </div>
   `, [{l:id?'💾 تحديث':'+ إضافة',c:'bp',fn:`saveSupplier(${id||''})`}], 'mlg');
+  addInlineDocs('supplier', id?String(id):null, s?.name||'');
   // Inject inline docs section
   setTimeout(()=>{
     const mb=document.getElementById('m-body');
@@ -3936,6 +4094,7 @@ async function openDrugReg(id){
     <div class="fg" style="margin-top:10px"><label>ملاحظات</label>
       <textarea id="dr-notes" class="inp">${esc(r.notes||'')}</textarea></div>`,
     [{l:id?'💾 تحديث':'+ إضافة',c:'bp',fn:`saveDrugReg(${id||''})`}]);
+  addInlineDocs('drugRegistration', id?String(id):null, r?.registrationNumber||'');
   // Inject inline docs section
   setTimeout(()=>{
     const mb=document.getElementById('m-body');
