@@ -986,6 +986,7 @@ PAGES['company-info'] = async function(){
       <div><h1>🏢 بيانات الشركة</h1>
         <p>البيانات القانونية والتجارية والدوائية — مبنية على المستندات الرسمية المصرية</p></div>
       <div class="ph-act">
+        <button class="btn bs" onclick="showDocsPanel('company','1','الشركة')">📁 مستندات الشركة</button>
         <button class="btn bp" onclick="saveCoInfo()">💾 حفظ جميع البيانات</button>
       </div>
     </div>
@@ -1821,6 +1822,7 @@ PAGES['products'] = async function(){
                   <td><div class="flex g6">
                     <button class="btn bs bsm" onclick="openProduct(${p.id})" title="تعديل">✏️</button>
                     <button class="btn bs bsm" onclick="viewProductBOM(${p.id})" title="BOM">📐</button>
+                    <button class="btn bd bsm" onclick="showDocsPanel('product',String(p.id),p.name||'منتج')" title="مستندات">📁</button>
                     <button class="btn bd bsm" onclick="deleteProd(${p.id})" title="حذف">🗑️</button>
                   </div></td>
                 </tr>`;
@@ -3711,6 +3713,7 @@ PAGES['drug-reg']=async function(){
               <td><span class="bge ${stMap[r.status]||'bg-m'}">${stL[r.status]||r.status}</span></td>
               <td><div class="flex g6">
                 <button class="btn bs bsm" onclick="openDrugReg(${r.id})">✏️</button>
+                <button class="btn bs bsm" onclick="showDocsPanel('drugRegistration',String(r.id),r.registrationNumber||r.productName||'تسجيل')" title="مستندات">📁</button>
                 <button class="btn bd bsm" onclick="delDrugReg(${r.id})">🗑️</button>
               </div></td>
             </tr>`;
