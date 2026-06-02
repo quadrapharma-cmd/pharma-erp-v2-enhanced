@@ -1206,28 +1206,7 @@ PAGES.purchasing=function(){
     ,'tbl_purchasing')}</div>`);
 };
 
-PAGES.quality=function(){
-  const rows=getAll('qualityChecks');
-  const passed=rows.filter(r=>r.result==='ناجح').length;
-  const failed=rows.filter(r=>r.result==='مرفوض').length;
-  setPage('ضبط الجودة QC','فحص وإفراج الدفعات الإنتاجية',
-    `<button class="btn btn-green" onclick="addQualityCheck()">${ic.plus} إضافة فحص جودة</button>`,
-    `<div class="stats-grid g4">
-      <div class="stat-card"><div class="lbl">إجمالي الفحوصات</div><div class="val">${rows.length}</div></div>
-      <div class="stat-card"><div class="lbl">ناجح ✅</div><div class="val text-green">${passed}</div></div>
-      <div class="stat-card"><div class="lbl">مرفوض ❌</div><div class="val text-red">${failed}</div></div>
-      <div class="stat-card"><div class="lbl">معدل النجاح</div><div class="val text-blue">${rows.length?((passed/rows.length)*100).toFixed(1)+'%':'—'}</div></div>
-    </div>
-    <div class="card">${tbl(['المنتج','رقم الدفعة','تاريخ الفحص','الكيميائي المسؤول','النتيجة','قرار الإفراج',''],
-      rows.map(r=>tr(
-        getAll('products').find(p=>p.id===r.productId)?.name||'-',
-        r.batchNumber||'-',r.checkDate||'-',r.analyst||'-',
-        `<span class="${r.result==='ناجح'?'text-green fw7':'text-red fw7'}">${r.result||'-'}</span>`,
-        r.result==='ناجح'?'<span class="badge b-green">مُفرَج عنه</span>':'<span class="badge b-red">محجوز</span>',
-        `<div class="action-bar"><button class="icon-btn edit" onclick="editQualityCheck(${r.id})">${ic.edit}</button><button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('qualityChecks',${r.id});go('quality')}">${ic.del}</button></div>`
-      ))
-    ,'tbl_quality')}</div>`);
-};
+;
 
 PAGES.expiry=function(){
   const inv=getAll('inventory'),now=new Date();
@@ -1396,6 +1375,15 @@ function coEnter(c){
   } catch(e){ DB = {...defaultDB}; }
   // Seed chart of accounts if new company
   setTimeout(seedChartOfAccounts, 100);
+  // Ensure tax settings exist for new companies
+  setTimeout(()=>{
+    if(typeof getTaxSettings==='function' && typeof saveDB==='function'){
+      const ts = (getAll('taxSettings')||[]);
+      if(!ts.length && typeof TAX_DEFAULTS!=='undefined'){
+        insert('taxSettings', {...TAX_DEFAULTS, createdAt:new Date().toISOString()});
+      }
+    }
+  }, 150);
 
   /* update sidebar branding */
   const ico = document.querySelector('.logo-icon');
@@ -1892,14 +1880,6 @@ function toggleAI(){
   if(_aiOpen){ document.getElementById('ai-input')?.focus(); }
 }
 
-async function sendAIMessage(){
-  const input = document.getElementById('ai-input');
-  const msg = input?.value?.trim();
-  if(!msg) return;
-  input.value = '';
-  appendAIMsg(msg,'user');
-  appendAIMsg('⚠️ المساعد الذكي يحتاج خادم وسيط (backend proxy) للعمل من المتصفح. يمكن تفعيله عبر تكامل API منفصل.','assistant');
-}
 
 function appendAIMsg(text, role){
   const chat = document.getElementById('ai-chat');
@@ -2205,52 +2185,7 @@ function autoFillFromBOM(productionOrderId, orderQty){
 }
 
 // ── BOM Management Page (وصفة الإنتاج) ──────────────────────
-PAGES.bom = function(){
-  const products = getAll('products');
-  const bom = getAll('productBOM')||[];
-  const mats = getAll('materials');
-
-  setPage('وصفة الإنتاج (BOM)','تحديد المواد والكميات المستخدمة لكل منتج',
-    `<button class="btn btn-green" onclick="addBOMEntry()">${ic.plus} إضافة وصفة</button>`,
-    `<div class="alert alert-warn">${ic.warn}<div><strong>ملاحظة:</strong> الوصفة هي الكميات القياسية للوحدة — يمكن تعديلها يدوياً عند كل تشغيلة</div></div>
-    <div class="tabs">
-      ${products.filter(p => bom.some(b=>b.productId===p.id)).map(p=>
-        `<button class="tab${products.filter(pr=>bom.some(b=>b.productId===pr.id))[0]?.id===p.id?' active':''}" data-group="bom" data-tab="bom-${p.id}">${p.name}</button>`
-      ).join('')}
-    </div>
-    ${products.filter(p => bom.some(b=>b.productId===p.id)).map((p,pi) => {
-      const pBom = bom.filter(b=>b.productId===p.id);
-      const totalPerUnit = pBom.reduce((s,b)=>{
-        const mat=getById('materials',b.materialId);
-        return s+Number(b.quantityPerUnit||0)*Number(mat?.unitCost||0);
-      },0);
-      return `<div id="bom-${p.id}" class="tab-pane" data-group="bom" ${pi>0?'style="display:none"':''}>
-        <div class="card">
-          <div class="card-head">
-            <h2>وصفة: ${p.name}</h2>
-            <span class="text-blue fw7">تكلفة مواد الوحدة القياسية: ${fmt(totalPerUnit)} ج.م</span>
-          </div>
-          ${tbl(['المادة','النوع','الوحدة','الكمية/وحدة منتج','السعر الحالي (ج.م)','تكلفة/وحدة منتج',''],
-            pBom.map(b => {
-              const mat = getById('materials', b.materialId);
-              const costPerUnit = Number(b.quantityPerUnit||0) * Number(mat?.unitCost||0);
-              return tr(
-                `<strong>${mat?.name||b.materialName||'-'}</strong>`,
-                badge(mat?.materialType||'raw_material'),
-                mat?.unit||'-',
-                `<span class="fw7">${fmtN(b.quantityPerUnit)}</span>`,
-                mat?.unitCost ? `<span class="text-blue">${fmt(mat.unitCost)} ج.م</span>` : '—',
-                `<span class="text-red fw7">${fmt(costPerUnit)} ج.م</span>`,
-                `<button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('productBOM',${b.id});go('bom')}">${ic.del}</button>`
-              );
-            })
-          ,'tbl_bom')}
-        </div>
-      </div>`;
-    }).join('')}
-    ${!bom.length ? '<div class="card"><div class="empty">📭 لا توجد وصفات بعد — أضف وصفة لكل منتج</div></div>' : ''}`);
-  initTabs();
-};
+;
 
 function addBOMEntry(){
   const pOpts = [{v:0,l:'اختر منتج...'},...getAll('products').map(p=>({v:p.id,l:p.name}))];
@@ -3639,20 +3574,7 @@ function rejectBatch(orderId){
 // كل البنود المحاسبية طبقاً للمعايير المصرية والدولية
 // ════════════════════════════════════════════════════════════════
 
-PAGES.reports = function(){
-  setPage('التقارير المالية الشاملة',
-    'قوائم مالية كاملة محسوبة تلقائياً من بيانات الشركة',
-    `<div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-green" onclick="exportFinancialExcel()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-        تصدير Excel كامل
-      </button>
-      <button class="btn btn-white" onclick="window.print()">🖨️ طباعة</button>
-    </div>`,
-    buildFinancialReports()
-  );
-  initTabs();
-};
+;
 
 // ════════════════════════════════════════════════════════════════
 // CORE CALCULATIONS ENGINE
@@ -6075,13 +5997,7 @@ PAGES.vat = function(){
 // ── MATERIALS — add edit/delete buttons to existing page ──────
 // Patch the materials PAGES to include edit/delete in raw materials table
 const _origMatPage = PAGES.materials;
-PAGES.materials = function(){
-  _origMatPage();
-  // Add edit/delete to action buttons after render
-  setTimeout(()=>{
-    document.querySelectorAll('[onclick*="editMaterial"]').forEach(()=>{});
-  },100);
-};
+;
 
 // ── BATCHRECORDS — add delete ─────────────────────────────────
 // removeBatchOrder() already exists — just make sure it's in the table
@@ -7890,37 +7806,7 @@ if(_origDashboard) PAGES.dashboard = function(){
 
 // ── 11. Settings Page Enhancement — sound + preferences ──────
 const _origSettings = PAGES.users;
-PAGES.users = function(){
-  if(_origSettings) _origSettings();
-
-  // Add settings panel below
-  const content = document.getElementById('pg-content');
-  if(!content) return;
-
-  const soundEnabled = localStorage.getItem('sound_alerts') !== '0';
-  const panel = document.createElement('div');
-  panel.className = 'card';
-  panel.style.marginTop = '16px';
-  panel.style.padding = '20px';
-  panel.innerHTML = `
-    <h2 style="font-size:14px;font-weight:700;margin-bottom:14px">⚙️ إعدادات التطبيق</h2>
-    <div style="display:flex;flex-direction:column;gap:12px">
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-        <input type="checkbox" id="sound-toggle" ${soundEnabled?'checked':''} style="width:16px;height:16px">
-        <span>🔔 تنبيهات صوتية عند المخزون الحرج ومنتهي الصلاحية</span>
-      </label>
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-        <input type="checkbox" id="sidebar-auto" ${localStorage.getItem('sidebar_collapsed')==='1'?'checked':''} style="width:16px;height:16px">
-        <span>◀ بدء التطبيق بقائمة مطوية</span>
-      </label>
-      <div style="display:flex;gap:8px;margin-top:8px">
-        <button class="btn btn-green btn-sm" onclick="saveAppSettings()">💾 حفظ الإعدادات</button>
-        <button class="btn btn-white btn-sm" onclick="showInventoryCostMethod()">⚖️ طريقة المخزون (FIFO/AVG)</button>
-        <button class="btn btn-white btn-sm" onclick="go('auditlog')">📋 سجل التدقيق</button>
-      </div>
-    </div>`;
-  content.appendChild(panel);
-};
+;
 
 
 // ── 12. Dynamic Table Refresh (avoid full page reload) ───────
@@ -8082,10 +7968,7 @@ function getChartColors(n){
 
 // Patch dashboard to include charts
 const _origDashboard2 = PAGES.dashboard;
-PAGES.dashboard = function(){
-  _origDashboard2();
-  setTimeout(renderDashboardCharts, 200);
-};
+;
 
 function renderDashboardCharts(){
   const content = document.getElementById('pg-content');
@@ -12408,93 +12291,7 @@ function calcActualCost(orderId){
 // ── ٨. تحديث صفحة الإنتاج لتشمل كل الميزات الجديدة ────────────────────────
 
 window._origProductionPage2 = PAGES.production;
-PAGES.production = function(){
-  const rows      = getAll('productionOrders');
-  const batchMats = getAll('batchMaterials');
-  const stages    = getAll('productionStages');
-  const dispRecs  = getAll('dispensingRecords');
-
-  const calcBatchCost = (orderId) => {
-    const mats = batchMats.filter(m=>m.productionOrderId===orderId);
-    return mats.reduce((s,m)=>s+Number(m.quantity||0)*Number(m.unitCostAtTime||0),0);
-  };
-
-  const STATUS_MAP = {
-    'draft':       {l:'مسودة',          c:'b-gray'},
-    'approved':    {l:'معتمد',          c:'b-blue'},
-    'in_progress': {l:'جاري',           c:'b-amber'},
-    'completed':   {l:'منجز',           c:'b-green'},
-    'qa_review':   {l:'مراجعة QA',      c:'b-purple'},
-    'released':    {l:'مُفرج ✅',        c:'b-green'},
-    'rejected':    {l:'مرفوض ❌',        c:'b-red'},
-    'on_hold':     {l:'معلق ⏸️',         c:'b-amber'},
-    'pending':     {l:'قيد الانتظار',   c:'b-gray'},
-    'received':    {l:'مستلم',          c:'b-green'},
-    'cancelled':   {l:'ملغي',           c:'b-red'},
-  };
-
-  const totalRows   = rows.length;
-  const released    = rows.filter(r=>r.status==='released').length;
-  const inProd      = rows.filter(r=>r.status==='in_progress').length;
-  const qaReview    = rows.filter(r=>r.status==='qa_review').length;
-  const totalCost   = rows.reduce((s,o)=>s+calcBatchCost(o.id)+Number(o.cmoBaseCost||o.totalCost||0),0);
-
-  setPage('🏭 أوامر الإنتاج','إدارة التشغيلات الدوائية — GMP Compliant',
-    `<div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-green" onclick="addProduction()">+ أمر إنتاج جديد</button>
-      <button class="btn btn-white" onclick="go('bom')">📋 وصفات BOM</button>
-      <button class="btn btn-white" onclick="go('productionstages')">🔬 مراحل الإنتاج</button>
-      <button class="btn btn-white" onclick="go('cmoscorecard')">📊 Scorecard المصانع</button>
-    </div>`,
-    `<div class="stats-grid g4" style="margin-bottom:16px">
-      <div class="stat-card"><div class="lbl">إجمالي الأوامر</div><div class="val">${totalRows}</div></div>
-      <div class="stat-card"><div class="lbl">مُفرجة ✅</div><div class="val text-green">${released}</div></div>
-      <div class="stat-card"><div class="lbl">جارية 🔄</div><div class="val text-blue">${inProd}</div></div>
-      <div class="stat-card"><div class="lbl">مراجعة QA 🔬</div><div class="val text-amber">${qaReview}</div></div>
-    </div>
-    <div class="card">${tbl(
-      ['رقم التشغيلة','المنتج','المصنع','الكمية','تكلفة المواد','تكلفة الوحدة','الحالة','الإجراءات'],
-      rows.sort((a,b)=>(b.orderDate||'')>(a.orderDate||'')?1:-1).map(o=>{
-        const prod  = getById('products',o.productId);
-        const cmo   = getById('cmos',o.cmoId);
-        const matC  = calcBatchCost(o.id);
-        const totC  = matC + Number(o.cmoBaseCost||o.totalCost||0);
-        const unitC = Number(o.quantity||1) > 0 ? totC/Number(o.quantity) : 0;
-        const st    = STATUS_MAP[o.status] || {l:o.status||'—', c:'b-gray'};
-        const stagesDone = stages.filter(s=>s.productionOrderId===o.id&&s.status==='completed').length;
-        const dispDone   = dispRecs.filter(d=>d.productionOrderId===o.id).length;
-
-        return tr(
-          `<div style="font-size:12px"><code class="fw7">${escapeHtml(o.batchNumber||o.orderNumber||'—')}</code>
-           <div style="font-size:10px;color:var(--muted);margin-top:2px">${escapeHtml(o.orderNumber||'')}</div></div>`,
-          `<strong>${escapeHtml(prod?.name||'—')}</strong>
-           <div style="font-size:10px;color:var(--muted)">${prod?.dosageForm||'—'}</div>`,
-          escapeHtml(cmo?.name||'—'),
-          `${fmtN(o.quantity)} وحدة`,
-          `${fmt(matC)} ج.م`,
-          `<div style="font-size:12px">${unitC>0?fmt(unitC)+' ج.م':'—'}
-           ${o.costVariancePct?`<div style="font-size:10px;color:${Number(o.costVariancePct)>10?'var(--red)':'var(--muted)'}">فرق: ${o.costVariancePct}%</div>`:''}
-          </div>`,
-          `<div style="display:flex;flex-direction:column;gap:3px">
-            <span class="badge ${st.c}">${st.l}</span>
-            ${dispDone>0?`<span style="font-size:10px;color:var(--muted)">⚖️ موزون</span>`:''}
-            ${stagesDone>0?`<span style="font-size:10px;color:var(--muted)">🔬 ${stagesDone} مراحل</span>`:''}
-          </div>`,
-          `<div class="action-bar" style="gap:3px;flex-wrap:wrap">
-            <button class="btn btn-sm" style="background:rgba(56,139,253,.12);color:var(--blue);border:1px solid rgba(56,139,253,.25);font-size:10px" onclick="openProductionStages(${o.id})">🔬 المراحل</button>
-            <button class="btn btn-sm" style="background:rgba(46,160,67,.12);color:var(--green-light);border:1px solid rgba(46,160,67,.25);font-size:10px" onclick="showDispensingRecord(${o.id})">⚖️ الوزن</button>
-            ${o.status!=='released'&&o.status!=='rejected'
-              ?`<button class="btn btn-sm" style="background:rgba(188,128,240,.12);color:#bc80f0;border:1px solid rgba(188,128,240,.25);font-size:10px" onclick="showBatchRelease(${o.id})">🚀 إفراج</button>`
-              :''}
-            <button class="btn btn-white btn-sm" style="font-size:10px" onclick="showBPR(${o.id})">📋 BPR</button>
-            <button class="icon-btn edit" onclick="editProduction(${o.id})">${ic.edit}</button>
-            <button class="icon-btn del" onclick="removeBatchOrder(${o.id})">${ic.del}</button>
-          </div>`
-        );
-      })
-    ,'tbl_production')}</div>`
-  );
-};
+;
 
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -13402,90 +13199,7 @@ function enterCycleCount(receiptId){
 // ── ٩. تحديث صفحة المواد الخام لتشمل كل الميزات ─────────────────────
 
 window._origMatsPage = PAGES.materials;
-PAGES.materials = function(){
-  const rows    = getAll('materials');
-  const recs    = getAll('materialReceipts');
-  const raw     = rows.filter(r=>r.materialType==='raw_material');
-  const pkg     = rows.filter(r=>r.materialType==='packaging');
-  const lowStock = rows.filter(r=>Number(r.currentStock||0)<=Number(r.reorderLevel||0)&&r.reorderLevel);
-  const retestSoon = recs.filter(r=>{
-    const d = r.retestDate||r.expiryDate;
-    if(!d) return false;
-    const days = Math.floor((new Date(d)-new Date())/86400000);
-    return days>=0 && days<=60 && r.status==='approved';
-  });
-
-  setPage('🧪 المواد الخام والتغليف','إدارة المواد وفق GMP — ICH Q7 — 21 CFR 211',
-    `<div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-green" onclick="addMaterial('raw_material')">+ مادة خام</button>
-      <button class="btn btn-green" style="background:rgba(46,160,67,.12);color:var(--green-light);border:1px solid rgba(46,160,67,.3)" onclick="addMaterial('packaging')">+ مادة تغليف</button>
-      <button class="btn btn-white" onclick="addMaterialReceipt()">📥 استلام دفعة (GRN)</button>
-      <button class="btn btn-white" onclick="go('cyclecounting')">📊 الجرد الدوري</button>
-    </div>`,
-    `<div class="stats-grid g4" style="margin-bottom:16px">
-      <div class="stat-card"><div class="lbl">مواد خام</div><div class="val">${raw.length}</div></div>
-      <div class="stat-card"><div class="lbl">مواد تغليف</div><div class="val">${pkg.length}</div></div>
-      <div class="stat-card"><div class="lbl text-red">مخزون منخفض ⚠️</div><div class="val text-red">${lowStock.length}</div></div>
-      <div class="stat-card"><div class="lbl text-amber">إعادة فحص قريباً ⏰</div><div class="val text-amber">${retestSoon.length}</div></div>
-    </div>
-
-    ${retestSoon.length ? `
-    <div style="padding:12px;background:rgba(240,136,0,.06);border:1px solid rgba(240,136,0,.2);border-radius:10px;margin-bottom:16px">
-      <div style="font-weight:700;font-size:12px;color:var(--amber);margin-bottom:8px">⏰ دفعات تحتاج إعادة فحص خلال 60 يوم</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px">
-        ${retestSoon.slice(0,6).map(r=>{
-          const mat = getById('materials',r.materialId);
-          const d = r.retestDate||r.expiryDate;
-          const days = Math.floor((new Date(d)-new Date())/86400000);
-          return `<div style="padding:8px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);font-size:11px">
-            <div style="font-weight:700">${escapeHtml(mat?.name||'—')}</div>
-            <div>LOT: ${escapeHtml(r.batchNumber||'—')}</div>
-            <div style="color:${days<30?'var(--red)':'var(--amber)'}">${days} يوم</div>
-            <button class="btn btn-sm" style="margin-top:4px;font-size:10px" onclick="changeReceiptStatus(${r.id})">تغيير الحالة</button>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>` : ''}
-
-    <div class="card">${tbl(
-      ['المادة','النوع','الدرجة','CAS','المخزون','إعادة الطلب','المورد','الحالة','إجراء'],
-      rows.map(m=>{
-        const receipts = recs.filter(r=>r.materialId===m.id&&r.status==='approved');
-        const nearExpiry = receipts.some(r=>{
-          const d = r.retestDate||r.expiryDate;
-          return d && Math.floor((new Date(d)-new Date())/86400000)<60;
-        });
-        const lowSt = Number(m.currentStock||0) <= Number(m.reorderLevel||0) && m.reorderLevel;
-        const hazIcon = m.hazardClass==='narcotic'?'🔐':m.hazardClass==='flammable'?'⚠️':m.hazardClass==='toxic'?'☠️':'';
-        return tr(
-          `<div>
-            <strong>${hazIcon} ${escapeHtml(m.name||'—')}</strong>
-            ${m.casNumber?`<div style="font-size:10px;color:var(--muted)">CAS: ${m.casNumber}</div>`:''}
-            ${m.chemicalFormula?`<div style="font-size:10px;color:var(--muted)">${m.chemicalFormula}</div>`:''}
-          </div>`,
-          `<span style="font-size:11px">${m.materialType==='raw_material'?'🧪 خام':'📦 تغليف'}</span>
-           ${m.subType?`<div style="font-size:10px;color:var(--muted)">${m.subType}</div>`:''}`,
-          m.pharmacopoeialGrade?`<span class="badge b-blue" style="font-size:10px">${m.pharmacopoeialGrade}</span>`:'—',
-          m.casNumber?`<code style="font-size:10px">${m.casNumber}</code>`:'—',
-          `<div style="${lowSt?'color:var(--red);font-weight:700':''}">
-            ${fmtN(m.currentStock||0)} ${m.unit||''}
-            ${lowSt?'<span class="badge b-red" style="font-size:10px">منخفض ⚠️</span>':''}
-            ${nearExpiry?'<span class="badge b-amber" style="font-size:10px">فحص قريب ⏰</span>':''}
-          </div>`,
-          m.reorderLevel?fmtN(m.reorderLevel)+' '+m.unit:'—',
-          escapeHtml(m.supplier||'—').substring(0,20),
-          `<span class="badge ${m.status==='active'?'b-green':'b-gray'}">${m.status==='active'?'نشط':'غير نشط'}</span>`,
-          `<div class="action-bar" style="gap:4px">
-            <button class="btn btn-white btn-sm" style="font-size:10px" onclick="addMaterialReceipt(${m.id})">📥 GRN</button>
-            <button class="btn btn-white btn-sm" style="font-size:10px" onclick="showMaterialBatches(${m.id})">📦 الدفعات</button>
-            <button class="icon-btn edit" onclick="editMaterial(${m.id})">${ic.edit}</button>
-            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('materials',${m.id});go('materials')}">${ic.del}</button>
-          </div>`
-        );
-      })
-    ,'tbl_materials')}</div>`
-  );
-};
+;
 
 function showMaterialBatches(matId){
   const mat  = getById('materials', matId);
@@ -14054,31 +13768,7 @@ function showAccountForm(a={}){
 
 // ── دفتر اليومية — Journal Entries ───────────────────
 
-PAGES.journal = function(){
-  const entries = getAll('journalEntries')||[];
-  setPage('📒 دفتر اليومية — Journal',  'قيود اليومية المحاسبية',
-    `<button class="btn btn-green" onclick="addJournalEntry()">+ قيد يومية</button>`,
-    `<div class="card">${tbl(
-      ['رقم القيد','التاريخ','الوصف','مجموع المدين','مجموع الدائن','الرصيد','إجراء'],
-      entries.sort((a,b)=>b.id-a.id).map(e=>{
-        const totalDr = (e.lines||[]).reduce((s,l)=>s+Number(l.debit||0),0);
-        const totalCr = (e.lines||[]).reduce((s,l)=>s+Number(l.credit||0),0);
-        const balanced = Math.abs(totalDr-totalCr)<0.01;
-        return tr(
-          `<code>JE-${String(e.id).padStart(6,'0')}</code>`,
-          e.entryDate||'—',
-          escapeHtml((e.description||'').substring(0,50)),
-          fmtC(totalDr), fmtC(totalCr),
-          balanced?'<span class="badge b-green">✅ متوازن</span>':'<span class="badge b-red">❌ غير متوازن</span>',
-          `<div class="action-bar">
-            <button class="btn btn-white btn-sm" onclick="viewJE(${e.id})">عرض</button>
-            <button class="icon-btn del" onclick="if(confirm('حذف؟')){remove('journalEntries',${e.id});go('journal')}">${ic.del}</button>
-          </div>`
-        );
-      })
-    ,'tbl_je')}</div>`
-  );
-};
+;
 
 
 function checkJEBalance(){
@@ -17724,47 +17414,7 @@ function runAllDepreciation(){
 
 // ── K. تحليل التكلفة — Cost Analysis ─────────────────────────────
 
-PAGES.costanalysis = function(){
-  const prods   = getAll('products')||[];
-  const pos     = getAll('productionOrders')||[];
-  const batchM  = getAll('batchMaterials')||[];
-  const invs    = getAll('salesInvoices')||[];
-
-  const prodAnalysis = prods.map(p=>{
-    const pOrders = pos.filter(o=>o.productId===p.id&&o.status==='completed');
-    const totalProduced= pOrders.reduce((s,o)=>s+Number(o.batchSize||o.quantity||0),0);
-    const matCost = pOrders.reduce((s,o)=>{
-      const bm = batchM.filter(b=>b.productionOrderId===o.id);
-      return s + bm.reduce((ss,m)=>ss+Number(m.quantity||0)*Number(m.unitCostAtTime||0),0);
-    },0);
-    const cmoCost = pOrders.reduce((s,o)=>s+Number(o.cmoAmount||0),0);
-    const totalCost = matCost+cmoCost;
-    const unitCost  = totalProduced>0 ? totalCost/totalProduced : 0;
-    const salePrice = Number(p.sellingPrice||0);
-    const margin    = salePrice>0 ? ((salePrice-unitCost)/salePrice)*100 : 0;
-    const revenue   = invs.filter(i=>(i.lines||[]).some(l=>l.productId===p.id))
-      .reduce((s,i)=>(i.lines||[]).filter(l=>l.productId===p.id).reduce((ss,l)=>ss+l.lineTotal||0,s),0);
-    return {...p, totalProduced, matCost, cmoCost, totalCost, unitCost, margin, revenue};
-  });
-
-  setPage('📈 تحليل التكلفة — Cost Analysis','تكلفة الوحدة وهامش الربح',
-    `<button class="btn btn-white" onclick="go('incomestatement')">← الدخل</button>`,
-    `<div class="card">${tbl(
-      ['المنتج','الكمية المنتجة','تكلفة مواد','تكلفة CMO','التكلفة الكلية','تكلفة الوحدة','سعر البيع','هامش الربح %','الإيراد الكلي'],
-      prodAnalysis.map(p=>tr(
-        escapeHtml(p.name||'—'),
-        fmtN(p.totalProduced||0),
-        fmtC(p.matCost||0),
-        fmtC(p.cmoCost||0),
-        fmtC(p.totalCost||0),
-        `<strong>${fmtC(p.unitCost||0)}</strong>`,
-        fmtC(p.sellingPrice||0),
-        `<span class="badge ${p.margin>=30?'b-green':p.margin>=15?'b-amber':'b-red'}">${p.margin.toFixed(1)}%</span>`,
-        fmtC(p.revenue||0)
-      ))
-    ,'tbl_cost')}</div>`
-  );
-};
+;
 
 
 // ══════════════════════════════════════════════════════════════════
@@ -21512,37 +21162,7 @@ function addImportBtn(page){
 
 // renderNav/go called by coEnter() after company is selected
 
-PAGES.auditlog = function(){
-  const logs = ((DB.auditLogs||[]).slice()).reverse();
-  const filterAction = window._auditFilter||'all';
-  const filtered = filterAction==='all' ? logs : logs.filter(l=>l.action===filterAction);
-  const actionCls  = {'إضافة':'b-green','تعديل':'b-blue','حذف':'b-red','BACKUP_EXPORT':'b-purple','BACKUP_IMPORT':'b-amber'};
-
-  setPage('📋 سجل التدقيق — Audit Log',
-    `${logs.length} سجل | قانون المحاسبة 127/1981`,
-    `<div style="display:flex;gap:8px">
-      <button class="btn btn-white" onclick="go('settings')">← الإعدادات</button>
-      <button class="btn btn-white" onclick="exportAuditCSV()">📊 تصدير CSV</button>
-    </div>`,
-    `<div style="display:flex;gap:6px;margin-bottom:12px">
-      ${['all','إضافة','تعديل','حذف'].map(f=>`
-      <button class="btn btn-sm ${filterAction===f?'btn-green':'btn-white'}" onclick="window._auditFilter='${f}';go('auditlog')">
-        ${f==='all'?'الكل ('+logs.length+')':f+' ('+logs.filter(l=>l.action===f).length+')'}
-      </button>`).join('')}
-    </div>
-    <div class="card">${tbl(
-      ['التاريخ والوقت','الإجراء','الجدول','رقم السجل','التفاصيل','المستخدم'],
-      filtered.slice(0,200).map(l=>tr(
-        `<span style="font-size:10px;direction:ltr">${l.at?.slice(0,19)?.replace('T',' ')||'—'}</span>`,
-        `<span class="badge ${actionCls[l.action]||'b-gray'}" style="font-size:10px">${l.action||'—'}</span>`,
-        `<code style="font-size:10px">${escapeHtml(l.table||'—')}</code>`,
-        l.recordId ? `<code style="font-size:10px">#${l.recordId}</code>` : '—',
-        `<span style="font-size:11px">${escapeHtml((l.description||'—').slice(0,60))}</span>`,
-        escapeHtml(l.by||'—')
-      ))
-    ,'tbl_audit')}</div>`
-  );
-};
+;
 
 function exportAuditCSV(){
   const logs = ((DB.auditLogs||[]).slice()).reverse();
@@ -22180,6 +21800,29 @@ function fixAllDiag(){
   if(typeof navItems==='undefined') return;
   if(!navItems.find(n=>n.id==='diagnostics'))
     navItems.push({id:'diagnostics',icon:'🔧',label:'فحص وإصلاح النظام',sec:'الإعدادات'});
+})();
+
+
+// ── Session Timeout: 30 minutes of inactivity ─────────────────
+;(function initSessionTimeout(){
+  if(window._sessionTimeoutInit) return;
+  window._sessionTimeoutInit = true;
+  let _timer = null;
+  const TIMEOUT = 30 * 60 * 1000; // 30 minutes
+  function resetTimer(){
+    clearTimeout(_timer);
+    _timer = setTimeout(()=>{
+      if(window._authUser){
+        alert('⏱️ انتهت الجلسة تلقائياً بعد 30 دقيقة من عدم النشاط.\nيرجى تسجيل الدخول مرة أخرى.');
+        if(typeof _authLogout==='function') _authLogout();
+        else { window._authUser=null; sessionStorage.removeItem('_erp_s'); location.reload(); }
+      }
+    }, TIMEOUT);
+  }
+  ['mousedown','keydown','touchstart','scroll'].forEach(ev=>{
+    document.addEventListener(ev, resetTimer, {passive:true});
+  });
+  resetTimer();
 })();
 </script>
 
