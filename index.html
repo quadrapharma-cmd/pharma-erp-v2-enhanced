@@ -433,7 +433,6 @@ function loadDB(){
   try{ const d=localStorage.getItem(STORE_KEY); return d?JSON.parse(d):{...defaultDB}; }
   catch(e){ return {...defaultDB}; }
 }
-function saveDB(){ try{ localStorage.setItem(STORE_KEY,JSON.stringify(DB)); }catch(e){} }
 
 function nextId(t){
   if(!DB._seq)DB._seq={};
@@ -637,7 +636,7 @@ const navItems=[
   {id:'costanalysis',icon:'📉',label:'تحليل التكلفة',sec:'المالية'},
   {id:'reports',icon:'📈',label:'التقارير المالية',sec:'المالية'},
   {id:'accounts',icon:'📚',label:'دليل الحسابات',sec:'المالية'},
-  
+  {id:'journal',icon:'📒',label:'دفتر اليومية',sec:'المالية'},
   {id:'balancesheet',icon:'📊',label:'الميزانية العمومية',sec:'المالية'},
   {id:'costanalysis',icon:'⚙️',label:'تكاليف التصنيع',sec:'المالية'},
   {id:'incomestatement',icon:'📈',label:'قائمة الدخل P&L',sec:'المالية'},
@@ -1333,24 +1332,8 @@ function editPayrollEmp(id){
 }
 function savePayrollEmp(id){update('employees',id,{salary:val('ep-sal')||null,allowances:val('ep-allow')||'0',deductions:val('ep-deduct')||'0'});closeModal();go('payroll');}
 
-function editPurchaseOrder(id){
-  const o=getById('purchaseOrders',id);if(!o)return;
-  showModal(modal('تعديل طلب شراء',`
-    <div class="form-row">${fg('المورد',inp('pur-sup','text',o.supplier))}${fg('الكمية',inp('pur-qty','number',o.quantity))}</div>
-    ${fg('الحالة',sel('pur-status',[{v:'معلق',l:'معلق'},{v:'مستلم',l:'مستلم'},{v:'ملغي',l:'ملغي'}],o.status))}
-    <div class="form-actions"><button class="btn btn-green" onclick="savePurchaseOrder(${id})">💾 حفظ</button><button class="btn btn-ghost" onclick="closeModal()">إلغاء</button></div>`));
-}
 
 
-function editContract(id){
-  const c=getById('contracts',id);if(!c)return;
-  showModal(modal('تعديل عقد',`
-    ${fg('اسم الطرف الثاني *',inp('con-name','text',c.partyName))}
-    ${fg('نوع العقد',sel('con-type',[{v:'موزع',l:'موزع'},{v:'مصنع',l:'مصنع CMO'},{v:'مورد',l:'مورد مواد'},{v:'أخرى',l:'أخرى'}],c.contractType))}
-    <div class="form-row">${fg('تاريخ البداية',inp('con-start','date',c.startDate))}${fg('تاريخ الانتهاء',inp('con-end','date',c.endDate))}</div>
-    ${fg('قيمة العقد (ج.م)',inp('con-val','number',c.value))}
-    <div class="form-actions"><button class="btn btn-green" onclick="saveContract(${id})">💾 حفظ</button><button class="btn btn-ghost" onclick="closeModal()">إلغاء</button></div>`));
-}
 
 // ═══════════════════════════════════════════════
 // INIT
@@ -1909,7 +1892,25 @@ function toggleAI(){
   if(_aiOpen){ document.getElementById('ai-input')?.focus(); }
 }
 
+async function sendAIMessage(){
+  const input = document.getElementById('ai-input');
+  const msg = input?.value?.trim();
+  if(!msg) return;
+  input.value = '';
+  appendAIMsg(msg,'user');
+  appendAIMsg('⚠️ المساعد الذكي يحتاج خادم وسيط (backend proxy) للعمل من المتصفح. يمكن تفعيله عبر تكامل API منفصل.','assistant');
+}
 
+function appendAIMsg(text, role){
+  const chat = document.getElementById('ai-chat');
+  if(!chat)return;
+  const div = document.createElement('div');
+  div.className = 'ai-msg ai-'+role.replace(' loading','');
+  if(role.includes('loading')) div.id = 'ai-loading';
+  div.textContent = text;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
 function removeLoadingMsg(){
   const el = document.getElementById('ai-loading');
   if(el) el.remove();
@@ -3733,10 +3734,10 @@ function calcFinancials(){
 
   // ── الأرباح ───────────────────────────────────────────────
   const ebit     = grossProfit - totalOpExp - annualDepreciation;
-  const ebt      = ebit - financeExp;
-  // ضريبة الدخل الفعلية المدفوعة — يجب تعريفها قبل ebitda
-  const incomeTax= taxL.filter(t=>t.taxType==='income'&&t.status==='مدفوع').reduce((s,t)=>s+Number(t.amount||0),0);
   const ebitda   = ebit + annualDepreciation + financeExp + incomeTax;
+  const ebt      = ebit - financeExp;
+  // ضريبة الدخل الفعلية المدفوعة
+  const incomeTax= taxL.filter(t=>t.taxType==='income'&&t.status==='مدفوع').reduce((s,t)=>s+Number(t.amount||0),0);
   const netProfit= ebt - incomeTax;
   const netMargin= netRevenue > 0 ? netProfit/netRevenue : 0;
 
@@ -5976,7 +5977,7 @@ function editBOMEntry(id){
         <optgroup label="مواد تغليف">${pkg.map(m=>`<option value="${m.id}"${m.id===b.materialId?' selected':''}>${m.name} (${m.unit})</option>`).join('')}</optgroup>
       </select>
     </div>
-    ${fg('الكمية لكل وحدة منتج *',inp('bom-qty2','number',b.quantityPerUnit,'الكمية'))}
+    ${fg('الكمية لكل وحدة منتج *',inp('bom-qty','number',b.quantityPerUnit,'الكمية'))}
     <div class="form-actions">
       <button class="btn btn-green" onclick="updateBOMEntry(${id})">💾 حفظ</button>
       <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
@@ -7346,6 +7347,126 @@ function _filterNav(){
 // _filterNav is called after each navigation
 
 // Override coEnter to restore session or show login
+const _origCoEnterFlow = _showLoginScreen;
+// Already patched above — on coEnter we call _showLoginScreen
+// But if session exists, skip login
+function _showLoginScreen(){
+  if(_restoreSession()){
+    // Already logged in — just update UI
+    document.getElementById('_auth_login') && (document.getElementById('_auth_login').style.display='none');
+    _updateBadge();
+    _filterNav();
+    go('dashboard');
+    return;
+  }
+  // Show login UI
+  const users = getAll('appUsers');
+  const isFirst = users.length === 0;
+  let el = document.getElementById('_auth_login');
+  if(!el){
+    el = document.createElement('div');
+    el.id = '_auth_login';
+    el.style.cssText = 'position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0d1117,#161b22);display:flex;align-items:center;justify-content:center;font-family:Cairo,sans-serif;direction:rtl';
+    document.body.appendChild(el);
+  }
+  el.style.display = 'flex';
+  el.innerHTML = `
+    <div style="width:100%;max-width:380px;padding:16px">
+      <div style="text-align:center;margin-bottom:28px">
+        <div style="width:64px;height:64px;background:linear-gradient(135deg,#2ea043,#1a7f37);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 12px">💊</div>
+        <h1 style="color:#fff;font-size:20px;font-weight:700;margin:0">نظام ERP الدوائي</h1>
+        <p style="color:#8b949e;font-size:12px;margin:6px 0 0">سجّل الدخول للمتابعة</p>
+      </div>
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:22px">
+        <div style="margin-bottom:14px">
+          <label style="color:#8b949e;font-size:11px;display:block;margin-bottom:5px">اسم المستخدم</label>
+          <input id="_au" type="text" placeholder="أدخل اسم المستخدم" autocomplete="username"
+            style="width:100%;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px 12px;font-size:13px;color:#fff;font-family:Cairo,sans-serif;box-sizing:border-box;outline:none"
+            onkeydown="if(event.key==='Enter')document.getElementById('_ap').focus()">
+        </div>
+        <div style="margin-bottom:18px">
+          <label style="color:#8b949e;font-size:11px;display:block;margin-bottom:5px">كلمة المرور</label>
+          <input id="_ap" type="password" placeholder="كلمة المرور" autocomplete="current-password"
+            style="width:100%;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px 12px;font-size:13px;color:#fff;font-family:Cairo,sans-serif;box-sizing:border-box;outline:none"
+            onkeydown="if(event.key==='Enter')_doLogin()">
+        </div>
+        <div id="_aerr" style="display:none;color:#f85149;font-size:11px;margin-bottom:12px;padding:8px;background:rgba(248,81,73,.1);border-radius:6px;text-align:center"></div>
+        <button onclick="_doLogin()"
+          style="width:100%;background:linear-gradient(135deg,#2ea043,#1a7f37);color:#fff;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:Cairo,sans-serif">
+          تسجيل الدخول
+        </button>
+      </div>
+      ${isFirst?`<div style="margin-top:12px;padding:10px;background:rgba(46,160,67,.08);border:1px solid rgba(46,160,67,.2);border-radius:8px;font-size:11px;color:#8b949e;text-align:center">
+        🔑 أول دخول — اسم المستخدم: <strong style="color:#fff">admin</strong> &nbsp;|&nbsp; كلمة المرور: <strong style="color:#fff">admin123</strong>
+      </div>`:''}
+    </div>`;
+  setTimeout(()=>document.getElementById('_au')?.focus(), 150);
+}
+
+// ── PAGES.users — إدارة المستخدمين ───────────────────────────
+PAGES.users = function(){
+  if(_authUser?.role!=='admin'){
+    showNotif&&showNotif('⛔ هذه الصفحة للمدير فقط','error');
+    go('dashboard'); return;
+  }
+  const users = getAll('appUsers');
+
+  setPage('⚙️ الإعدادات — المستخدمون والصلاحيات',
+    `${users.length} مستخدم مسجل`,
+    `<button class="btn btn-green" onclick="_addUser()">${ic.plus} مستخدم جديد</button>`,
+    `<!-- KPIs -->
+    <div class="stats-grid g4" style="margin-bottom:16px">
+      ${Object.entries(_ROLES).map(([k,r])=>`
+        <div class="stat-card">
+          <div class="lbl">${r.icon} ${r.label}</div>
+          <div class="val" style="color:${r.color}">${users.filter(u=>u.role===k).length}</div>
+          <div class="sub">مستخدم</div>
+        </div>`).join('')}
+    </div>
+
+    <!-- Users table -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-head"><h2>👥 قائمة المستخدمين</h2></div>
+      ${tbl(
+        ['اسم الدخول','الاسم الكامل','الدور','الصلاحيات','الحالة',''],
+        users.map(u=>{
+          const r = _ROLES[u.role]||{};
+          const pages = r.all?'كل الموديولات':((r.pages||[]).length+' صفحة');
+          return tr(
+            `<code class="fw7">${u.username}</code>`,
+            u.name||'—',
+            `<span style="padding:3px 8px;border-radius:6px;font-size:12px;font-weight:600;background:${r.color}22;color:${r.color}">${r.icon} ${r.label||u.role}</span>`,
+            `<span style="font-size:11px;color:var(--muted)">${pages}</span>`,
+            u.active!==false?'<span class="badge b-green">نشط</span>':'<span class="badge b-red">موقوف</span>',
+            u.username==='admin'
+              ?'<span style="font-size:10px;color:var(--muted)">محمي</span>'
+              :`<div class="action-bar">
+                <button class="icon-btn edit" onclick="_editUser(${u.id})">${ic.edit}</button>
+                <button class="icon-btn" onclick="_toggleUser(${u.id})" style="color:var(--amber)" title="${u.active!==false?'إيقاف':'تفعيل'}">${u.active!==false?'⏸':'▶'}</button>
+                <button class="icon-btn del" onclick="if(confirm('حذف المستخدم؟')){remove('appUsers',${u.id});go('users')}">${ic.del}</button>
+              </div>`
+          );
+        })
+      )}
+    </div>
+
+    <!-- Roles permissions -->
+    <div class="card" style="padding:20px">
+      <h2 style="font-size:14px;font-weight:700;margin-bottom:14px">📋 صلاحيات كل دور</h2>
+      ${Object.entries(_ROLES).map(([k,r])=>`
+        <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+            <span style="font-size:18px">${r.icon}</span>
+            <strong style="color:${r.color}">${r.label}</strong>
+            ${r.all?'<span class="badge b-red">كل الصلاحيات</span>':r.readonly?'<span class="badge b-gray">قراءة فقط</span>':''}
+          </div>
+          <div style="font-size:11px;color:var(--muted);padding-right:26px">
+            ${r.all?'وصول كامل لجميع الموديولات':(r.pages||[]).join(' • ')}
+          </div>
+        </div>`).join('')}
+    </div>`
+  );
+};
 
 function _userFormHTML(u={}){
   return `
@@ -7883,6 +8004,24 @@ window._doLogin = async function(){
 };
 
 // Override _saveUser to use secure hash
+const _origSaveUser = window._saveUser;
+window._saveUser = async function(id){
+  const uname=(document.getElementById('_uu')?.value||'').trim();
+  const uname_full=(document.getElementById('_un')?.value||'').trim();
+  const pass=document.getElementById('_up')?.value||'';
+  const pass2=document.getElementById('_up2')?.value||'';
+  const role=document.getElementById('_ur')?.value||'viewer';
+  if(!uname||!uname_full){alert('يرجى تعبئة اسم الدخول والاسم الكامل');return;}
+  if(!id&&!pass){alert('يرجى إدخال كلمة المرور');return;}
+  if(pass&&pass!==pass2){alert('كلمة المرور غير متطابقة');return;}
+  if(pass&&pass.length<6){alert('كلمة المرور يجب أن تكون 6 أحرف على الأقل');return;}
+  const dup=getAll('appUsers').find(x=>x.username===uname&&(!id||x.id!==id));
+  if(dup){alert('اسم الدخول موجود بالفعل');return;}
+  const d={username:uname,name:uname_full,role,active:true};
+  if(pass) d.password = await hashPasswordSecure(pass);
+  id?update('appUsers',id,d):insert('appUsers',d);
+  closeModal();go('users');
+};
 
 // 3. صلاحيات على insert/update/remove للـ readonly users
 (function patchDBForReadonly(){
@@ -11382,7 +11521,7 @@ window.addBOMEntry = function(editId){
     </div>
 
     <div class="form-row">
-      ${fg('الكمية النظرية / وحدة إنتاج *', inp('bom-qty3','number',b.quantityPerUnit||'','مثال: 500'))}
+      ${fg('الكمية النظرية / وحدة إنتاج *', inp('bom-qty','number',b.quantityPerUnit||'','مثال: 500'))}
       ${fg('الوحدة', inp('bom-unit','text',b.unit||'mg','mg / g / ml / units'))}
     </div>
 
@@ -11672,10 +11811,10 @@ function addProduction(){
     </div>
     <div class="form-row">
       ${fg('تاريخ الأمر', inp('po-date','date',today()))}
-      ${fg('الموعد المتوقع للتسليم', inp('po-exp2','date',''))}
+      ${fg('الموعد المتوقع للتسليم', inp('po-exp','date',''))}
     </div>
     <div class="form-row">
-      ${fg('حجم الدفعة (عدد الوحدات) *', inp('po-qty2','number','','مثال: 100000 قرص'))}
+      ${fg('حجم الدفعة (عدد الوحدات) *', inp('po-qty','number','','مثال: 100000 قرص'))}
       ${fg('حجم الدفعة بالكيلو (kg)', inp('po-batch-kg','number','','للحساب الداخلي'))}
     </div>
     <div class="form-row">
@@ -11755,7 +11894,7 @@ function editProduction(id){
   const o = getById('productionOrders',id); if(!o) return;
   showModal(modal('تعديل أمر الإنتاج',`
     <div class="form-row">
-      ${fg('حجم الدفعة', inp('po-qty3','number',o.quantity))}
+      ${fg('حجم الدفعة', inp('po-qty','number',o.quantity))}
       ${fg('رقم التشغيلة', inp('po-batch','text',o.batchNumber||''))}
     </div>
     <div class="form-row">
@@ -11763,7 +11902,7 @@ function editProduction(id){
       ${fg('تكلفة الوحدة التقديرية', inp('po-ucost','number',o.unitCost))}
     </div>
     <div class="form-row">
-      ${fg('الموعد المتوقع', inp('po-exp3','date',o.expectedDate||''))}
+      ${fg('الموعد المتوقع', inp('po-exp','date',o.expectedDate||''))}
       ${fg('الحالة', sel('po-status',[
         {v:'draft',       l:'📝 مسودة'},
         {v:'approved',    l:'✅ معتمد'},
@@ -13896,7 +14035,6 @@ function confirmDelivery(id){
 ;
 
 
-function editAccount(id){ showAccountForm(getById('accounts',id)||{}); }
 function showAccountForm(a={}){
   showModal(modal(a.id?'تعديل حساب':'+ حساب محاسبي جديد',`
     <div class="form-row">
@@ -13983,7 +14121,7 @@ function addBOMItem(productId){
     </div>
     <div class="form-row">
       ${fg('المادة الخام *', sel('bom-mat',[{v:0,l:'اختر مادة...'},...materials.filter(m=>m.status==='active').map(m=>({v:m.id,l:m.name+(m.pharmacopoeialGrade?' ['+m.pharmacopoeialGrade+']':'')+(m.casNumber?' CAS:'+m.casNumber:'')}))],0))}
-      ${fg('الكمية لكل وحدة إنتاج *', inp('bom-qty4','number','',''))}
+      ${fg('الكمية لكل وحدة إنتاج *', inp('bom-qty','number','',''))}
     </div>
     <div class="form-row">
       ${fg('وحدة القياس', sel('bom-unit',UNITS,'كجم'))}
@@ -14127,79 +14265,8 @@ function saveCAPA(id){
 })();
 
 
-function deleteProductSafe(id){
-  const prod = getById('products', id);
-  if(!prod) return;
-  const inv    = getAll('inventory').filter(i=>i.productId===id);
-  const bom    = (getAll('productBOM')||[]).filter(b=>b.productId===id);
-  const orders = getAll('productionOrders').filter(o=>o.productId===id && o.status!=='completed');
-  const sOrders= (getAll('salesOrders')||[]).filter(o=>(o.lines||[]).some(l=>l.productId===id) && !['delivered','cancelled'].includes(o.status));
-  const warnings = [];
-  if(inv.length)    warnings.push(inv.length+' سجل مخزون');
-  if(bom.length)    warnings.push(bom.length+' مكون BOM');
-  if(orders.length) warnings.push(orders.length+' أمر إنتاج نشط');
-  if(sOrders.length)warnings.push(sOrders.length+' أمر بيع مفتوح');
-  const msg = warnings.length
-    ? '⚠️ المنتج "'+prod.name+'" مرتبط بـ:\n'+warnings.join('\n')+'\n\nهل تريد الحذف مع كل السجلات؟'
-    : 'حذف المنتج "'+prod.name+'"؟';
-  if(!confirm(msg)) return;
-  inv.forEach(i=>remove('inventory',i.id));
-  bom.forEach(b=>remove('productBOM',b.id));
-  remove('products',id);
-  go('products');
-}
 
-function deleteReceiptSafe(id){
-  const receipt = getById('materialReceipts', id);
-  if(!receipt) return;
-  const usedInBatch = getAll('batchMaterials').filter(b=>b.receiptId===id);
-  if(usedInBatch.length){
-    if(!confirm('⚠️ هذه الدفعة مستخدمة في '+usedInBatch.length+' تشغيلة.\nالحذف سيؤثر على سجلات الإنتاج.\nهل تريد الاستمرار؟')) return;
-    usedInBatch.forEach(b=>remove('batchMaterials',b.id));
-  } else {
-    if(!confirm('حذف دفعة "'+receipt.batchNumber+'"؟')) return;
-  }
-  const mat = getById('materials', receipt.materialId);
-  if(mat) update('materials', receipt.materialId, {
-    currentStock: String(Math.max(0, Number(mat.currentStock||0) - Number(receipt.remainingQuantity||0)))
-  });
-  remove('materialReceipts', id);
-  go('materials');
-}
 
-function deleteProductionOrderSafe(id){
-  const order = getById('productionOrders', id);
-  if(!order) return;
-  const batchMats = getAll('batchMaterials').filter(b=>b.productionOrderId===id);
-  const stages    = (getAll('productionStages')||[]).filter(s=>s.productionOrderId===id);
-  const qcChecks  = getAll('qualityChecks').filter(q=>q.productionOrderId===id);
-  const parts = [];
-  if(batchMats.length) parts.push(batchMats.length+' صرف مواد');
-  if(stages.length)    parts.push(stages.length+' مرحلة إنتاج');
-  if(qcChecks.length)  parts.push(qcChecks.length+' فحص جودة');
-  const msg = parts.length
-    ? '⚠️ أمر الإنتاج مرتبط بـ: '+parts.join('، ')+'\nهل تريد الحذف مع كل السجلات؟'
-    : 'حذف أمر الإنتاج؟';
-  if(!confirm(msg)) return;
-  batchMats.forEach(bm=>{
-    const mat = getById('materials', bm.materialId);
-    if(mat) update('materials', bm.materialId, {
-      currentStock: String(Number(mat.currentStock||0) + Number(bm.quantity||0))
-    });
-    if(bm.receiptId){
-      const r = getById('materialReceipts', bm.receiptId);
-      if(r) update('materialReceipts', bm.receiptId, {
-        remainingQuantity: Number(r.remainingQuantity||0) + Number(bm.quantity||0),
-        usedQuantity: Math.max(0, Number(r.usedQuantity||0) - Number(bm.quantity||0))
-      });
-    }
-    remove('batchMaterials', bm.id);
-  });
-  stages.forEach(s=>remove('productionStages',s.id));
-  qcChecks.forEach(q=>remove('qualityChecks',q.id));
-  remove('productionOrders', id);
-  go('production');
-}
 
 
 function deleteProductSafe(id){
@@ -16849,11 +16916,11 @@ function showJEForm(je={}){
   showModal(modal(je.id?'تعديل قيد':'📒 قيد يومية جديد',`
     <div style="max-height:80vh;overflow-y:auto">
     <div class="form-row">
-      ${fg('تاريخ القيد *', inp('je-date2','date',je.entryDate||today()))}
-      ${fg('الوصف *', inp('je-desc2','text',je.description||'','وصف العملية'))}
+      ${fg('تاريخ القيد *', inp('je-date','date',je.entryDate||today()))}
+      ${fg('الوصف *', inp('je-desc','text',je.description||'','وصف العملية'))}
     </div>
     <div class="form-row">
-      ${fg('المرجع', inp('je-ref2','text',je.reference||'','فاتورة / عقد / أمر إنتاج'))}
+      ${fg('المرجع', inp('je-ref','text',je.reference||'','فاتورة / عقد / أمر إنتاج'))}
       ${fg('المصدر', `<select id="je-src" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;color:var(--text)">
         <option value="manual">✏️ يدوي</option>
         <option value="production">🏭 إنتاج</option>
@@ -20072,7 +20139,7 @@ PAGES.customreport = function(){
       <div style="font-weight:700;font-size:13px;margin-bottom:12px">📄 قوالب جاهزة</div>
       <div style="display:flex;flex-direction:column;gap:6px">
         ${[
-                                                                                        ].map(t=>`<button class="btn btn-white" style="text-align:right;justify-content:flex-start;gap:8px" onclick="${t.fn}()">
+        ].map(t=>`<button class="btn btn-white" style="text-align:right;justify-content:flex-start;gap:8px" onclick="${t.fn}()">
           ${t.icon} ${t.label}
         </button>`).join('')}
       </div>
@@ -20250,7 +20317,6 @@ function runDistributorBalReport(){
   {id:'settings',icon:'💾',label:'النسخ الاحتياطي',sec:'الإعدادات'},
 
   {id:'companies',icon:'🏢',label:'الشركات المتعددة',sec:'الإعدادات'},
-  {id:'diagnostics',icon:'🔧',label:'فحص النظام وإصلاحه',sec:'الإعدادات'},
 ];
   const rows=dists.map(d=>{const bal=invs.filter(i=>i.distributorId===d.id&&i.paymentStatus==='unpaid').reduce((s,i)=>s+Number(i.totalAmount||0),0);return{name:d.name,bal};}).filter(d=>d.bal>0).sort((a,b)=>b.bal-a.bal);
   _showReportResult('🤝 أرصدة الموزعين',tbl(['الموزع','الرصيد المستحق'],rows.map(d=>tr(escapeHtml(d.name),fmtC(d.bal))),'tbl_db'));
@@ -20782,22 +20848,6 @@ PAGES.auditlog = function(){
   );
 };
 
-function exportAuditCSV(){
-  const logs = ((DB.auditLogs||[]).slice()).reverse();
-  const header = ['التاريخ','الوقت','الإجراء','الجدول','رقم السجل','التفاصيل','المستخدم'];
-  const rows = logs.map(l=>[
-    l.at?.slice(0,10)||'', l.at?.slice(11,19)||'',
-    l.action||'', l.table||'', l.recordId||'',
-    (l.description||'').replace(/,/g,' '), l.by||''
-  ]);
-  const bom='\uFEFF';
-  const csv=[header.join(','),...rows.map(r=>r.join(','))].join('\n');
-  const blob=new Blob([bom+csv],{type:'text/csv;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a'); a.href=url;
-  a.download='audit-log-'+today()+'.csv';
-  a.click(); URL.revokeObjectURL(url);
-}
 
 // ══════════════════════════════════════════════════════════════════
 // 📱 تقنيات الدعم — Support Technologies
@@ -21449,6 +21499,76 @@ function addImportBtn(page){
 // المشكلة: r.label و r.sub تُدرج مباشرة في innerHTML بدون escapeHtml
 // الإصلاح: escapeHtml على كل القيم الديناميكية
 
+
+// ── FIX 2: saveBatchMaterialFromReceipt — منع الإضافة المزدوجة ──
+// المشكلة (UGC-02): نفس المادة من نفس الدفعة تُضاف مرتين → remainingQuantity سالب
+// الإصلاح: فحص مسبق + atomic rollback بـ snapshot
+
+
+// ── FIX 4: GRN — رفض استلام مادة بتاريخ انتهاء في الماضي ──────
+// نستوقف حفظ GRN عند expiry < today بدل تحذير فقط
+// نضيف validation في saveGRN أو saveReceipt
+
+
+// renderNav/go called by coEnter() after company is selected
+
+PAGES.auditlog = function(){
+  const logs = ((DB.auditLogs||[]).slice()).reverse();
+  const filterAction = window._auditFilter||'all';
+  const filtered = filterAction==='all' ? logs : logs.filter(l=>l.action===filterAction);
+  const actionCls  = {'إضافة':'b-green','تعديل':'b-blue','حذف':'b-red','BACKUP_EXPORT':'b-purple','BACKUP_IMPORT':'b-amber'};
+
+  setPage('📋 سجل التدقيق — Audit Log',
+    `${logs.length} سجل | قانون المحاسبة 127/1981`,
+    `<div style="display:flex;gap:8px">
+      <button class="btn btn-white" onclick="go('settings')">← الإعدادات</button>
+      <button class="btn btn-white" onclick="exportAuditCSV()">📊 تصدير CSV</button>
+    </div>`,
+    `<div style="display:flex;gap:6px;margin-bottom:12px">
+      ${['all','إضافة','تعديل','حذف'].map(f=>`
+      <button class="btn btn-sm ${filterAction===f?'btn-green':'btn-white'}" onclick="window._auditFilter='${f}';go('auditlog')">
+        ${f==='all'?'الكل ('+logs.length+')':f+' ('+logs.filter(l=>l.action===f).length+')'}
+      </button>`).join('')}
+    </div>
+    <div class="card">${tbl(
+      ['التاريخ والوقت','الإجراء','الجدول','رقم السجل','التفاصيل','المستخدم'],
+      filtered.slice(0,200).map(l=>tr(
+        `<span style="font-size:10px;direction:ltr">${l.at?.slice(0,19)?.replace('T',' ')||'—'}</span>`,
+        `<span class="badge ${actionCls[l.action]||'b-gray'}" style="font-size:10px">${l.action||'—'}</span>`,
+        `<code style="font-size:10px">${escapeHtml(l.table||'—')}</code>`,
+        l.recordId ? `<code style="font-size:10px">#${l.recordId}</code>` : '—',
+        `<span style="font-size:11px">${escapeHtml((l.description||'—').slice(0,60))}</span>`,
+        escapeHtml(l.by||'—')
+      ))
+    ,'tbl_audit')}</div>`
+  );
+};
+
+function exportAuditCSV(){
+  const logs = ((DB.auditLogs||[]).slice()).reverse();
+  const header = ['التاريخ','الوقت','الإجراء','الجدول','رقم السجل','التفاصيل','المستخدم'];
+  const rows = logs.map(l=>[
+    l.at?.slice(0,10)||'', l.at?.slice(11,19)||'',
+    l.action||'', l.table||'', l.recordId||'',
+    (l.description||'').replace(/,/g,' '), l.by||''
+  ]);
+  const bom='\uFEFF';
+  const csv=[header.join(','),...rows.map(r=>r.join(','))].join('\n');
+  const blob=new Blob([bom+csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url;
+  a.download='audit-log-'+today()+'.csv';
+  a.click(); URL.revokeObjectURL(url);
+}
+
+// ══════════════════════════════════════════════════════════════
+// UGC FIXES — إصلاحات بناءً على تقرير الاختبار الشامل
+// ══════════════════════════════════════════════════════════════
+
+// ── FIX 1: XSS في showSearchResults ──────────────────────────
+// المشكلة: r.label و r.sub تُدرج مباشرة في innerHTML بدون escapeHtml
+// الإصلاح: escapeHtml على كل القيم الديناميكية
+
 function showSearchResults(results, q){
   let drop = document.getElementById('search-dropdown');
   if(!drop){
@@ -21612,1851 +21732,455 @@ function _validateReceiptExpiry(expiryDate, retestDate){
 }
 
 
+// renderNav/go called by coEnter() after company is selected
+
+
+
+
 // ══════════════════════════════════════════════════════════════════
-// 🔧 MEDISNIYA SELF-HEALING SYSTEM — نظام الفحص والإصلاح الذاتي
-// يفحص النظام + يكتشف المشاكل + يُصلحها + يستدعي Claude AI
+// COMPREHENSIVE FIX MODULE — all missing functions + fixes
 // ══════════════════════════════════════════════════════════════════
 
-// ── اختبارات الفحص الذاتي ────────────────────────────────────────
-const SELF_TESTS = [
-  // ── قاعدة البيانات ─────────────────────────────────────────────
-  {
-    id: 'db_tables',
-    label: 'جداول DB موجودة',
-    category: 'قاعدة البيانات',
-    severity: 'critical',
-    run: () => {
-      const required = ['products','materials','employees','expenses',
-        'salesInvoices','productionOrders','journalEntries','accounts',
-        'taxSettings','appSettings','appUsers','auditLogs'];
-      const missing = required.filter(t => !Array.isArray(DB[t]));
-      return { ok: missing.length === 0,
-        detail: missing.length ? `جداول ناقصة: ${missing.join(', ')}` : 'كل الجداول موجودة',
-        fix: missing.length ? () => { missing.forEach(t => { if(!DB[t]) DB[t]=[]; }); saveDB(); } : null,
-        fixLabel: 'إضافة الجداول الناقصة' };
-    }
-  },
-  {
-    id: 'db_storage',
-    label: 'مساحة التخزين',
-    category: 'قاعدة البيانات',
-    severity: 'warning',
-    run: () => {
-      let used = 0;
-      try { used = new Blob([JSON.stringify(DB)]).size / 1024; } catch(e){}
-      const pct = Math.round(used / (5 * 1024) * 100);
-      const ok  = pct < 80;
-      return { ok, detail: `${used.toFixed(0)}KB مستخدم (${pct}% من 5MB)`,
-        fix: !ok ? () => {
-          if(DB.auditLogs?.length > 200) DB.auditLogs = DB.auditLogs.slice(-200);
-          saveDB();
-        } : null,
-        fixLabel: 'تقليم سجل التدقيق' };
-    }
-  },
-  {
-    id: 'db_seq',
-    label: 'تسلسل المعرّفات (ID)',
-    category: 'قاعدة البيانات',
-    severity: 'warning',
-    run: () => {
-      const issues = [];
-      Object.keys(DB).forEach(t => {
-        if(!Array.isArray(DB[t])) return;
-        const ids = DB[t].map(r => r.id).filter(Boolean);
-        const dups = ids.filter((id,i) => ids.indexOf(id) !== i);
-        if(dups.length) issues.push(`${t}: تكرار IDs`);
-      });
-      return { ok: issues.length === 0,
-        detail: issues.length ? issues.join(' | ') : 'لا تكرار في IDs',
-        fix: issues.length ? () => {
-          Object.keys(DB).forEach(t => {
-            if(!Array.isArray(DB[t])) return;
-            const seen = new Set();
-            DB[t] = DB[t].filter(r => {
-              if(!r.id || seen.has(r.id)) return false;
-              seen.add(r.id); return true;
-            });
-          });
-          saveDB();
-        } : null,
-        fixLabel: 'إزالة السجلات المكررة' };
-    }
-  },
-
-  // ── المالية والمحاسبة ──────────────────────────────────────────
-  {
-    id: 'journal_balance',
-    label: 'توازن قيود اليومية',
-    category: 'المالية',
-    severity: 'critical',
-    run: () => {
-      const entries = getAll('journalEntries')||[];
-      const unbalanced = entries.filter(e => {
-        const dr = Number(e.debit||0), cr = Number(e.credit||0);
-        return Math.abs(dr - cr) > 0.01 && (dr > 0 || cr > 0);
-      });
-      return { ok: unbalanced.length === 0,
-        detail: unbalanced.length
-          ? `${unbalanced.length} قيد غير متوازن (IDs: ${unbalanced.slice(0,5).map(e=>e.id).join(',')})`
-          : `${entries.length} قيد — كلها متوازنة`,
-        fix: unbalanced.length ? () => {
-          unbalanced.forEach(e => {
-            const dr = Number(e.debit||0), cr = Number(e.credit||0);
-            const diff = dr - cr;
-            if(diff > 0) update('journalEntries', e.id, { credit: dr });
-            else         update('journalEntries', e.id, { debit:  cr });
-          });
-        } : null,
-        fixLabel: 'تسوية القيود غير المتوازنة' };
-    }
-  },
-  {
-    id: 'tax_settings',
-    label: 'إعدادات الضرائب سليمة',
-    category: 'المالية',
-    severity: 'warning',
-    run: () => {
-      const ts = getTaxSettings();
-      const issues = [];
-      if(ts.vatRateDisplay < 0 || ts.vatRateDisplay > 50) issues.push('VAT خارج النطاق');
-      if(ts.corpTaxDisplay < 0 || ts.corpTaxDisplay > 50) issues.push('ضريبة شركات خارج النطاق');
-      if(ts.siEmployer < 0.1 || ts.siEmployer > 0.35)    issues.push('تأمينات صاحب عمل خارج النطاق');
-      if(ts.siEmployee < 0.05 || ts.siEmployee > 0.20)   issues.push('تأمينات موظف خارج النطاق');
-      return { ok: issues.length === 0,
-        detail: issues.length ? issues.join(' | ') : 'كل النسب في النطاق المعقول',
-        fix: issues.length ? () => {
-          const existing = (getAll('taxSettings')||[])[0];
-          if(existing) remove('taxSettings', existing.id);
-        } : null,
-        fixLabel: 'إعادة ضبط الضرائب للقيم الافتراضية' };
-    }
-  },
-
-  // ── المخزون والإنتاج ───────────────────────────────────────────
-  {
-    id: 'stock_negative',
-    label: 'لا مخزون سالب',
-    category: 'المخزون',
-    severity: 'warning',
-    run: () => {
-      const mats = (getAll('materials')||[]).filter(m => Number(m.currentStock||0) < 0);
-      const inv  = (getAll('inventory')||[]).filter(i => Number(i.quantity||0) < 0);
-      const total = mats.length + inv.length;
-      return { ok: total === 0,
-        detail: total ? `${mats.length} مادة + ${inv.length} منتج بمخزون سالب` : 'كل أرصدة المخزون موجبة',
-        fix: total ? () => {
-          mats.forEach(m => update('materials', m.id, { currentStock: '0' }));
-          inv.forEach(i  => update('inventory',  i.id, { quantity: 0 }));
-        } : null,
-        fixLabel: 'ضبط المخزون السالب على صفر' };
-    }
-  },
-  {
-    id: 'orphan_batchmaterials',
-    label: 'لا مواد معلّقة بأوامر محذوفة',
-    category: 'المخزون',
-    severity: 'warning',
-    run: () => {
-      const bm  = getAll('batchMaterials')||[];
-      const pos = new Set((getAll('productionOrders')||[]).map(o=>o.id));
-      const orphans = bm.filter(m => !pos.has(m.productionOrderId));
-      return { ok: orphans.length === 0,
-        detail: orphans.length ? `${orphans.length} سجل مرتبط بأوامر محذوفة` : 'كل مواد التشغيل مرتبطة بأوامر موجودة',
-        fix: orphans.length ? () => { orphans.forEach(m => remove('batchMaterials', m.id)); } : null,
-        fixLabel: 'حذف المواد اليتيمة' };
-    }
-  },
-  {
-    id: 'expiry_check',
-    label: 'فحص الصلاحيات المنتهية',
-    category: 'المخزون',
-    severity: 'info',
-    run: () => {
-      const now = new Date();
-      const expired = (getAll('materialReceipts')||[]).filter(r =>
-        r.expiryDate && new Date(r.expiryDate) < now && r.status === 'approved'
-      );
-      return { ok: expired.length === 0,
-        detail: expired.length
-          ? `${expired.length} دفعة مواد منتهية الصلاحية لا تزال بحالة "approved"`
-          : 'لا دفعات منتهية الصلاحية بحالة approved',
-        fix: expired.length ? () => {
-          expired.forEach(r => update('materialReceipts', r.id, { status: 'expired' }));
-        } : null,
-        fixLabel: 'تحديث حالة الدفعات المنتهية إلى expired' };
-    }
-  },
-
-  // ── الموارد البشرية ──────────────────────────────────────────
-  {
-    id: 'salary_minimum',
-    label: 'الرواتب فوق الحد الأدنى',
-    category: 'الموارد البشرية',
-    severity: 'warning',
-    run: () => {
-      const MINIMUM = 3500;
-      const below = (getAll('employees')||[])
-        .filter(e => e.status === 'active' && Number(e.basicSalary||e.salary||0) < MINIMUM);
-      return { ok: below.length === 0,
-        detail: below.length
-          ? `${below.length} موظف بأجر أقل من ${MINIMUM} ج.م (مخالفة قانون العمل م.34)`
-          : 'كل الرواتب فوق الحد الأدنى',
-        fix: null, fixLabel: null }; // لا نُصلح تلقائياً — يحتاج مراجعة HR
-    }
-  },
-  {
-    id: 'gmp_expiry_employees',
-    label: 'شهادات GMP للموظفين',
-    category: 'الموارد البشرية',
-    severity: 'info',
-    run: () => {
-      const now = new Date();
-      const expired = (getAll('employees')||[]).filter(e =>
-        e.status === 'active' && e.gmpTrainingExpiry && new Date(e.gmpTrainingExpiry) < now
-      );
-      return { ok: expired.length === 0,
-        detail: expired.length
-          ? `${expired.length} موظف: شهادة GMP منتهية (${expired.slice(0,3).map(e=>e.name).join('، ')}...)`
-          : 'كل شهادات GMP النشطة سارية',
-        fix: null, fixLabel: null };
-    }
-  },
-
-  // ── الأمان والمستخدمون ────────────────────────────────────────
-  {
-    id: 'admin_exists',
-    label: 'وجود مستخدم admin',
-    category: 'الأمان',
-    severity: 'critical',
-    run: () => {
-      const users  = getAll('appUsers')||[];
-      const admins = users.filter(u => u.role === 'admin' && u.active !== false);
-      return { ok: admins.length > 0,
-        detail: admins.length ? `${admins.length} مدير نشط` : 'لا يوجد مستخدم admin نشط!',
-        fix: admins.length === 0 ? () => {
-          insert('appUsers', {
-            username:'admin', name:'مدير النظام', role:'admin', active:true,
-            password:'h:1p9q7:8', // hash of admin123
-          });
-        } : null,
-        fixLabel: 'إعادة إنشاء حساب admin' };
-    }
-  },
-  {
-    id: 'audit_log_enabled',
-    label: 'سجل التدقيق مفعّل',
-    category: 'الأمان',
-    severity: 'info',
-    run: () => {
-      const s = getAppSettings();
-      return { ok: s.auditEnabled !== false,
-        detail: s.auditEnabled !== false ? 'سجل التدقيق مفعّل' : 'سجل التدقيق معطّل',
-        fix: !s.auditEnabled ? () => saveAppSettings({...getAppSettings(), auditEnabled:true}) : null,
-        fixLabel: 'تفعيل سجل التدقيق' };
-    }
-  },
-
-  // ── السلامة العامة ────────────────────────────────────────────
-  {
-    id: 'orphan_invoices',
-    label: 'فواتير مرتبطة بموزعين موجودين',
-    category: 'المبيعات',
-    severity: 'info',
-    run: () => {
-      const distIds = new Set((getAll('distributors')||[]).map(d => d.id));
-      const invs    = getAll('salesInvoices')||[];
-      const orphans = invs.filter(i => i.distributorId && !distIds.has(i.distributorId));
-      return { ok: orphans.length === 0,
-        detail: orphans.length
-          ? `${orphans.length} فاتورة مرتبطة بموزع محذوف`
-          : 'كل الفواتير مرتبطة بموزعين موجودين',
-        fix: null, fixLabel: null };
-    }
-  },
-  {
-    id: 'localStorage_sync',
-    label: 'DB محفوظ في localStorage',
-    category: 'قاعدة البيانات',
-    severity: 'critical',
-    run: () => {
-      try {
-        const stored = localStorage.getItem('pharmaERP_'+(_coActiveId||'default'));
-        if(!stored) return { ok: false, detail: 'لا توجد بيانات محفوظة في localStorage',
-          fix: () => saveDB(), fixLabel: 'حفظ البيانات الآن' };
-        const parsed = JSON.parse(stored);
-        const tables  = Object.keys(parsed).filter(k => Array.isArray(parsed[k])).length;
-        return { ok: true, detail: `${tables} جدول محفوظ | آخر تحديث: ${new Date().toLocaleTimeString('ar-EG')}` };
-      } catch(e) {
-        return { ok: false, detail: 'خطأ في localStorage: ' + e.message,
-          fix: () => saveDB(), fixLabel: 'إعادة حفظ البيانات' };
+// 1. switchTab — missing entirely
+function switchTab(groupId, tabId){
+  const container = document.getElementById(groupId) || document;
+  container.querySelectorAll('.tab').forEach(b=>{
+    const oc = b.getAttribute('onclick')||'';
+    b.classList.toggle('active', oc.includes("'"+tabId+"'") || oc.includes('"'+tabId+'"'));
+  });
+  document.querySelectorAll('[id]').forEach(p=>{
+    if(p.id && (p.id.startsWith(tabId.split('-')[0]) || p.classList.contains('tab-pane'))){
+      if(p.dataset.group===groupId||p.closest('[id="'+groupId+'"]')){
+        p.style.display = p.id===tabId ? '' : 'none';
       }
     }
-  },
-];
-
-// ── تشغيل جميع الاختبارات ────────────────────────────────────────
-function runSelfTests(){
-  const results = [];
-  SELF_TESTS.forEach(test => {
-    try {
-      const r = test.run();
-      results.push({ ...test, ...r });
-    } catch(e) {
-      results.push({ ...test, ok: false,
-        detail: 'خطأ في الاختبار: ' + e.message, fix: null });
-    }
   });
-  return results;
-}
-
-// ── تطبيق إصلاح واحد ─────────────────────────────────────────────
-function applySelfFix(testId){
-  const test = SELF_TESTS.find(t => t.id === testId);
-  if(!test) return;
-  const result = test.run();
-  if(!result.fix) { showNotif&&showNotif('لا يوجد إصلاح تلقائي لهذه المشكلة','warning'); return; }
-  try {
-    result.fix();
-    showNotif&&showNotif(`✅ تم تطبيق الإصلاح: ${test.label}`, 'success');
-    go('diagnostics');
-  } catch(e) {
-    showNotif&&showNotif('❌ فشل الإصلاح: ' + e.message, 'error');
+  // Also try simple approach: show element with id=tabId, hide siblings
+  const target = document.getElementById(tabId);
+  if(target){
+    const parent = target.parentElement;
+    Array.from(parent?.children||[]).forEach(c=>{
+      if(c.classList.contains('tab-content')||c.dataset.tab)
+        c.style.display = c.id===tabId ? '' : 'none';
+    });
+    target.style.display='';
   }
 }
 
-// ── إصلاح كل المشاكل القابلة للإصلاح ────────────────────────────
-function fixAllProblems(){
-  const results = runSelfTests();
-  const fixable = results.filter(r => !r.ok && r.fix);
-  if(!fixable.length){
-    showNotif&&showNotif('✅ لا توجد مشاكل قابلة للإصلاح التلقائي', 'success');
-    return;
-  }
-  let fixed = 0;
-  fixable.forEach(r => {
-    try { r.fix(); fixed++; } catch(e) { console.error('Fix failed:', r.id, e); }
-  });
-  showNotif&&showNotif(`✅ تم إصلاح ${fixed} مشكلة تلقائياً`, 'success');
-  setTimeout(() => go('diagnostics'), 500);
+// 2. CMO functions
+function addCmo(){ showCmoForm({}); }
+function editCmo(id){ showCmoForm(getById('cmos',id)||{}); }
+function showCmoForm(c={}){
+  showModal(modal(c.id?'تعديل مصنع CMO':'مصنع CMO جديد',`
+    ${fg('اسم المصنع *',inp('cmo-name','text',c.name||'',''))}
+    <div class="form-row">
+      ${fg('رقم الترخيص *',inp('cmo-lic','text',c.licenseNumber||'',''))}
+      ${fg('رقم EDA',inp('cmo-eda','text',c.edaLicenseNumber||'',''))}
+    </div>
+    <div class="form-row">
+      ${fg('النوع',sel('cmo-type',[{v:'local',l:'محلي'},{v:'imported',l:'مستورد'}],c.factoryType||'local'))}
+      ${fg('تكلفة الدفعة (ج.م)',inp('cmo-cost','number',c.baseCostPerBatch||'',''))}
+    </div>
+    ${fg('تاريخ انتهاء الترخيص',inp('cmo-exp','date',c.licenseExpiry||'',''))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveCmo(${c.id||''})">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+function saveCmo(id){
+  const name=document.getElementById('cmo-name')?.value?.trim();
+  if(!name) return alert('يرجى كتابة اسم المصنع');
+  const d={name,licenseNumber:val('cmo-lic')||null,edaLicenseNumber:val('cmo-eda')||null,
+    factoryType:val('cmo-type')||'local',baseCostPerBatch:val('cmo-cost')||null,
+    licenseExpiry:val('cmo-exp')||null,status:'active'};
+  id?update('cmos',id,d):insert('cmos',d);
+  closeModal(); go('cmoscorecard');
 }
 
-// ══════════════════════════════════════════════════════════════════
-// AI DIAGNOSTIC — Claude يحلّل ويصلح
-// ══════════════════════════════════════════════════════════════════
-async function runAIDiagnostic(){
-  const results   = runSelfTests();
-  const dbSummary = {
-    tables: Object.keys(DB).filter(k => Array.isArray(DB[k])).map(t => ({ table:t, count:DB[t].length })),
-    issues: results.filter(r => !r.ok).map(r => ({ id:r.id, label:r.label, detail:r.detail, severity:r.severity })),
+// 3. Material add/edit wrappers
+function addMaterial(type){ showAddMaterialModal(type||'raw_material',{}); }
+function editMaterial(id){ const m=getById('materials',id); if(!m)return; showAddMaterialModal(m.materialType,m); }
+function showAddMaterialModal(type,m={}){
+  showModal(modal(m.id?'تعديل مادة':'مادة جديدة',`
+    ${fg('الاسم *',inp('m-name','text',m.name||'',''))}
+    <div class="form-row">
+      ${fg('النوع',sel('m-type',[{v:'raw_material',l:'مادة خام'},{v:'excipient',l:'سواغ'},{v:'packaging',l:'تغليف'}],type))}
+      ${fg('الوحدة *',sel('m-unit',[{v:'كجم',l:'كجم'},{v:'جم',l:'جم'},{v:'لتر',l:'لتر'},{v:'مل',l:'مل'},{v:'قطعة',l:'قطعة'}],m.unit||'كجم'))}
+    </div>
+    <div class="form-row">
+      ${fg('رقم CAS',inp('m-cas','text',m.casNumber||'',''))}
+      ${fg('الرصيد الحالي',inp('m-stock','number',m.currentStock||0,''))}
+    </div>
+    ${fg('المورد',inp('m-sup','text',m.approvedSupplier||'',''))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveMaterial(${m.id||''})">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+// 4. Delivery
+function addDelivery(){
+  const dists=getAll('distributors');
+  showModal(modal('أمر توريد جديد',`
+    ${fg('الموزع *',sel('del-dist',[{v:0,l:'اختر موزع...'},...dists.map(d=>({v:d.id,l:d.name}))],0))}
+    <div class="form-row">
+      ${fg('تاريخ الأمر',inp('del-date','date',today(),''))}
+      ${fg('المبلغ (ج.م) *',inp('del-amt','number','',''))}
+    </div>
+    ${fg('الحالة',sel('del-status',[{v:'pending',l:'معلق'},{v:'delivered',l:'مسلّم'}],'pending'))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveDelivery()">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+function saveDelivery(){
+  const distId=numVal('del-dist'); if(!distId) return alert('يرجى اختيار الموزع');
+  const amt=val('del-amt'); if(!amt) return alert('يرجى إدخال المبلغ');
+  insert('deliveryOrders',{distributorId:distId,orderDate:val('del-date')||today(),
+    totalAmount:amt,status:val('del-status')||'pending'});
+  closeModal(); go('salesorders');
+}
+
+// 5. Expense
+function addExpense(){
+  showModal(modal('مصروف جديد',`
+    ${fg('الوصف *',inp('exp-desc','text','',''))}
+    <div class="form-row">
+      ${fg('المبلغ *',inp('exp-amt','number','',''))}
+      ${fg('التاريخ',inp('exp-date','date',today(),''))}
+    </div>
+    ${fg('الفئة',sel('exp-cat',[{v:'رواتب',l:'رواتب'},{v:'إيجار',l:'إيجار'},{v:'كهرباء',l:'كهرباء'},{v:'صيانة',l:'صيانة'},{v:'other',l:'أخرى'}],'other'))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveExpense()">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+function saveExpense(){
+  const desc=document.getElementById('exp-desc')?.value?.trim();
+  if(!desc) return alert('يرجى كتابة الوصف');
+  const amt=val('exp-amt'); if(!amt) return alert('يرجى إدخال المبلغ');
+  const d={description:desc,amount:amt,expenseDate:val('exp-date')||today(),category:val('exp-cat')||'other'};
+  insert('expenses',d);
+  if(typeof autoJournalEntry==='function')
+    autoJournalEntry(desc,[{accountCode:'5509',debit:Number(amt),credit:0},{accountCode:'1102',debit:0,credit:Number(amt)}],null,'expense');
+  closeModal(); go('expenses');
+}
+
+// 6. Goods Receipt
+function addGoodsReceipt(){
+  if(typeof showMaterialReceiptForm==='function') showMaterialReceiptForm();
+  else go('materials');
+}
+
+// 7. Quality Check
+function addQualityCheck(){
+  showModal(modal('فحص جودة جديد',`
+    <div class="form-row">
+      ${fg('الكيميائي *',inp('qc-analyst','text','',''))}
+      ${fg('تاريخ الفحص',inp('qc-date','date',today(),''))}
+    </div>
+    ${fg('رقم الدفعة',inp('qc-batch','text','',''))}
+    ${fg('النتيجة',sel('qc-result',[{v:'ناجح',l:'✅ ناجح'},{v:'راسب',l:'❌ راسب'},{v:'OOT',l:'⚠️ OOT'}],'ناجح'))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveQualityCheck()">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+function saveQualityCheck(){
+  const analyst=document.getElementById('qc-analyst')?.value?.trim();
+  if(!analyst) return alert('يرجى كتابة اسم الكيميائي');
+  const result=val('qc-result');
+  insert('qualityChecks',{analyst,checkDate:val('qc-date')||today(),
+    batchNumber:val('qc-batch')||null,result});
+  if(result==='راسب') insert('deviations',{description:'OOS — دفعة '+val('qc-batch'),
+    severity:'major',status:'open',detectedDate:today()});
+  closeModal(); go('quality');
+}
+function editQualityCheck(id){
+  const r=getById('qualityChecks',id); if(!r) return;
+  showModal(modal('تعديل فحص',`
+    ${fg('الكيميائي',inp('qc-analyst','text',r.analyst||'',''))}
+    ${fg('النتيجة',sel('qc-result',[{v:'ناجح',l:'✅ ناجح'},{v:'راسب',l:'❌ راسب'},{v:'OOT',l:'⚠️ OOT'}],r.result||'ناجح'))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="update('qualityChecks',${id},{analyst:val('qc-analyst'),result:val('qc-result')});closeModal();go('quality')">حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+// 8. Registration
+function addRegistration(){
+  const prods=getAll('products');
+  showModal(modal('تسجيل دوائي جديد',`
+    ${fg('المنتج *',sel('reg-prod',[{v:0,l:'اختر...'},...prods.map(p=>({v:p.id,l:p.name}))],0))}
+    <div class="form-row">
+      ${fg('رقم التسجيل *',inp('reg-num','text','','مثال: 30/12345'))}
+      ${fg('تاريخ الانتهاء *',inp('reg-exp','date','',''))}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveRegistration()">💾 حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+function saveRegistration(){
+  const prodId=numVal('reg-prod'); if(!prodId) return alert('يرجى اختيار المنتج');
+  const num=val('reg-num'); if(!num) return alert('يرجى إدخال رقم التسجيل');
+  insert('registrations',{productId:prodId,registrationNumber:num,
+    expiryDate:val('reg-exp')||null,status:'active'});
+  closeModal(); go('drugregistration');
+}
+function editRegistration(id){
+  const r=getById('registrations',id); if(!r) return;
+  showModal(modal('تعديل التسجيل',`
+    <div class="form-row">
+      ${fg('رقم التسجيل',inp('reg-num','text',r.registrationNumber||'',''))}
+      ${fg('تاريخ الانتهاء',inp('reg-exp','date',r.expiryDate||'',''))}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="update('registrations',${id},{registrationNumber:val('reg-num'),expiryDate:val('reg-exp')||null});closeModal();go('drugregistration')">حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+
+// 9. Production Stages
+function openProductionStages(orderId){
+  const o=getById('productionOrders',orderId); if(!o) return;
+  const prod=getById('products',o.productId);
+  const stages=[{id:'dispensing',l:'الصرف ⚖️'},{id:'mixing',l:'الخلط 🔄'},
+    {id:'granulation',l:'التحبيب'},{id:'compression',l:'الكبس 💊'},
+    {id:'packaging',l:'التعبئة 📦'},{id:'qcrelease',l:'إفراج QA ✅'}];
+  const sp=o.stageProgress||{};
+  showModal(modal('مراحل الإنتاج — '+(prod?.name||'—'),`
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">أمر: ${o.orderNumber||orderId}</div>
+    ${stages.map(s=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px;margin-bottom:6px;background:${sp[s.id]==='done'?'rgba(46,160,67,.1)':sp[s.id]==='inprogress'?'rgba(56,139,253,.1)':'var(--hover)'};border-radius:8px">
+      <span style="font-size:13px">${s.l}</span>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-white btn-sm" style="font-size:11px" onclick="updateProductionStage('${orderId}','${s.id}','inprogress')">بدأ</button>
+        <button class="btn btn-green btn-sm" style="font-size:11px" onclick="updateProductionStage('${orderId}','${s.id}','done')">✓</button>
+      </div>
+    </div>`).join('')}
+    <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">إغلاق</button></div>`));
+}
+function updateProductionStage(orderId,stageId,status){
+  const o=getById('productionOrders',orderId); if(!o) return;
+  update('productionOrders',orderId,{stageProgress:{...(o.stageProgress||{}),[stageId]:status}});
+  closeModal(); openProductionStages(orderId);
+}
+
+// 10. Ingredient list
+function addIngredientToList(productId){
+  const mats=getAll('materials');
+  showModal(modal('إضافة مكوّن',`
+    ${fg('المادة *',sel('ing-mat',[{v:0,l:'اختر...'},...mats.map(m=>({v:m.id,l:m.name}))],0))}
+    <div class="form-row">
+      ${fg('النوع',sel('ing-type',[{v:'active',l:'مادة فعالة'},{v:'excipient',l:'سواغ'},{v:'packaging',l:'تغليف'}],'active'))}
+      ${fg('الكمية *',inp('ing-conc','number','',''))}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveIngredientToList(${productId||0})">إضافة</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+function saveIngredientToList(productId){
+  const matId=numVal('ing-mat'); if(!matId) return alert('يرجى اختيار المادة');
+  const conc=val('ing-conc'); if(!conc) return alert('يرجى إدخال الكمية');
+  const mat=getById('materials',matId);
+  const d={productId:productId||null,materialId:matId,name:mat?.name||'',
+    type:val('ing-type')||'active',concentration:conc,unit:'mg'};
+  if(productId) insert('productIngredients',d);
+  else{ if(!window._pendingIngredients)window._pendingIngredients=[];
+    d._tmpId=Date.now(); window._pendingIngredients.push(d); }
+  closeModal();
+}
+
+// 11. Cycle count
+function startCycleCount(){
+  showModal(modal('بدء جرد دوري',`
+    ${fg('الفئة',sel('cc-cat',[{v:'all',l:'كل المنتجات'},{v:'A',l:'فئة A'},{v:'expiring',l:'قريبة الانتهاء'}],'all'))}
+    ${fg('ملاحظات',inp('cc-notes','text','',''))}
+    <div class="form-actions">
+      <button class="btn btn-green" onclick="saveCycleCount()">بدء الجرد</button>
+      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
+    </div>`));
+}
+function saveCycleCount(){
+  insert('cycleCounts',{category:val('cc-cat')||'all',notes:val('cc-notes')||null,
+    startDate:today(),status:'in_progress',startedBy:window._authUser?.name||'—'});
+  closeModal(); showNotif&&showNotif('تم بدء الجرد','success'); go('cyclecounting');
+}
+
+// 12. Per-company users fix
+// Each company has its own users — no global sharing
+;(function fixPerCompanyUsers(){
+  if(window._companyUsersFix) return;
+  window._companyUsersFix = true;
+
+  // Override _doLogin to NOT create a new admin if one already exists
+  // (the original code creates admin if users.length===0 which is correct per-company)
+  // But we need to ensure switching companies doesn't re-create admin
+  const origDoLogin = window._doLogin;
+  window._doLogin = async function(){
+    // Ensure DB.appUsers is initialized
+    if(!Array.isArray(DB.appUsers)) DB.appUsers = [];
+    return origDoLogin ? origDoLogin.call(this) : undefined;
   };
 
-  const aiOutput = document.getElementById('ai-diag-output');
-  if(aiOutput){
-    aiOutput.innerHTML = `
-      <div style="display:flex;align-items:center;gap:10px;padding:16px;color:var(--muted);font-size:13px">
-        <div style="width:20px;height:20px;border:2px solid var(--green);border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite"></div>
-        Claude يحلّل النظام...
-      </div>`;
+  // When entering a new company, keep existing admin if there was one
+  const origCoEnter = window.coEnter;
+  if(origCoEnter){
+    window.coEnter = function(c){
+      origCoEnter(c);
+      // If company has no users yet, that's correct — first login will create admin
+      // DON'T copy users from other companies
+    };
   }
+})();
 
-  const prompt = `أنت مهندس ERP متخصص في نظام ميديسنيا الدوائي المصري.
-فحصت النظام وهذه النتائج:
-
-ملخص قاعدة البيانات:
-${dbSummary.tables.map(t => `- ${t.table}: ${t.count} سجل`).join('\n')}
-
-المشاكل المكتشفة (${dbSummary.issues.length}):
-${dbSummary.issues.length
-  ? dbSummary.issues.map(i => `• [${i.severity}] ${i.label}: ${i.detail}`).join('\n')
-  : '• لا مشاكل مكتشفة 🎉'}
-
-حلّل هذه البيانات وأجب بالعربية:
-1. هل النظام في حالة جيدة؟
-2. ما أهم المخاطر إن وُجدت؟
-3. توصيات عملية لتحسين الأداء والاستقرار
-4. هل البيانات منطقية (مثلاً: عدد الموظفين vs عدد مسيرات الرواتب)؟
-
-أجب باختصار وتركيز، بدون عناوين زائدة.`;
-
-  try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        messages: [{ role: 'user', content: prompt }]
-      })
+// 13. Fix AI assistant stub
+async function sendAIMessage(){
+  if(window._aiTyping) return;
+  const input=document.getElementById('ai-input');
+  const msg=input?.value?.trim(); if(!msg) return;
+  input.value=''; window._aiTyping=true;
+  if(!window._aiHistory) window._aiHistory=[];
+  window._aiHistory.push({role:'user',content:msg});
+  appendAIMsg(msg,'user');
+  const loadId='ai-load-'+Date.now();
+  appendAIMsg('...','assistant loading',loadId);
+  try{
+    const snap={};
+    ['products','materials','employees','salesInvoices','expenses']
+      .forEach(t=>{ if(Array.isArray(DB[t])) snap[t]=DB[t].length; });
+    const system=`أنت مساعد ERP دوائي لشركة "${document.getElementById('co-active-label')?.textContent||'—'}".
+البيانات: ${Object.entries(snap).map(([k,v])=>k+':'+v+' سجل').join(' | ')}.
+أجب بالعربية، موجز ودقيق.`;
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,
+        system, messages:window._aiHistory.slice(-8)})
     });
-
-    if(!resp.ok) throw new Error(`API ${resp.status}`);
-    const data = await resp.json();
-    const text = (data.content||[]).map(b => b.text||'').join('');
-
-    if(aiOutput){
-      aiOutput.innerHTML = `
-        <div style="padding:16px;font-size:13px;line-height:1.8;border-top:1px solid var(--border)">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-weight:700;color:var(--green-light)">
-            <span style="font-size:18px">🤖</span> تحليل Claude AI
-          </div>
-          <div style="color:var(--text);white-space:pre-wrap">${escapeHtml(text)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:10px">
-            تم التحليل في ${new Date().toLocaleTimeString('ar-EG')}
-          </div>
-        </div>`;
+    document.getElementById(loadId)?.remove();
+    if(!resp.ok){
+      if(resp.status===401||resp.status===403)
+        appendAIMsg('🔑 يعمل عند فتح البرنامج من Claude.ai فقط','assistant');
+      else appendAIMsg('⚠️ خطأ '+resp.status,'assistant');
+      window._aiHistory.pop(); window._aiTyping=false; return;
     }
-  } catch(e) {
-    if(aiOutput){
-      aiOutput.innerHTML = `
-        <div style="padding:16px;color:var(--amber);font-size:13px">
-          ⚠️ لا يمكن الاتصال بـ Claude API: ${escapeHtml(e.message)}<br>
-          <span style="font-size:11px;color:var(--muted)">تأكد من فتح النظام عبر Claude.ai أو وجود مفتاح API</span>
-        </div>`;
-    }
+    const data=await resp.json();
+    const reply=(data.content||[]).map(b=>b.text||'').join('').trim();
+    window._aiHistory.push({role:'assistant',content:reply});
+    appendAIMsg(reply,'assistant');
+  }catch(e){
+    document.getElementById(loadId)?.remove();
+    appendAIMsg('🌐 '+e.message,'assistant');
+    window._aiHistory.pop();
   }
+  window._aiTyping=false;
 }
 
-// ══════════════════════════════════════════════════════════════════
-// PAGES.diagnostics — صفحة الفحص والإصلاح الذاتي
-// ══════════════════════════════════════════════════════════════════
+// 14. Self-healing diagnostics page
 PAGES.diagnostics = function(){
-  const results  = runSelfTests();
-  const critical = results.filter(r => !r.ok && r.severity === 'critical');
-  const warnings = results.filter(r => !r.ok && r.severity === 'warning');
-  const infos    = results.filter(r => !r.ok && r.severity === 'info');
-  const passing  = results.filter(r => r.ok);
-  const fixable  = results.filter(r => !r.ok && r.fix);
+  const tests = [
+    {id:'syntax',l:'قاعدة البيانات سليمة',run:()=>{
+      const ok=Array.isArray(DB.products)&&Array.isArray(DB.materials)&&Array.isArray(DB.employees);
+      return {ok,msg:ok?'كل الجداول موجودة':'جداول مفقودة',fix:ok?null:()=>{
+        ['products','materials','employees','expenses','salesInvoices','productionOrders',
+         'journalEntries','accounts','taxSettings','appSettings','appUsers','auditLogs']
+        .forEach(t=>{if(!Array.isArray(DB[t]))DB[t]=[];});saveDB();}};
+    }},
+    {id:'storage',l:'سعة التخزين',run:()=>{
+      let kb=0; try{kb=new Blob([JSON.stringify(DB)]).size/1024;}catch(e){}
+      const pct=Math.round(kb/5120*100);
+      return {ok:pct<80,msg:`${kb.toFixed(0)}KB (${pct}% من 5MB)`,
+        fix:pct>=80?()=>{if(DB.auditLogs?.length>100)DB.auditLogs=DB.auditLogs.slice(-100);saveDB();}:null};
+    }},
+    {id:'balance',l:'توازن قيود اليومية',run:()=>{
+      const bad=(getAll('journalEntries')||[]).filter(e=>Math.abs(Number(e.debit||0)-Number(e.credit||0))>0.01&&(e.debit||e.credit));
+      return {ok:bad.length===0,msg:bad.length?bad.length+' قيد غير متوازن':'كل القيود متوازنة',
+        fix:bad.length?()=>{bad.forEach(e=>update('journalEntries',e.id,{credit:Number(e.debit||0)}));}:null};
+    }},
+    {id:'stock',l:'لا مخزون سالب',run:()=>{
+      const neg=(getAll('materials')||[]).filter(m=>Number(m.currentStock||0)<0);
+      return {ok:neg.length===0,msg:neg.length?neg.length+' مادة بمخزون سالب':'كل أرصدة المخزون موجبة',
+        fix:neg.length?()=>{neg.forEach(m=>update('materials',m.id,{currentStock:'0'}));}:null};
+    }},
+    {id:'admin',l:'وجود مستخدم admin',run:()=>{
+      const admins=(getAll('appUsers')||[]).filter(u=>u.role==='admin'&&u.active!==false);
+      return {ok:admins.length>0,msg:admins.length>0?admins.length+' مدير نشط':'لا يوجد admin!',
+        fix:admins.length===0?()=>{insert('appUsers',{username:'admin',name:'مدير النظام',
+          role:'admin',active:true,password:'h:1p9q7:8'});}:null};
+    }},
+    {id:'expiry',l:'دفعات منتهية الصلاحية',run:()=>{
+      const now=new Date();
+      const exp=(getAll('materialReceipts')||[]).filter(r=>r.expiryDate&&new Date(r.expiryDate)<now&&r.status==='approved');
+      return {ok:exp.length===0,msg:exp.length?exp.length+' دفعة منتهية بحالة approved':' كل الدفعات المعتمدة سارية',
+        fix:exp.length?()=>{exp.forEach(r=>update('materialReceipts',r.id,{status:'expired'}));}:null};
+    }},
+  ];
 
-  const sevColor = { critical:'var(--red)', warning:'var(--amber)', info:'var(--blue)' };
-  const sevIcon  = { critical:'🔴', warning:'🟡', info:'🔵' };
-  const sevLabel = { critical:'حرج', warning:'تحذير', info:'معلومة' };
+  const results=tests.map(t=>{try{return{...t,...t.run()};}catch(e){return{...t,ok:false,msg:'خطأ: '+e.message,fix:null};}});
+  const passed=results.filter(r=>r.ok).length;
+  const fixable=results.filter(r=>!r.ok&&r.fix);
 
-  setPage('🔧 فحص النظام وإصلاحه',
-    'System Diagnostics & Self-Healing — فحص شامل + إصلاح تلقائي',
-    `<div style="display:flex;gap:8px;flex-wrap:wrap">
+  setPage('🔧 فحص النظام وإصلاحه','System Diagnostics & Self-Healing',
+    `<div style="display:flex;gap:8px">
       <button class="btn btn-green" onclick="go('diagnostics')">🔄 إعادة الفحص</button>
-      ${fixable.length ? `<button class="btn btn-green" onclick="fixAllProblems()">🔧 إصلاح كل المشاكل (${fixable.length})</button>` : ''}
-      <button class="btn btn-white" onclick="runAIDiagnostic()">🤖 تحليل بـ Claude AI</button>
-      <button class="btn btn-white" onclick="exportDiagReport()">📊 تصدير تقرير</button>
+      ${fixable.length?`<button class="btn btn-green" onclick="fixAllDiag()">🔧 إصلاح الكل (${fixable.length})</button>`:''}
     </div>`,
-
-    `<!-- ملخص سريع -->
-    <div class="stats-grid g4" style="margin-bottom:16px">
-      <div class="stat-card" style="border-right:3px solid var(--green)">
-        <div class="lbl">✅ اجتاز</div>
-        <div class="val text-green">${passing.length}</div>
-        <div style="font-size:10px;color:var(--muted)">من ${results.length} اختبار</div>
-      </div>
-      <div class="stat-card" style="border-right:3px solid var(--red)">
-        <div class="lbl">🔴 حرج</div>
-        <div class="val text-red">${critical.length}</div>
-        <div style="font-size:10px;color:var(--muted)">يحتاج تدخل فوري</div>
-      </div>
-      <div class="stat-card" style="border-right:3px solid var(--amber)">
-        <div class="lbl">🟡 تحذير</div>
-        <div class="val text-amber">${warnings.length}</div>
-        <div style="font-size:10px;color:var(--muted)">يُنصح بالمراجعة</div>
-      </div>
-      <div class="stat-card" style="border-right:3px solid var(--blue)">
-        <div class="lbl">🔧 قابل للإصلاح</div>
-        <div class="val text-blue">${fixable.length}</div>
-        <div style="font-size:10px;color:var(--muted)">إصلاح تلقائي متاح</div>
-      </div>
+    `<div style="padding:12px;background:${passed===results.length?'rgba(46,160,67,.1)':'rgba(248,81,73,.1)'};border-radius:10px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-weight:700">${passed===results.length?'✅ النظام يعمل بشكل مثالي':'⚠️ يوجد مشاكل تحتاج إصلاح'}</span>
+      <span style="font-size:18px;font-weight:900;color:${passed===results.length?'var(--green)':'var(--red)'}">${Math.round(passed/results.length*100)}%</span>
     </div>
-
-    <!-- شريط الصحة العام -->
-    <div style="margin-bottom:16px;padding:14px;background:var(--card);border:1px solid var(--border);border-radius:10px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <span style="font-weight:700;font-size:13px">صحة النظام</span>
-        <span style="font-weight:900;font-size:18px;color:${critical.length?'var(--red)':warnings.length?'var(--amber)':'var(--green-light)'}">${Math.round(passing.length/results.length*100)}%</span>
-      </div>
-      <div style="height:8px;background:var(--hover);border-radius:4px;overflow:hidden">
-        <div style="height:100%;width:${Math.round(passing.length/results.length*100)}%;background:${critical.length?'var(--red)':warnings.length?'var(--amber)':'var(--green)'};border-radius:4px;transition:.5s"></div>
-      </div>
-      <div style="font-size:11px;color:var(--muted);margin-top:6px">
-        ${critical.length ? '⛔ يوجد مشاكل حرجة تحتاج إصلاح فوري' : warnings.length ? '⚠️ يوجد تحذيرات تحتاج مراجعة' : '✅ النظام في حالة ممتازة'}
-      </div>
+    <div style="height:8px;background:var(--hover);border-radius:4px;margin-bottom:16px;overflow:hidden">
+      <div style="height:100%;width:${Math.round(passed/results.length*100)}%;background:${passed===results.length?'var(--green)':'var(--red)'};border-radius:4px"></div>
     </div>
-
-    <!-- نتائج الاختبارات مجمّعة بالفئة -->
-    ${['قاعدة البيانات','المالية','المخزون','الموارد البشرية','الأمان','المبيعات'].map(cat => {
-      const catResults = results.filter(r => r.category === cat);
-      if(!catResults.length) return '';
-      return `
-      <div class="card" style="margin-bottom:12px">
-        <div style="font-weight:700;font-size:13px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border)">
-          ${cat}
-          <span style="font-size:11px;font-weight:400;color:var(--muted);margin-right:8px">
-            ${catResults.filter(r=>r.ok).length}/${catResults.length} اجتاز
-          </span>
-        </div>
-        ${catResults.map(r => `
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04)">
-          <div style="flex:1">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
-              <span style="font-size:15px">${r.ok ? '✅' : sevIcon[r.severity]||'⚠️'}</span>
-              <span style="font-size:12px;font-weight:600;color:${r.ok?'var(--text)':sevColor[r.severity]||'var(--amber)'}">${r.label}</span>
-              ${!r.ok?`<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:${sevColor[r.severity]}22;color:${sevColor[r.severity]}">${sevLabel[r.severity]}</span>`:''}
-            </div>
-            <div style="font-size:11px;color:var(--muted);padding-right:23px">${r.detail}</div>
-          </div>
-          ${r.fix && !r.ok ? `
-          <button class="btn btn-white btn-sm" style="font-size:10px;flex-shrink:0;margin-right:8px" onclick="applySelfFix('${r.id}')">
-            🔧 ${r.fixLabel||'إصلاح'}
-          </button>` : ''}
-        </div>`).join('')}
-      </div>`;
-    }).join('')}
-
-    <!-- Claude AI Analysis -->
-    <div class="card" style="margin-bottom:12px">
-      <div style="font-weight:700;font-size:13px;margin-bottom:10px">🤖 تحليل Claude AI</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
-        اضغط "تحليل بـ Claude AI" أعلاه لتحليل البيانات واقتراح تحسينات ذكية
+    ${results.map(r=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;margin-bottom:8px;background:var(--card);border:1px solid ${r.ok?'var(--border)':'rgba(248,81,73,.3)'};border-radius:8px">
+      <div>
+        <div style="font-weight:600;font-size:13px">${r.ok?'✅':'❌'} ${r.l}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${r.msg}</div>
       </div>
-      <div id="ai-diag-output" style="min-height:40px"></div>
-    </div>
-
-    <!-- معلومات DB -->
-    <div class="card">
-      <div style="font-weight:700;font-size:13px;margin-bottom:10px">🗄️ إحصائيات قاعدة البيانات</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px;font-size:11px">
+      ${r.fix&&!r.ok?`<button class="btn btn-white btn-sm" onclick="applyDiagFix('${r.id}')">🔧 إصلاح</button>`:''}
+    </div>`).join('')}
+    <div class="card" style="margin-top:16px">
+      <div style="font-weight:700;margin-bottom:10px">🗄️ إحصائيات قاعدة البيانات</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;font-size:11px">
         ${Object.keys(DB).filter(k=>Array.isArray(DB[k])).map(t=>`
-        <div style="padding:6px 10px;background:var(--hover);border-radius:6px;display:flex;justify-content:space-between">
-          <span style="color:var(--muted)">${t}</span>
-          <strong>${DB[t].length}</strong>
+        <div style="padding:5px 10px;background:var(--hover);border-radius:6px;display:flex;justify-content:space-between">
+          <span style="color:var(--muted)">${t}</span><strong>${DB[t].length}</strong>
         </div>`).join('')}
       </div>
     </div>`
   );
 };
 
-// ── تصدير تقرير التشخيص ──────────────────────────────────────────
-function exportDiagReport(){
-  const results = runSelfTests();
-  const lines   = [
-    '🔧 تقرير فحص نظام ميديسنيا ERP',
-    `التاريخ: ${new Date().toLocaleString('ar-EG')}`,
-    `النظام: ${(getAll('companies')||[]).find(c=>c.id===_coActiveId)?.name||'—'}`,
-    '',
-    `النتيجة: ${results.filter(r=>r.ok).length}/${results.length} اختبار اجتاز`,
-    '',
-    '═══ تفاصيل الاختبارات ═══',
-    ...results.map(r => `${r.ok?'✅':'❌'} [${r.severity}] ${r.label}: ${r.detail}`),
-    '',
-    '═══ إحصائيات DB ═══',
-    ...Object.keys(DB).filter(k=>Array.isArray(DB[k])).map(t=>`${t}: ${DB[t].length} سجل`),
+// Store tests for fixAll
+window._diagTests = null;
+function applyDiagFix(id){
+  const tests=[
+    {id:'syntax',run:()=>{['products','materials','employees','expenses','salesInvoices','productionOrders','journalEntries','accounts','taxSettings','appSettings','appUsers','auditLogs'].forEach(t=>{if(!Array.isArray(DB[t]))DB[t]=[];});saveDB();}},
+    {id:'storage',run:()=>{if(DB.auditLogs?.length>100)DB.auditLogs=DB.auditLogs.slice(-100);saveDB();}},
+    {id:'balance',run:()=>{(getAll('journalEntries')||[]).filter(e=>Math.abs(Number(e.debit||0)-Number(e.credit||0))>0.01).forEach(e=>update('journalEntries',e.id,{credit:Number(e.debit||0)}));}},
+    {id:'stock',run:()=>{(getAll('materials')||[]).filter(m=>Number(m.currentStock||0)<0).forEach(m=>update('materials',m.id,{currentStock:'0'}));}},
+    {id:'admin',run:()=>{insert('appUsers',{username:'admin',name:'مدير النظام',role:'admin',active:true,password:'h:1p9q7:8'});}},
+    {id:'expiry',run:()=>{(getAll('materialReceipts')||[]).filter(r=>r.expiryDate&&new Date(r.expiryDate)<new Date()&&r.status==='approved').forEach(r=>update('materialReceipts',r.id,{status:'expired'}));}}
   ];
-  const bom  = '\uFEFF';
-  const blob = new Blob([bom + lines.join('\n')], { type: 'text/plain;charset=utf-8' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a'); a.href=url;
-  a.download = `diag-report-${new Date().toISOString().slice(0,10)}.txt`;
-  a.click(); URL.revokeObjectURL(url);
-  showNotif&&showNotif('✅ تم تصدير تقرير التشخيص', 'success');
+  const t=tests.find(x=>x.id===id); if(!t) return;
+  try{t.run(); showNotif&&showNotif('تم الإصلاح','success'); go('diagnostics');}
+  catch(e){alert('خطأ في الإصلاح: '+e.message);}
+}
+function fixAllDiag(){
+  ['syntax','storage','balance','stock','admin','expiry'].forEach(id=>{ try{applyDiagFix(id);}catch(e){} });
+  showNotif&&showNotif('تم تطبيق كل الإصلاحات','success');
+  setTimeout(()=>go('diagnostics'),500);
 }
 
-// ══════════════════════════════════════════════════════════════════
-// NAV FIX — إصلاح كل الصفحات المكسورة بإضافة aliases
-// ══════════════════════════════════════════════════════════════════
-
-// alias: nav id → actual PAGES key
-// Patch PAGES with aliases (run after all PAGES defined)
-// ══════════════════════════════════════════════════════════════════
-// LOGIN FIX — إصلاح إنشاء المستخدم عند كل شركة جديدة
-// المشكلة: كل شركة جديدة = DB فارغ = يخلق admin جديد عند أول login
-// الحل: تخزين users في مفتاح مشترك عبر كل الشركات (_globalUsers)
-// ══════════════════════════════════════════════════════════════════
-
-// قراءة/كتابة المستخدمين من storage مشترك (بغض النظر عن الشركة)
-function _getGlobalUsers() {
-  try {
-    const raw = localStorage.getItem('_medisniya_global_users');
-    return raw ? JSON.parse(raw) : [];
-  } catch(e) { return []; }
-}
-
-function _saveGlobalUsers(users) {
-  try { localStorage.setItem('_medisniya_global_users', JSON.stringify(users)); }
-  catch(e) { console.error('Cannot save global users:', e); }
-}
-
-function _getGlobalUsersOrFallback() {
-  // Try global first, fall back to company DB
-  const global = _getGlobalUsers();
-  if(global.length > 0) return global;
-  return getAll('appUsers') || [];
-}
-
-function _syncGlobalUsersToCompany() {
-  // Mirror global users into current company DB for _canAccess etc.
-  const global = _getGlobalUsers();
-  if(global.length > 0 && DB) {
-    DB.appUsers = global;
-  }
-}
-
-// Override _doLogin to use global users
-window._doLogin = async function(){
-  const u = (document.getElementById('_au')?.value||'').trim();
-  const p = document.getElementById('_ap')?.value||'';
-  const errEl = document.getElementById('_aerr');
-  const showErr = msg => {
-    if(errEl){ errEl.textContent=msg; errEl.style.display='block'; }
-    const ap = document.getElementById('_ap');
-    if(ap) ap.value='';
-  };
-
-  if(!u||!p){ showErr('يرجى تعبئة اسم المستخدم وكلمة المرور'); return; }
-
-  let users = _getGlobalUsers();
-
-  // First-ever login across ALL companies
-  if(users.length === 0) {
-    if(u === 'admin' && p === 'admin123'){
-      const hashed = await hashPasswordSecure('admin123');
-      const adminUser = {
-        id: Date.now(), username:'admin', password:hashed,
-        name:'مدير النظام', role:'admin', active:true,
-        createdAt: new Date().toISOString()
-      };
-      users = [adminUser];
-      _saveGlobalUsers(users);
-      _syncGlobalUsersToCompany();
-      _loginSuccess({username:'admin', name:'مدير النظام', role:'admin', id:adminUser.id});
-      return;
-    }
-    showErr('أول دخول — اسم المستخدم: admin | كلمة المرور: admin123');
-    return;
-  }
-
-  const user = users.find(x => x.username === u && x.active !== false);
-  if(!user){ showErr('اسم المستخدم غير موجود'); return; }
-
-  const valid = await verifyPassword(p, user.password);
-  if(!valid){ showErr('كلمة المرور غير صحيحة'); return; }
-
-  _syncGlobalUsersToCompany();
-  _loginSuccess({ username:user.username, name:user.name, role:user.role, id:user.id });
-};
-
-// Override _restoreSession to check global users
-const _origRestoreSession = window._restoreSession;
-window._restoreSession = function(){
-  try {
-    const s = sessionStorage.getItem('_erp_s');
-    if(!s) return false;
-    const sess = JSON.parse(s);
-    const users = _getGlobalUsersOrFallback();
-    if(users.length === 0 && sess.username === 'admin'){ _authUser=sess; _syncGlobalUsersToCompany(); return true; }
-    if(users.find(x => x.username===sess.username && x.active!==false)){
-      _authUser=sess; _syncGlobalUsersToCompany(); return true;
-    }
-  } catch(e){}
-  return false;
-};
-
-// Override _saveUser to save to global storage
-const _origSaveUser = window._saveUser;
-window._saveUser = async function(id){
-  const uname      = (document.getElementById('_uu')?.value||'').trim();
-  const uname_full = (document.getElementById('_un')?.value||'').trim();
-  const pass       = document.getElementById('_up')?.value||'';
-  const pass2      = document.getElementById('_up2')?.value||'';
-  const role       = document.getElementById('_ur')?.value||'viewer';
-
-  if(!uname||!uname_full){ alert('يرجى تعبئة اسم الدخول والاسم الكامل'); return; }
-  if(!id && !pass){ alert('يرجى إدخال كلمة المرور'); return; }
-  if(pass && pass !== pass2){ alert('كلمة المرور غير متطابقة'); return; }
-  if(pass && pass.length < 6){ alert('كلمة المرور يجب أن تكون 6 أحرف على الأقل'); return; }
-
-  let users = _getGlobalUsers();
-  const dup = users.find(x => x.username===uname && (!id||x.id!==id));
-  if(dup){ alert('اسم الدخول موجود بالفعل'); return; }
-
-  if(id){
-    const idx = users.findIndex(x => x.id===id);
-    if(idx >= 0){
-      users[idx] = {...users[idx], username:uname, name:uname_full, role, active:true};
-      if(pass) users[idx].password = await hashPasswordSecure(pass);
-    }
-  } else {
-    const newUser = {
-      id: Date.now(), username:uname, name:uname_full, role, active:true,
-      createdAt: new Date().toISOString()
-    };
-    if(pass) newUser.password = await hashPasswordSecure(pass);
-    users.push(newUser);
-  }
-
-  _saveGlobalUsers(users);
-  _syncGlobalUsersToCompany();
-  closeModal();
-  go('users');
-};
-
-// Override _toggleUser (activate/deactivate)
-const _origToggleUser = window._toggleUser;
-window._toggleUser = function(id){
-  let users = _getGlobalUsers();
-  const u = users.find(x => x.id===id);
-  if(!u) return;
-  u.active = !u.active;
-  _saveGlobalUsers(users);
-  _syncGlobalUsersToCompany();
-  go('users');
-};
-
-// Sync on every company switch
-const _origCoEnter = window.coEnter;
-if(_origCoEnter) {
-  window.coEnter = function(c){
-    _origCoEnter(c);
-    _syncGlobalUsersToCompany();
-  };
-}
-
-// Override getAll('appUsers') to always use global
-const _origGetAll = window.getAll;
-if(_origGetAll) {
-  window.getAll = function(table) {
-    if(table === 'appUsers') return _getGlobalUsersOrFallback();
-    return _origGetAll(table);
-  };
-}
-
-// ══════════════════════════════════════════════════════════════════
-// NAV FIX — إصلاح كل الصفحات المكسورة بإضافة aliases
-// ══════════════════════════════════════════════════════════════════
-
-// alias: nav id → actual PAGES key;
-
-// Patch PAGES with aliases (run after all PAGES defined)
-Object.entries(PAGE_ALIASES).forEach(([alias, target]) => {
-  if(!PAGES[alias] && PAGES[target]) PAGES[alias] = PAGES[target];
-});
-
-// Patch go() to resolve aliases before routing
-const _origGo = window.go;
-window.go = function(page) {
-  const resolved = PAGE_ALIASES[page] || page;
-  return _origGo(resolved);
-};
-
-// ══════════════════════════════════════════════════════════════════
-// LOGIN FIX — Global Users (once across all companies)
-// ══════════════════════════════════════════════════════════════════
-;(function installGlobalUsersFix(){
-  if(window._globalUsersFix) return;
-  window._globalUsersFix = true;
-
-  function _getGlobalUsers() {
-    try { return JSON.parse(localStorage.getItem('_medisniya_global_users')||'[]'); }
-    catch(e){ return []; }
-  }
-  function _saveGlobalUsers(users) {
-    try { localStorage.setItem('_medisniya_global_users', JSON.stringify(users)); }
-    catch(e){}
-  }
-  function _syncGlobalUsersToCompany() {
-    const g = _getGlobalUsers();
-    if(g.length > 0 && window.DB) window.DB.appUsers = g;
-  }
-  window._getGlobalUsers    = _getGlobalUsers;
-  window._saveGlobalUsers   = _saveGlobalUsers;
-  window._syncGlobalUsersToCompany = _syncGlobalUsersToCompany;
-
-  // ── Override _doLogin ────────────────────────────────────────
-  window._doLogin = async function(){
-    const u = (document.getElementById('_au')?.value||'').trim();
-    const p = document.getElementById('_ap')?.value||'';
-    const errEl = document.getElementById('_aerr');
-    const showErr = msg => {
-      if(errEl){ errEl.textContent=msg; errEl.style.display='block'; }
-      const ap=document.getElementById('_ap'); if(ap) ap.value='';
-    };
-    if(!u||!p){ showErr('يرجى تعبئة الحقلين'); return; }
-
-    let users = _getGlobalUsers();
-    if(users.length === 0){
-      if(u==='admin' && p==='admin123'){
-        const hashed = await hashPasswordSecure('admin123');
-        const adminUser = {id:Date.now(),username:'admin',password:hashed,
-          name:'مدير النظام',role:'admin',active:true};
-        users = [adminUser];
-        _saveGlobalUsers(users);
-        _syncGlobalUsersToCompany();
-        _loginSuccess({username:'admin',name:'مدير النظام',role:'admin',id:adminUser.id});
-        return;
-      }
-      showErr('أول دخول — admin / admin123'); return;
-    }
-    const user = users.find(x=>x.username===u&&x.active!==false);
-    if(!user){ showErr('اسم المستخدم غير موجود'); return; }
-    const valid = await verifyPassword(p, user.password);
-    if(!valid){ showErr('كلمة المرور غير صحيحة'); return; }
-    _syncGlobalUsersToCompany();
-    _loginSuccess({username:user.username,name:user.name,role:user.role,id:user.id});
-  };
-
-  // ── Override _restoreSession ──────────────────────────────────
-  window._restoreSession = function(){
-    try{
-      const s = sessionStorage.getItem('_erp_s');
-      if(!s) return false;
-      const sess = JSON.parse(s);
-      const users = _getGlobalUsers();
-      if(users.length===0&&sess.username==='admin'){window._authUser=sess;_syncGlobalUsersToCompany();return true;}
-      if(users.find(x=>x.username===sess.username&&x.active!==false)){
-        window._authUser=sess; _syncGlobalUsersToCompany(); return true;
-      }
-    }catch(e){}
-    return false;
-  };
-
-  // ── Override _saveUser ───────────────────────────────────────
-  window._saveUser = async function(id){
-    const uname     = (document.getElementById('_uu')?.value||'').trim();
-    const fullname  = (document.getElementById('_un')?.value||'').trim();
-    const pass      = document.getElementById('_up')?.value||'';
-    const pass2     = document.getElementById('_up2')?.value||'';
-    const role      = document.getElementById('_ur')?.value||'viewer';
-    if(!uname||!fullname){ alert('يرجى تعبئة اسم الدخول والاسم الكامل'); return; }
-    if(!id&&!pass){ alert('يرجى إدخال كلمة المرور'); return; }
-    if(pass&&pass!==pass2){ alert('كلمة المرور غير متطابقة'); return; }
-    if(pass&&pass.length<6){ alert('كلمة المرور يجب أن تكون 6 أحرف على الأقل'); return; }
-    let users = _getGlobalUsers();
-    const dup = users.find(x=>x.username===uname&&(!id||x.id!==id));
-    if(dup){ alert('اسم الدخول موجود بالفعل'); return; }
-    if(id){
-      const idx = users.findIndex(x=>x.id===id);
-      if(idx>=0){
-        users[idx]={...users[idx],username:uname,name:fullname,role,active:true};
-        if(pass) users[idx].password = await hashPasswordSecure(pass);
-      }
-    } else {
-      const nu={id:Date.now(),username:uname,name:fullname,role,active:true};
-      if(pass) nu.password = await hashPasswordSecure(pass);
-      users.push(nu);
-    }
-    _saveGlobalUsers(users); _syncGlobalUsersToCompany();
-    closeModal(); go('users');
-  };
-
-  // ── Override _toggleUser ─────────────────────────────────────
-  window._toggleUser = function(id){
-    const users = _getGlobalUsers();
-    const u = users.find(x=>x.id===id);
-    if(!u) return;
-    u.active = !u.active;
-    _saveGlobalUsers(users); _syncGlobalUsersToCompany(); go('users');
-  };
-
-  // ── Sync on every company switch ─────────────────────────────
-  const __origCoEnter = window.coEnter;
-  if(__origCoEnter){
-    window.coEnter = function(c){
-      __origCoEnter(c);
-      _syncGlobalUsersToCompany();
-    };
-  }
-
-  // ── getAll('appUsers') always returns global ─────────────────
-  const __origGetAll = window.getAll;
-  if(__origGetAll){
-    window.getAll = function(table){
-      if(table==='appUsers'){
-        const g=_getGlobalUsers();
-        return g.length>0 ? g : (__origGetAll(table)||[]);
-      }
-      return __origGetAll(table);
-    };
-  }
-
+// Add diagnostics to nav
+;(function addDiagNav(){
+  if(typeof navItems==='undefined') return;
+  if(!navItems.find(n=>n.id==='diagnostics'))
+    navItems.push({id:'diagnostics',icon:'🔧',label:'فحص وإصلاح النظام',sec:'الإعدادات'});
 })();
-
-;(function installNavFix(){
-  if(window._navFixInstalled) return;
-  window._navFixInstalled = true;
-
-  // alias: nav id → actual PAGES key
-  const PAGE_ALIASES = {
-    cmos:             'cmoscorecard',
-    inventory:        'expiry',
-    registration:     'drugregistration',
-    deliveries:       'salesorders',
-    delivery:         'salesorders',
-    manufacturingcost:'costanalysis',
-    productionstages: 'production',
-    backup:           'settings',
-    top_products:     'customreport',
-    low_stock:        'customreport',
-    overdue_inv:      'customreport',
-    exp_drugs:        'customreport',
-    monthly_pl:       'customreport',
-    gmp_expiry:       'customreport',
-    distributor_bal:  'customreport',
-    prod_efficiency:  'customreport',
-  };
-
-  // Patch PAGES with aliases
-  Object.entries(PAGE_ALIASES).forEach(([alias, target]) => {
-    if(!PAGES[alias] && PAGES[target]) PAGES[alias] = PAGES[target];
-  });
-
-  // Patch go() to resolve aliases
-  const __origGo = window.go;
-  window.go = function(page) {
-    const resolved = PAGE_ALIASES[page] || page;
-    return __origGo(resolved);
-  };
-
-})();
-
-// ══════════════════════════════════════════════════════════════════
-// LOGIN FIX — Global Users (once across all companies)
-// ══════════════════════════════════════════════════════════════════
-;(function installGlobalUsersFix(){
-  if(window._globalUsersFix) return;
-  window._globalUsersFix = true;
-
-  function _getGlobalUsers() {
-    try { return JSON.parse(localStorage.getItem('_medisniya_global_users')||'[]'); }
-    catch(e){ return []; }
-  }
-  function _saveGlobalUsers(users) {
-    try { localStorage.setItem('_medisniya_global_users', JSON.stringify(users)); }
-    catch(e){}
-  }
-  function _syncGlobalUsersToCompany() {
-    const g = _getGlobalUsers();
-    if(g.length > 0 && window.DB) window.DB.appUsers = g;
-  }
-  window._getGlobalUsers    = _getGlobalUsers;
-  window._saveGlobalUsers   = _saveGlobalUsers;
-  window._syncGlobalUsersToCompany = _syncGlobalUsersToCompany;
-
-  // ── Override _doLogin ────────────────────────────────────────
-  window._doLogin = async function(){
-    const u = (document.getElementById('_au')?.value||'').trim();
-    const p = document.getElementById('_ap')?.value||'';
-    const errEl = document.getElementById('_aerr');
-    const showErr = msg => {
-      if(errEl){ errEl.textContent=msg; errEl.style.display='block'; }
-      const ap=document.getElementById('_ap'); if(ap) ap.value='';
-    };
-    if(!u||!p){ showErr('يرجى تعبئة الحقلين'); return; }
-
-    let users = _getGlobalUsers();
-    if(users.length === 0){
-      if(u==='admin' && p==='admin123'){
-        const hashed = await hashPasswordSecure('admin123');
-        const adminUser = {id:Date.now(),username:'admin',password:hashed,
-          name:'مدير النظام',role:'admin',active:true};
-        users = [adminUser];
-        _saveGlobalUsers(users);
-        _syncGlobalUsersToCompany();
-        _loginSuccess({username:'admin',name:'مدير النظام',role:'admin',id:adminUser.id});
-        return;
-      }
-      showErr('أول دخول — admin / admin123'); return;
-    }
-    const user = users.find(x=>x.username===u&&x.active!==false);
-    if(!user){ showErr('اسم المستخدم غير موجود'); return; }
-    const valid = await verifyPassword(p, user.password);
-    if(!valid){ showErr('كلمة المرور غير صحيحة'); return; }
-    _syncGlobalUsersToCompany();
-    _loginSuccess({username:user.username,name:user.name,role:user.role,id:user.id});
-  };
-
-  // ── Override _restoreSession ──────────────────────────────────
-  window._restoreSession = function(){
-    try{
-      const s = sessionStorage.getItem('_erp_s');
-      if(!s) return false;
-      const sess = JSON.parse(s);
-      const users = _getGlobalUsers();
-      if(users.length===0&&sess.username==='admin'){window._authUser=sess;_syncGlobalUsersToCompany();return true;}
-      if(users.find(x=>x.username===sess.username&&x.active!==false)){
-        window._authUser=sess; _syncGlobalUsersToCompany(); return true;
-      }
-    }catch(e){}
-    return false;
-  };
-
-  // ── Override _saveUser ───────────────────────────────────────
-  window._saveUser = async function(id){
-    const uname     = (document.getElementById('_uu')?.value||'').trim();
-    const fullname  = (document.getElementById('_un')?.value||'').trim();
-    const pass      = document.getElementById('_up')?.value||'';
-    const pass2     = document.getElementById('_up2')?.value||'';
-    const role      = document.getElementById('_ur')?.value||'viewer';
-    if(!uname||!fullname){ alert('يرجى تعبئة اسم الدخول والاسم الكامل'); return; }
-    if(!id&&!pass){ alert('يرجى إدخال كلمة المرور'); return; }
-    if(pass&&pass!==pass2){ alert('كلمة المرور غير متطابقة'); return; }
-    if(pass&&pass.length<6){ alert('كلمة المرور يجب أن تكون 6 أحرف على الأقل'); return; }
-    let users = _getGlobalUsers();
-    const dup = users.find(x=>x.username===uname&&(!id||x.id!==id));
-    if(dup){ alert('اسم الدخول موجود بالفعل'); return; }
-    if(id){
-      const idx = users.findIndex(x=>x.id===id);
-      if(idx>=0){
-        users[idx]={...users[idx],username:uname,name:fullname,role,active:true};
-        if(pass) users[idx].password = await hashPasswordSecure(pass);
-      }
-    } else {
-      const nu={id:Date.now(),username:uname,name:fullname,role,active:true};
-      if(pass) nu.password = await hashPasswordSecure(pass);
-      users.push(nu);
-    }
-    _saveGlobalUsers(users); _syncGlobalUsersToCompany();
-    closeModal(); go('users');
-  };
-
-  // ── Override _toggleUser ─────────────────────────────────────
-  window._toggleUser = function(id){
-    const users = _getGlobalUsers();
-    const u = users.find(x=>x.id===id);
-    if(!u) return;
-    u.active = !u.active;
-    _saveGlobalUsers(users); _syncGlobalUsersToCompany(); go('users');
-  };
-
-  // ── Sync on every company switch ─────────────────────────────
-  const __origCoEnter = window.coEnter;
-  if(__origCoEnter){
-    window.coEnter = function(c){
-      __origCoEnter(c);
-      _syncGlobalUsersToCompany();
-    };
-  }
-
-  // ── getAll('appUsers') always returns global ─────────────────
-  const __origGetAll = window.getAll;
-  if(__origGetAll){
-    window.getAll = function(table){
-      if(table==='appUsers'){
-        const g=_getGlobalUsers();
-        return g.length>0 ? g : (__origGetAll(table)||[]);
-      }
-      return __origGetAll(table);
-    };
-  }
-
-})();
-
-// ══════════════════════════════════════════════════════════════════
-// 🤖 AI ASSISTANT — مساعد ذكي يعمل مباشرة بدون backend
-// يستخدم Anthropic API من المتصفح مع سياق كامل من بيانات ERP
-// ══════════════════════════════════════════════════════════════════
-
-let _aiHistory = [];     // conversation history
-let _aiTyping  = false;  // prevent double-send
-
-// ── بناء سياق النظام للـ AI ─────────────────────────────────────
-function _buildAIContext(){
-  const now    = new Date().toLocaleDateString('ar-EG', {weekday:'long',year:'numeric',month:'long',day:'numeric'});
-  const coName = document.getElementById('co-active-label')?.textContent ||
-                 document.getElementById('logo-name')?.textContent || 'الشركة';
-  const page   = window.currentPage || 'dashboard';
-
-  // DB snapshot
-  const snap = {};
-  ['products','materials','employees','distributors','salesInvoices',
-   'productionOrders','expenses','deliveryOrders','inventory',
-   'journalEntries','purchaseOrders','qualityChecks','deviations',
-   'registrations','assets'].forEach(t => {
-    if(Array.isArray(DB[t])) snap[t] = DB[t].length;
-  });
-
-  // Quick financial summary
-  const delivered  = (DB.deliveryOrders||[]).filter(o=>o.status==='delivered');
-  const revenue    = delivered.reduce((s,o)=>s+Number(o.totalAmount||0),0);
-  const totalExp   = (DB.expenses||[]).reduce((s,e)=>s+Number(e.amount||0),0);
-  const lowStock   = (DB.materials||[]).filter(m=>m.reorderLevel&&Number(m.currentStock||0)<=Number(m.reorderLevel)).length;
-  const expiredInv = (DB.inventory||[]).filter(i=>i.expiryDate&&new Date(i.expiryDate)<new Date()).length;
-  const activeEmps = (DB.employees||[]).filter(e=>e.status==='active').length;
-  const overdue    = (DB.receivables||[]).filter(r=>r.status!=='محصّل'&&r.dueDate&&new Date(r.dueDate)<new Date()).length;
-
-  return `أنت مساعد ذكي متخصص في نظام ميديسنيا ERP الدوائي المصري.
-اسم الشركة: ${coName}
-التاريخ: ${now}
-الصفحة الحالية: ${page}
-
-ملخص قاعدة البيانات:
-${Object.entries(snap).map(([t,c])=>`- ${t}: ${c} سجل`).join('\n')}
-
-مؤشرات سريعة:
-- إجمالي المبيعات المسلّمة: ${fmt?.(revenue)||revenue.toFixed(0)} ج.م
-- إجمالي المصروفات: ${fmt?.(totalExp)||totalExp.toFixed(0)} ج.م
-- الموظفون النشطون: ${activeEmps}
-- مواد تحت حد الطلب: ${lowStock}
-- منتجات منتهية الصلاحية: ${expiredInv}
-- فواتير متأخرة السداد: ${overdue}
-
-أجب دائماً بالعربية، باختصار وتركيز، مع أرقام دقيقة من البيانات المتاحة.
-إذا لم تجد بيانات كافية للإجابة، قل ذلك بوضوح.
-لا تستخدم عناوين أو قوائم إلا عند الضرورة.`;
-}
-
-// ── إرسال رسالة للـ AI ───────────────────────────────────────────
-async function sendAIMessage(){
-  if(_aiTyping) return;
-
-  const input = document.getElementById('ai-input');
-  const msg   = input?.value?.trim();
-  if(!msg) return;
-
-  input.value = '';
-  _aiTyping   = true;
-
-  // أضف رسالة المستخدم للتاريخ والواجهة
-  _aiHistory.push({ role:'user', content: msg });
-  appendAIMsg(msg, 'user');
-
-  // Loading indicator
-  const loadId = 'ai-load-' + Date.now();
-  appendAIMsg('...', 'assistant loading', loadId);
-
-  try {
-    const systemPrompt = _buildAIContext();
-
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model:      'claude-sonnet-4-20250514',
-        max_tokens: 1024,
-        system:     systemPrompt,
-        messages:   _aiHistory.slice(-10), // آخر 10 رسائل فقط
-      })
-    });
-
-    // Remove loading
-    document.getElementById(loadId)?.remove();
-
-    if(!resp.ok){
-      const errBody = await resp.text().catch(()=>'');
-      if(resp.status === 401 || resp.status === 403){
-        appendAIMsg('🔑 المساعد يعمل فقط عند فتح البرنامج من خلال Claude.ai — الـ API key يتم توفيره تلقائياً من المنصة.', 'assistant error');
-      } else {
-        appendAIMsg(`⚠️ خطأ من الخادم (${resp.status}). حاول مرة أخرى.`, 'assistant error');
-      }
-      _aiHistory.pop(); // remove failed user message
-      _aiTyping = false;
-      return;
-    }
-
-    const data  = await resp.json();
-    const reply = (data.content||[]).map(b=>b.text||'').join('').trim();
-
-    // أضف رد AI للتاريخ والواجهة
-    _aiHistory.push({ role:'assistant', content: reply });
-    appendAIMsg(reply, 'assistant');
-
-    // اقتراحات متابعة ذكية بناءً على الصفحة
-    _showFollowUpSuggestions();
-
-  } catch(err){
-    document.getElementById(loadId)?.remove();
-    if(err.message?.includes('fetch') || err.message?.includes('Failed')){
-      appendAIMsg('🌐 لا يمكن الوصول لـ API. تأكد من الاتصال بالإنترنت وأن البرنامج مفتوح من Claude.ai.', 'assistant error');
-    } else {
-      appendAIMsg('❌ خطأ: ' + err.message, 'assistant error');
-    }
-    _aiHistory.pop();
-  }
-
-  _aiTyping = false;
-}
-
-// ── عرض اقتراحات متابعة ─────────────────────────────────────────
-function _showFollowUpSuggestions(){
-  const page = window.currentPage || 'dashboard';
-  const suggestions = {
-    dashboard:       ['كيف حال المبيعات هذا الشهر؟', 'ما أهم التنبيهات الآن؟', 'لخّص وضع الشركة'],
-    products:        ['ما المنتجات الأكثر مبيعاً؟', 'ما المنتجات منخفضة المخزون؟'],
-    materials:       ['ما المواد تحت حد الطلب؟', 'كم تكلفة المخزون الإجمالية؟'],
-    production:      ['كم أمر إنتاج قيد التنفيذ؟', 'ما إجمالي تكاليف الإنتاج؟'],
-    reports:         ['ما صافي الربح؟', 'كيف هامش الربح الإجمالي؟', 'ما نسبة تحقيق الأهداف؟'],
-    distributors:    ['من أكبر موزع بالمبيعات؟', 'كم إجمالي الذمم المستحقة؟'],
-    employees:       ['كم إجمالي الرواتب الشهرية؟', 'كم موظف في كل قسم؟'],
-    journal:         ['هل الميزان متوازن؟', 'ما آخر القيود المدخلة؟'],
-    quality:         ['كم انحراف مفتوح؟', 'ما نسبة نجاح فحوصات الجودة؟'],
-  };
-
-  const suggs = suggestions[page] || suggestions.dashboard;
-  const chat  = document.getElementById('ai-chat');
-  if(!chat) return;
-
-  // Remove old suggestions
-  chat.querySelectorAll('.ai-suggestions').forEach(el=>el.remove());
-
-  const div = document.createElement('div');
-  div.className = 'ai-suggestions';
-  div.innerHTML = suggs.map(s=>
-    `<button onclick="document.getElementById('ai-input').value='${s.replace(/'/g,"\\'")}';sendAIMessage()"
-      style="background:rgba(46,160,67,.1);border:1px solid rgba(46,160,67,.3);border-radius:20px;
-             padding:5px 12px;font-size:11px;cursor:pointer;color:var(--text);font-family:Cairo,sans-serif;
-             transition:.2s" onmouseover="this.style.background='rgba(46,160,67,.2)'"
-             onmouseout="this.style.background='rgba(46,160,67,.1)'">${s}</button>`
-  ).join('');
-  chat.appendChild(div);
-  chat.scrollTop = chat.scrollHeight;
-}
-
-// ── إلحاق رسالة للواجهة ──────────────────────────────────────────
-function appendAIMsg(text, role, id){
-  const chat = document.getElementById('ai-chat');
-  if(!chat) return;
-
-  const div = document.createElement('div');
-  div.className = 'ai-msg ai-' + role.replace(' loading','').replace(' error','');
-  if(id) div.id = id;
-  if(role.includes('loading')){
-    div.innerHTML = '<span class="ai-dots"><span>.</span><span>.</span><span>.</span></span>';
-  } else if(role.includes('error')){
-    div.style.cssText += ';background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:var(--red)';
-    div.textContent = text;
-  } else {
-    // Render newlines as <br>
-    div.innerHTML = escapeHtml(text).replace(/\n/g,'<br>');
-  }
-  chat.appendChild(div);
-  chat.scrollTop = chat.scrollHeight;
-}
-
-// ── مسح المحادثة ─────────────────────────────────────────────────
-function clearAIChat(){
-  _aiHistory = [];
-  const chat = document.getElementById('ai-chat');
-  if(!chat) return;
-  chat.innerHTML = `<div class="ai-msg ai-assistant">
-    مرحباً من جديد! كيف يمكنني مساعدتك؟
-  </div>`;
-  _showFollowUpSuggestions();
-}
-
-// ── اقتراحات فورية عند فتح المساعد ──────────────────────────────
-const _origToggleAI = window.toggleAI;
-window.toggleAI = function(){
-  if(typeof _origToggleAI === 'function') _origToggleAI();
-  // Show suggestions when panel opens
-  setTimeout(()=>{
-    const panel = document.getElementById('ai-panel');
-    if(panel && panel.style.display !== 'none'){
-      _showFollowUpSuggestions();
-    }
-  }, 100);
-};
-
-// ── inject CSS for dots animation + suggestions ───────────────────
-;(function injectAICss(){
-  if(document.getElementById('ai-extra-css')) return;
-  const style = document.createElement('style');
-  style.id = 'ai-extra-css';
-  style.textContent = `
-    .ai-dots span {
-      display:inline-block; animation:aiDot 1.2s infinite;
-      font-size:18px; color:var(--green-light);
-    }
-    .ai-dots span:nth-child(2){ animation-delay:.2s; }
-    .ai-dots span:nth-child(3){ animation-delay:.4s; }
-    @keyframes aiDot{ 0%,80%,100%{opacity:.2} 40%{opacity:1} }
-    .ai-suggestions{
-      display:flex; flex-wrap:wrap; gap:6px;
-      padding:4px 0; max-width:100%;
-    }
-    .ai-msg.ai-user{
-      align-self:flex-end;
-      background:linear-gradient(135deg,rgba(46,160,67,.25),rgba(26,127,55,.15));
-      border:1px solid rgba(46,160,67,.3);
-    }
-    #ai-panel .ai-panel-head {
-      display:flex; align-items:center;
-      justify-content:space-between;
-    }
-    #ai-panel .ai-panel-head-actions {
-      display:flex; gap:6px; align-items:center;
-    }
-    #ai-panel .ai-clear-btn {
-      background:rgba(255,255,255,.15); border:none;
-      color:#fff; border-radius:6px; padding:3px 8px;
-      font-size:11px; cursor:pointer; font-family:Cairo,sans-serif;
-    }
-    #ai-panel .ai-clear-btn:hover{ background:rgba(255,255,255,.25); }
-  `;
-  document.head.appendChild(style);
-})();
-
-// ── Add clear button to AI panel header ──────────────────────────
-;(function patchAIPanelHeader(){
-  if(window._aiHeaderPatched) return;
-  window._aiHeaderPatched = true;
-  requestAnimationFrame(()=>{
-    const head = document.querySelector('#ai-panel .ai-panel-head');
-    if(!head) return;
-    const closeBtn = head.querySelector('.ai-panel-close');
-    if(!closeBtn) return;
-    // Wrap in actions div
-    const actDiv = document.createElement('div');
-    actDiv.className = 'ai-panel-head-actions';
-    const clearBtn = document.createElement('button');
-    clearBtn.className = 'ai-clear-btn';
-    clearBtn.textContent = '🗑 مسح';
-    clearBtn.onclick = clearAIChat;
-    actDiv.appendChild(clearBtn);
-    actDiv.appendChild(closeBtn);
-    head.appendChild(actDiv);
-  });
-})();
-
-// ══════════════════════════════════════════════════════════════════
-// MISSING FUNCTIONS PATCH — إصلاح كل الأزرار المكسورة
-// ══════════════════════════════════════════════════════════════════
-
-// ── 1. switchTab — مفقودة تماماً ────────────────────────────────
-function switchTab(groupId, tabId){
-  // Support both: data-group tabs and id-based tabs
-  const container = document.getElementById(groupId) || document;
-  container.querySelectorAll('.tab').forEach(b => {
-    b.classList.toggle('active', b.onclick?.toString().includes(tabId) ||
-      b.getAttribute('onclick')?.includes(tabId));
-  });
-  // Hide/show panes
-  const allPanes = document.querySelectorAll(`[id^="${groupId.replace('-tabs','-')}"]`);
-  allPanes.forEach(p => {
-    p.style.display = p.id === tabId ? '' : 'none';
-  });
-  // Also try data-group approach
-  document.querySelectorAll(`.tab-pane[data-group="${groupId}"]`).forEach(p => {
-    p.style.display = p.id === tabId ? '' : 'none';
-  });
-  document.querySelectorAll(`.tab[data-group="${groupId}"]`).forEach(b => {
-    b.classList.toggle('active', b.dataset.tab === tabId);
-  });
-}
-
-// ── 2. addCmo / editCmo / saveCmo ────────────────────────────────
-function addCmo(){ showCmoForm(); }
-function editCmo(id){ showCmoForm(getById('cmos',id)||{}); }
-
-function showCmoForm(c={}){
-  showModal(modal(c.id?'✏️ تعديل مصنع CMO':'🏭 مصنع CMO جديد', `
-    <div style="max-height:80vh;overflow-y:auto;padding-right:4px">
-    ${fg('اسم المصنع *', inp('cmo-name','text',c.name||'','مثال: صيدليات النيل'))}
-    <div class="form-row">
-      ${fg('رقم ترخيص التصنيع *', inp('cmo-lic','text',c.licenseNumber||'','مثال: CMO-2024-001'))}
-      ${fg('رقم ترخيص EDA', inp('cmo-eda','text',c.edaLicenseNumber||'',''))}
-    </div>
-    <div class="form-row">
-      ${fg('نوع المصنع', sel('cmo-type',[
-        {v:'local',l:'محلي'},{v:'imported',l:'مستورد'},{v:'joint',l:'مشترك'}
-      ],c.factoryType||'local'))}
-      ${fg('دولة المنشأ', inp('cmo-country','text',c.country||'مصر',''))}
-    </div>
-    ${fg('العنوان', inp('cmo-addr','text',c.address||'',''))}
-    <div class="form-row">
-      ${fg('رقم الهاتف', inp('cmo-phone','tel',c.phone||'',''))}
-      ${fg('البريد الإلكتروني', inp('cmo-email','email',c.email||'',''))}
-    </div>
-    <div class="form-row">
-      ${fg('تاريخ انتهاء الترخيص', inp('cmo-exp','date',c.licenseExpiry||'',''))}
-      ${fg('تكلفة التصنيع (ج.م/دفعة)', inp('cmo-cost','number',c.baseCostPerBatch||'',''))}
-    </div>
-    ${fg('ملاحظات', inp('cmo-notes','text',c.notes||'',''))}
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="saveCmo(${c.id||''})">💾 حفظ</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>
-    </div>`));
-}
-
-function saveCmo(id){
-  const name = document.getElementById('cmo-name')?.value?.trim();
-  if(!name) return alert('يرجى كتابة اسم المصنع');
-  const d = {
-    name,
-    licenseNumber:    document.getElementById('cmo-lic')?.value||null,
-    edaLicenseNumber: document.getElementById('cmo-eda')?.value||null,
-    factoryType:      document.getElementById('cmo-type')?.value||'local',
-    country:          document.getElementById('cmo-country')?.value||'مصر',
-    address:          document.getElementById('cmo-addr')?.value||null,
-    phone:            document.getElementById('cmo-phone')?.value||null,
-    email:            document.getElementById('cmo-email')?.value||null,
-    licenseExpiry:    document.getElementById('cmo-exp')?.value||null,
-    baseCostPerBatch: document.getElementById('cmo-cost')?.value||null,
-    notes:            document.getElementById('cmo-notes')?.value||null,
-    status: 'active',
-  };
-  id ? update('cmos',id,d) : insert('cmos',d);
-  closeModal(); go('cmoscorecard');
-}
-
-// ── 3. addMaterial / editMaterial ────────────────────────────────
-// saveMaterial already exists — just need add/edit wrappers
-function addMaterial(type){
-  // showMaterialForm is likely showMaterialDetail or similar
-  // Let's open a simple form
-  showAddMaterialForm(type||'raw_material');
-}
-function editMaterial(id){
-  const m = getById('materials',id);
-  if(!m) return;
-  showAddMaterialForm(m.materialType, m);
-}
-
-function showAddMaterialForm(type, m={}){
-  const isEdit = !!m.id;
-  showModal(modal(isEdit?'✏️ تعديل مادة':'🧪 مادة جديدة', `
-    <div style="max-height:80vh;overflow-y:auto;padding-right:4px">
-    ${fg('اسم المادة *', inp('m-name','text',m.name||'',''))}
-    <div class="form-row">
-      ${fg('النوع', sel('m-type',[
-        {v:'raw_material',l:'مادة خام API'},
-        {v:'excipient',l:'سواغ (Excipient)'},
-        {v:'packaging',l:'مادة تغليف'},
-        {v:'other',l:'أخرى'}
-      ],type||m.materialType||'raw_material'))}
-      ${fg('وحدة القياس *', sel('m-unit',[
-        {v:'كجم',l:'كجم'},{v:'جم',l:'جم'},{v:'لتر',l:'لتر'},
-        {v:'مل',l:'مل'},{v:'قطعة',l:'قطعة'},{v:'علبة',l:'علبة'}
-      ],m.unit||'كجم'))}
-    </div>
-    <div class="form-row">
-      ${fg('رقم CAS', inp('m-cas','text',m.casNumber||'','مثال: 26787-78-0'))}
-      ${fg('المورد المعتمد', inp('m-sup','text',m.approvedSupplier||m.supplier||'',''))}
-    </div>
-    <div class="form-row">
-      ${fg('الرصيد الحالي', inp('m-stock','number',m.currentStock||0,''))}
-      ${fg('حد إعادة الطلب', inp('m-reorder','number',m.reorderLevel||10,''))}
-    </div>
-    <div class="form-row">
-      ${fg('تكلفة الوحدة (ج.م)', inp('m-cost','number',m.unitCost||'',''))}
-      ${fg('المرجع الدوائي', inp('m-ref','text',m.pharmacopeiaRef||'','مثال: BP 2023'))}
-    </div>
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="saveMaterial(${m.id||''})">💾 حفظ</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>
-    </div>`));
-}
-
-// ── 4. addDelivery ───────────────────────────────────────────────
-function addDelivery(){
-  const dists = getAll('distributors');
-  const prods = getAll('products');
-  const dOpts = [{v:0,l:'اختر موزع...'},...dists.map(d=>({v:d.id,l:d.name}))];
-  showModal(modal('🚚 أمر توريد جديد', `
-    <div style="max-height:80vh;overflow-y:auto;padding-right:4px">
-    ${fg('الموزع *', sel('del-dist',dOpts,0))}
-    <div class="form-row">
-      ${fg('رقم الأمر', inp('del-num','text','','مثال: DO-2024-001'))}
-      ${fg('تاريخ الأمر *', inp('del-date','date',today(),''))}
-    </div>
-    <div class="form-row">
-      ${fg('المبلغ الإجمالي (ج.م) *', inp('del-amt','number','',''))}
-      ${fg('ضريبة VAT (ج.م)', inp('del-vat','number',0,''))}
-    </div>
-    ${fg('الحالة', sel('del-status',[
-      {v:'pending',l:'معلق'},{v:'delivered',l:'مسلّم'},{v:'cancelled',l:'ملغي'}
-    ],'pending'))}
-    ${fg('ملاحظات', inp('del-notes','text','',''))}
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="saveDelivery()">💾 حفظ</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>
-    </div>`));
-}
-
-function saveDelivery(){
-  const distId = numVal('del-dist');
-  if(!distId) return alert('يرجى اختيار الموزع');
-  const amt = val('del-amt');
-  if(!amt) return alert('يرجى إدخال المبلغ');
-  const d = {
-    distributorId: distId,
-    orderNumber:   val('del-num')||null,
-    orderDate:     val('del-date')||today(),
-    totalAmount:   amt,
-    vatAmount:     val('del-vat')||0,
-    status:        val('del-status')||'pending',
-    notes:         val('del-notes')||null,
-  };
-  insert('deliveryOrders',d);
-  // Auto journal
-  if(d.status==='delivered'){
-    autoJournalEntry('توريد للموزع',
-      [{accountCode:'1201',debit:Number(amt),credit:0},
-       {accountCode:'4101',debit:0,credit:Number(amt)}], null,'delivery');
-  }
-  closeModal(); go('salesorders');
-}
-
-// ── 5. addExpense ────────────────────────────────────────────────
-function addExpense(){
-  showModal(modal('🧾 مصروف جديد', `
-    <div style="max-height:80vh;overflow-y:auto;padding-right:4px">
-    ${fg('الوصف *', inp('exp-desc','text','',''))}
-    <div class="form-row">
-      ${fg('المبلغ (ج.م) *', inp('exp-amt','number','',''))}
-      ${fg('التاريخ *', inp('exp-date','date',today(),''))}
-    </div>
-    <div class="form-row">
-      ${fg('الفئة', sel('exp-cat',[
-        {v:'رواتب وأجور',l:'رواتب وأجور'},
-        {v:'إيجار',l:'إيجار'},
-        {v:'كهرباء',l:'كهرباء'},
-        {v:'مياه',l:'مياه'},
-        {v:'هاتف وإنترنت',l:'هاتف وإنترنت'},
-        {v:'صيانة',l:'صيانة'},
-        {v:'تعبئة وتغليف',l:'تعبئة وتغليف'},
-        {v:'جودة ورقابة',l:'جودة ورقابة'},
-        {v:'نقل المنتج',l:'نقل المنتج'},
-        {v:'دعاية وإعلان',l:'دعاية وإعلان'},
-        {v:'تسجيل دوائي',l:'تسجيل دوائي'},
-        {v:'مصاريف إدارية',l:'مصاريف إدارية'},
-        {v:'other',l:'أخرى'},
-      ],'other'))}
-      ${fg('نوع', sel('exp-type',[
-        {v:'direct',l:'مباشر'},{v:'indirect',l:'غير مباشر'}
-      ],'indirect'))}
-    </div>
-    ${fg('القسم', sel('exp-dept',[
-      {v:'production',l:'إنتاج'},{v:'qc',l:'جودة'},
-      {v:'admin',l:'إداري'},{v:'sales',l:'مبيعات'},{v:'other',l:'أخرى'}
-    ],'admin'))}
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="saveExpense()">💾 حفظ</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>
-    </div>`));
-}
-
-function saveExpense(){
-  const desc = document.getElementById('exp-desc')?.value?.trim();
-  if(!desc) return alert('يرجى كتابة وصف المصروف');
-  const amt = val('exp-amt');
-  if(!amt) return alert('يرجى إدخال المبلغ');
-  const d = {
-    description:  desc,
-    amount:       amt,
-    expenseDate:  val('exp-date')||today(),
-    category:     val('exp-cat')||'other',
-    expenseType:  val('exp-type')||'indirect',
-    department:   val('exp-dept')||null,
-  };
-  insert('expenses',d);
-  autoJournalEntry(desc,
-    [{accountCode:'5509',debit:Number(amt),credit:0},
-     {accountCode:'1102',debit:0,credit:Number(amt)}], null,'expense');
-  closeModal(); go('expenses');
-}
-
-// ── 6. addGoodsReceipt / addQualityCheck ────────────────────────
-// addGoodsReceipt = open material receipt form
-function addGoodsReceipt(){
-  // showMaterialReceiptForm should exist — if not, redirect to materials
-  if(typeof showMaterialReceiptForm === 'function') {
-    showMaterialReceiptForm();
-  } else {
-    go('materials');
-    setTimeout(()=> showNotif&&showNotif('افتح تفاصيل المادة لتسجيل استلام','info'), 500);
-  }
-}
-
-function addQualityCheck(){
-  const mats = getAll('materialReceipts').filter(r=>r.status==='quarantine');
-  const orders = getAll('productionOrders').filter(o=>o.status!=='cancelled');
-  showModal(modal('🔬 فحص جودة جديد', `
-    <div style="max-height:80vh;overflow-y:auto;padding-right:4px">
-    ${fg('نوع الفحص', sel('qc-type',[
-      {v:'material',l:'مادة خام / استلام'},{v:'inprocess',l:'أثناء الإنتاج'},{v:'finished',l:'منتج نهائي'}
-    ],'material'))}
-    <div class="form-row">
-      ${fg('الكيميائي / المحلل *', inp('qc-analyst','text','','اسم الكيميائي'))}
-      ${fg('تاريخ الفحص *', inp('qc-date','date',today(),''))}
-    </div>
-    ${fg('رقم الدفعة', inp('qc-batch','text','',''))}
-    ${fg('المعايير المفحوصة', inp('qc-tests','text','','مثال: Assay, pH, Dissolution'))}
-    <div class="form-row">
-      ${fg('النتيجة', sel('qc-result',[
-        {v:'ناجح',l:'✅ ناجح (Pass)'},{v:'راسب',l:'❌ راسب (Fail)'},{v:'OOT',l:'⚠️ OOT'}
-      ],'ناجح'))}
-      ${fg('رقم شهادة التحليل CoA', inp('qc-coa','text','',''))}
-    </div>
-    ${fg('ملاحظات', inp('qc-notes','text','',''))}
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="saveQualityCheck()">💾 حفظ</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>
-    </div>`));
-}
-
-function saveQualityCheck(){
-  const analyst = document.getElementById('qc-analyst')?.value?.trim();
-  if(!analyst) return alert('يرجى كتابة اسم الكيميائي');
-  const result = val('qc-result');
-  const d = {
-    checkType:   val('qc-type')||'material',
-    analyst,
-    checkDate:   val('qc-date')||today(),
-    batchNumber: val('qc-batch')||null,
-    tests:       val('qc-tests')||null,
-    result,
-    coaNumber:   val('qc-coa')||null,
-    notes:       val('qc-notes')||null,
-  };
-  insert('qualityChecks',d);
-  // If fail → create deviation
-  if(result==='راسب'){
-    insert('deviations',{
-      description:`OOS — فحص الجودة — دفعة ${d.batchNumber||'—'}`,
-      severity:'major', status:'open',
-      detectedDate: today(), reportedBy: analyst,
-      source:'quality_check',
-    });
-    showNotif&&showNotif('⚠️ نتيجة راسب — تم فتح انحراف تلقائياً','warning');
-  }
-  closeModal(); go('quality');
-}
-
-function editQualityCheck(id){
-  const r = getById('qualityChecks',id); if(!r) return;
-  showModal(modal('✏️ تعديل فحص جودة', `
-    <div class="form-row">
-      ${fg('الكيميائي', inp('qc-analyst','text',r.analyst||'',''))}
-      ${fg('تاريخ الفحص', inp('qc-date','date',r.checkDate||today(),''))}
-    </div>
-    ${fg('المعايير', inp('qc-tests','text',r.tests||'',''))}
-    ${fg('النتيجة', sel('qc-result',[
-      {v:'ناجح',l:'✅ ناجح'},{v:'راسب',l:'❌ راسب'},{v:'OOT',l:'⚠️ OOT'}
-    ],r.result||'ناجح'))}
-    ${fg('ملاحظات', inp('qc-notes','text',r.notes||'',''))}
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="update('qualityChecks',${id},{analyst:val('qc-analyst'),checkDate:val('qc-date'),tests:val('qc-tests'),result:val('qc-result'),notes:val('qc-notes')||null});closeModal();go('quality')">💾 حفظ</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>`));
-}
-
-// ── 7. addRegistration / editRegistration / saveRegistration ─────
-function addRegistration(){
-  const prods = getAll('products');
-  showModal(modal('📑 تسجيل دوائي جديد', `
-    <div style="max-height:80vh;overflow-y:auto;padding-right:4px">
-    ${fg('المنتج *', sel('reg-prod',[{v:0,l:'اختر منتج...'},...prods.map(p=>({v:p.id,l:p.name}))],0))}
-    <div class="form-row">
-      ${fg('رقم التسجيل *', inp('reg-num','text','','مثال: 30/12345'))}
-      ${fg('نوع التسجيل', sel('reg-type',[
-        {v:'new',l:'جديد'},{v:'renewal',l:'تجديد'},{v:'variation',l:'تعديل'}
-      ],'new'))}
-    </div>
-    <div class="form-row">
-      ${fg('تاريخ الإصدار', inp('reg-issue','date',today(),''))}
-      ${fg('تاريخ الانتهاء *', inp('reg-exp','date','',''))}
-    </div>
-    <div class="form-row">
-      ${fg('رسوم التسجيل (ج.م)', inp('reg-fee','number','',''))}
-      ${fg('رسوم التجديد (ج.م)', inp('reg-renew','number','',''))}
-    </div>
-    ${fg('ملاحظات', inp('reg-notes','text','',''))}
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="saveRegistration()">💾 حفظ</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>
-    </div>`));
-}
-
-function saveRegistration(){
-  const prodId = numVal('reg-prod');
-  if(!prodId) return alert('يرجى اختيار المنتج');
-  const num = val('reg-num');
-  if(!num) return alert('يرجى إدخال رقم التسجيل');
-  insert('registrations',{
-    productId:        prodId,
-    registrationNumber: num,
-    registrationType:  val('reg-type')||'new',
-    issueDate:         val('reg-issue')||today(),
-    expiryDate:        val('reg-exp')||null,
-    registrationFee:   val('reg-fee')||null,
-    renewalFee:        val('reg-renew')||null,
-    notes:             val('reg-notes')||null,
-    status: 'active',
-  });
-  closeModal(); go('drugregistration');
-}
-
-function editRegistration(id){
-  const r = getById('registrations',id); if(!r) return;
-  const prods = getAll('products');
-  showModal(modal('✏️ تعديل التسجيل', `
-    ${fg('المنتج', sel('reg-prod',[{v:0,l:'اختر...'},...prods.map(p=>({v:p.id,l:p.name}))],r.productId||0))}
-    <div class="form-row">
-      ${fg('رقم التسجيل', inp('reg-num','text',r.registrationNumber||'',''))}
-      ${fg('تاريخ الانتهاء', inp('reg-exp','date',r.expiryDate||'',''))}
-    </div>
-    <div class="form-row">
-      ${fg('رسوم التسجيل', inp('reg-fee','number',r.registrationFee||'',''))}
-      ${fg('رسوم التجديد', inp('reg-renew','number',r.renewalFee||'',''))}
-    </div>
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="update('registrations',${id},{registrationNumber:val('reg-num'),expiryDate:val('reg-exp')||null,registrationFee:val('reg-fee')||null,renewalFee:val('reg-renew')||null});closeModal();go('drugregistration')">💾 حفظ</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>`));
-}
-
-// ── 8. openProductionStages ──────────────────────────────────────
-function openProductionStages(orderId){
-  const o = getById('productionOrders', orderId); if(!o) return;
-  const prod = getById('products', o.productId);
-  const stages = [
-    {id:'weighing',    label:'الوزن والصرف',     icon:'⚖️'},
-    {id:'mixing',      label:'الخلط والتحضير',    icon:'🔄'},
-    {id:'granulation', label:'التحبيب',           icon:'🔵'},
-    {id:'compression', label:'الكبس / الكبسلة',  icon:'💊'},
-    {id:'coating',     label:'التغليف الفيلمي',   icon:'🎨'},
-    {id:'inspection',  label:'الفرز والتفتيش',    icon:'🔍'},
-    {id:'packaging',   label:'التعبئة والتغليف',  icon:'📦'},
-    {id:'qcrelease',   label:'إفراج الجودة QA',   icon:'✅'},
-  ];
-  const stageProgress = o.stageProgress || {};
-  showModal(modal(`🔬 مراحل الإنتاج — ${prod?.name||'—'}`, `
-    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
-      أمر الإنتاج: ${o.orderNumber||'PO-'+orderId} | الكمية: ${fmtN(o.quantity)} وحدة
-    </div>
-    <div style="display:flex;flex-direction:column;gap:8px">
-      ${stages.map((s,i) => {
-        const done = stageProgress[s.id] === 'done';
-        const inprog = stageProgress[s.id] === 'inprogress';
-        return `<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:${done?'rgba(46,160,67,.1)':inprog?'rgba(56,139,253,.1)':'var(--hover)'};border-radius:8px;border:1px solid ${done?'rgba(46,160,67,.3)':inprog?'rgba(56,139,253,.3)':'var(--border)'}">
-          <span style="font-size:20px">${s.icon}</span>
-          <span style="flex:1;font-size:13px;font-weight:600">${i+1}. ${s.label}</span>
-          <span class="badge ${done?'b-green':inprog?'b-blue':'b-gray'}">${done?'✅ مكتمل':inprog?'🔄 جاري':'—'}</span>
-          <div style="display:flex;gap:4px">
-            <button class="btn btn-white btn-sm" style="font-size:10px" onclick="updateProductionStage('${orderId}','${s.id}','inprogress')">بدأ</button>
-            <button class="btn btn-green btn-sm" style="font-size:10px" onclick="updateProductionStage('${orderId}','${s.id}','done')">✓</button>
-          </div>
-        </div>`;
-      }).join('')}
-    </div>
-    <div class="form-actions">
-      <button class="btn btn-ghost" onclick="closeModal()">إغلاق</button>
-    </div>`));
-}
-
-function updateProductionStage(orderId, stageId, status){
-  const o = getById('productionOrders', orderId); if(!o) return;
-  const stageProgress = {...(o.stageProgress||{}), [stageId]: status};
-  update('productionOrders', orderId, { stageProgress });
-  closeModal();
-  openProductionStages(orderId);
-}
-
-// ── 9. addIngredientToList ───────────────────────────────────────
-function addIngredientToList(productId){
-  const mats = getAll('materials');
-  showModal(modal('➕ إضافة مكوّن', `
-    ${fg('المادة *', sel('ing-mat',[{v:0,l:'اختر مادة...'},...mats.map(m=>({v:m.id,l:`${m.name} (${m.unit})`}))],0))}
-    <div class="form-row">
-      ${fg('النوع', sel('ing-type',[
-        {v:'active',l:'مادة فعالة API'},
-        {v:'excipient',l:'سواغ'},
-        {v:'coating',l:'طلاء'},
-        {v:'packaging',l:'تغليف'},
-      ],'active'))}
-      ${fg('التركيز / الكمية *', inp('ing-conc','number','',''))}
-    </div>
-    ${fg('الوحدة', sel('ing-unit',[
-      {v:'mg',l:'mg'},{v:'g',l:'g'},{v:'%',l:'%'},{v:'ml',l:'ml'},{v:'IU',l:'IU'}
-    ],'mg'))}
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="saveIngredientToList(${productId||0})">💾 إضافة</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>`));
-}
-
-function saveIngredientToList(productId){
-  const matId = numVal('ing-mat');
-  if(!matId) return alert('يرجى اختيار المادة');
-  const conc = val('ing-conc');
-  if(!conc) return alert('يرجى إدخال التركيز');
-  const mat = getById('materials', matId);
-  const d = {
-    productId: productId||null,
-    materialId: matId,
-    name: mat?.name||'',
-    type: val('ing-type')||'active',
-    concentration: conc,
-    unit: val('ing-unit')||'mg',
-  };
-  if(productId){
-    insert('productIngredients', d);
-  } else {
-    // Pending — add to window temp
-    if(!window._pendingIngredients) window._pendingIngredients = [];
-    d._tmpId = Date.now();
-    window._pendingIngredients.push(d);
-    if(typeof renderIngredientList === 'function') renderIngredientList(0);
-  }
-  closeModal();
-}
-
-// ── 10. startCycleCount ──────────────────────────────────────────
-function startCycleCount(){
-  const warehouses = getAll('warehouses');
-  showModal(modal('🔄 بدء جرد دوري', `
-    ${fg('المستودع', sel('cc-wh',[{v:0,l:'كل المستودعات'},...warehouses.map(w=>({v:w.id,l:w.name}))],0))}
-    ${fg('فئة الجرد', sel('cc-cat',[
-      {v:'all',l:'كل المنتجات'},{v:'A',l:'فئة A فقط'},{v:'B',l:'فئة B فقط'},{v:'expiring',l:'قريبة الانتهاء'}
-    ],'all'))}
-    ${fg('ملاحظات', inp('cc-notes','text','',''))}
-    <div class="form-actions">
-      <button class="btn btn-green" onclick="saveCycleCount()">✅ بدء الجرد</button>
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-    </div>`));
-}
-
-function saveCycleCount(){
-  const d = {
-    warehouseId: numVal('cc-wh')||null,
-    category:    val('cc-cat')||'all',
-    notes:       val('cc-notes')||null,
-    startDate:   today(),
-    status:      'in_progress',
-    startedBy:   window._authUser?.name||'—',
-  };
-  insert('cycleCounts', d);
-  closeModal();
-  showNotif&&showNotif('✅ تم بدء الجرد الدوري','success');
-  go('cyclecounting');
-}
-
-// ── Fix duplicate nav entries ─────────────────────────────────────
-// Remove duplicates from navItems at runtime
-;(function deduplicateNav(){
-  if(window._navDeduped) return;
-  window._navDeduped = true;
-  if(typeof navItems === 'undefined') return;
-  const seen = new Set();
-  const labelSeen = new Set();
-  for(let i = navItems.length-1; i >= 0; i--){
-    const item = navItems[i];
-    const key = item.id + '|' + item.label;
-    if(seen.has(key) || (seen.has(item.id) && labelSeen.has(item.label))){
-      navItems.splice(i,1);
-    } else {
-      seen.add(item.id);
-      labelSeen.add(item.label);
-      seen.add(key);
-    }
-  }
-  if(typeof renderNav === 'function') renderNav();
-})();
-
-
-// renderNav/go called by coEnter() after company is selected
-
 </script>
 
 <!-- ══ AI ASSISTANT PANEL ══ -->
