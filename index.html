@@ -1409,6 +1409,835 @@ async function initApp(){
   const list=getCos();
   if(!list.length) setTimeout(openNewCo,600);
 })();
+
+
+// ══════════════════════════════════════════════════════════════════
+// SECTION 9 — PHASE 2: المواد الخام والتغليف
+// materials, mat-receipts, suppliers
+// ══════════════════════════════════════════════════════════════════
+
+// ── ثوابت المواد ──────────────────────────────────────────────────
+const MAT_SUBTYPES = {
+  raw_material:[
+    {v:'api',         l:'🧬 API — مادة فعالة'},
+    {v:'excipient',   l:'⚗️ Excipient — سواغ'},
+    {v:'solvent',     l:'💧 Solvent — مذيب'},
+    {v:'process_aid', l:'🔧 Process Aid — مادة مساعدة'},
+    {v:'lab_reagent', l:'🔬 Lab Reagent — كاشف مختبر'},
+    {v:'water',       l:'💧 Water (PW/WFI)'},
+    {v:'gas',         l:'💨 Pharmaceutical Gas'},
+  ],
+  packaging:[
+    {v:'blister_film',  l:'📦 Blister Film (PVC/PVDC/Alu)'},
+    {v:'alu_foil',      l:'🔲 Aluminium Foil'},
+    {v:'glass_vial',    l:'🧪 Glass Vial'},
+    {v:'glass_ampoule', l:'💉 Glass Ampoule'},
+    {v:'hdpe_bottle',   l:'🍶 HDPE Bottle'},
+    {v:'rubber_stopper',l:'🔴 Rubber Stopper'},
+    {v:'aluminum_cap',  l:'🔩 Aluminum Cap'},
+    {v:'carton',        l:'📫 Carton Box'},
+    {v:'leaflet',       l:'📄 Package Leaflet'},
+    {v:'label',         l:'🏷️ Label — ملصق'},
+    {v:'sachet',        l:'🛍️ Sachet'},
+    {v:'tube',          l:'🧴 Tube — أنبوب'},
+  ],
+};
+
+const STORAGE_CONDS = [
+  {v:'room_temp',   l:'🌡️ درجة حرارة الغرفة (15-25°C)'},
+  {v:'cool',        l:'❄️ بارد (8-15°C)'},
+  {v:'refrigerate', l:'🧊 مبرد (2-8°C)'},
+  {v:'freeze',      l:'🧊 مجمد (-20°C)'},
+  {v:'protected',   l:'🌑 محمي من الضوء'},
+  {v:'dry',         l:'💨 جاف (< 40% RH)'},
+  {v:'flammable',   l:'⚠️ قابل للاشتعال'},
+];
+
+const PHARMA_REFS = ['BP 2023','USP 47','EP 11','JP 18','IP 2022','In-house','أخرى'];
+
+const UNITS_MAT = ['كجم','جم','مجم','لتر','مل','أمبولة','قطعة','لفافة','علبة','كيس','ورقة','م²'];
+
+// ── P07. Materials — المواد الخام ──────────────────────────────────
+PAGES['materials'] = async function(){
+  const mats = await dbAll('materials');
+  const rcpts = await dbAll('materialReceipts');
+
+  // حساب إحصائيات
+  const active = mats.filter(m=>m.status!=='inactive').length;
+  const low = mats.filter(m=>m.reorderLevel&&+m.currentStock<=+m.reorderLevel).length;
+  const apis = mats.filter(m=>m.subType==='api').length;
+  const pkg = mats.filter(m=>m.matType==='packaging').length;
+
+  setPage(`
+    <div class="ph">
+      <div><h1>🧪 المواد الخام والتغليف</h1>
+        <p>إدارة المواد الخام (APIs، سواغات) ومواد التغليف — متوافق مع ICH Q7</p></div>
+      <div class="ph-act">
+        <button class="btn bs" onclick="go('mat-receipts')">📦 استلام دفعة</button>
+        <button class="btn bp" onclick="openMat()">+ إضافة مادة</button>
+      </div>
+    </div>
+    <div class="sg sg4" style="margin-bottom:14px">
+      <div class="sc"><div class="lb">إجمالي المواد</div><div class="vl tc">${mats.length}</div></div>
+      <div class="sc"><div class="lb">مواد فعالة (APIs)</div><div class="vl" style="color:var(--blue)">${apis}</div></div>
+      <div class="sc"><div class="lb">مواد تغليف</div><div class="vl" style="color:var(--purple)">${pkg}</div></div>
+      <div class="sc"><div class="lb ${low?'ta':''}">${low?'⚠️ ':''} تحت حد الطلب</div>
+        <div class="vl ${low?'ta':''}">${low}</div></div>
+    </div>
+    <div class="card">
+      <div class="flex jb ac mb12">
+        <div class="ct" style="margin-bottom:0">قائمة المواد</div>
+        <div class="flex g8">
+          <input id="mat-search" class="inp" placeholder="🔍 بحث بالاسم أو CAS..." style="width:220px"
+            oninput="filterMats(this.value)">
+          <select id="mat-filter-type" class="inp" style="width:140px" onchange="filterMats(document.getElementById('mat-search').value)">
+            <option value="">كل الأنواع</option>
+            <option value="raw_material">مواد خام</option>
+            <option value="packaging">مواد تغليف</option>
+          </select>
+        </div>
+      </div>
+      ${!mats.length
+        ? `<div class="empty"><div class="em">🧪</div><h3>لا توجد مواد مسجلة</h3>
+           <p>أضف المواد الخام وسواغات الإنتاج</p>
+           <button class="btn bp" style="margin-top:12px" onclick="openMat()">+ إضافة أول مادة</button></div>`
+        : `<div class="tw" id="mat-tbl-wrap"><table id="mat-tbl">
+            <thead><tr>
+              <th>المادة</th><th>النوع</th><th>رقم CAS</th>
+              <th>الوحدة</th><th>الرصيد الحالي</th><th>حد الطلب</th>
+              <th>المورد المعتمد</th><th>الحالة</th><th>إجراءات</th>
+            </tr></thead>
+            <tbody id="mat-tbody">
+              ${mats.map(m=>matRow(m,rcpts)).join('')}
+            </tbody>
+          </table></div>`
+      }
+    </div>`);
+};
+
+function matRow(m, rcpts){
+  const subtypes = MAT_SUBTYPES[m.matType||'raw_material']||[];
+  const subLabel = subtypes.find(s=>s.v===m.subType)?.l || m.subType || '—';
+  const stock = +m.currentStock||0;
+  const reorder = +m.reorderLevel||0;
+  const stockCls = reorder>0&&stock<=reorder ? 'tr' : stock===0 ? 'ta' : 'tc';
+  const typeIcon = m.matType==='packaging' ? '📦' : '🧪';
+  const batches = rcpts ? rcpts.filter(r=>r.materialId===m.id&&r.status==='approved').length : 0;
+  return `<tr data-name="${(m.name||'').toLowerCase()}" data-type="${m.matType||'raw_material'}">
+    <td><div><strong>${esc(m.name)}</strong>
+      ${m.nameEn?`<div class="f11 tm">${esc(m.nameEn)}</div>`:''}
+    </div></td>
+    <td><span class="bge bg-b f11">${typeIcon} ${esc(subLabel.replace(/^[^\w]*/,'').split('—')[0].trim())}</span></td>
+    <td><code>${esc(m.casNumber||'—')}</code></td>
+    <td>${esc(m.unit||'كجم')}</td>
+    <td><strong class="${stockCls}">${fmt(stock,2)} ${esc(m.unit||'كجم')}</strong></td>
+    <td>${reorder>0?fmt(reorder,2)+' '+esc(m.unit||''):'—'}</td>
+    <td class="f12">${esc(m.approvedSupplier||'—')}</td>
+    <td><span class="bge ${m.status==='inactive'?'bg-m':'bg-g'}">${m.status==='inactive'?'موقوفة':'✅ نشطة'}</span>
+      ${batches>0?`<span class="bge bg-b f11" style="margin-right:4px">${batches} دفعة</span>`:''}
+    </td>
+    <td><div class="flex g6">
+      <button class="btn bs bsm" onclick="openMat(${m.id})" title="تعديل">✏️</button>
+      <button class="btn bs bsm" onclick="openGRN(${m.id})" title="استلام دفعة">📦</button>
+      <button class="btn bs bsm" onclick="viewMatBatches(${m.id})" title="الدفعات">📋</button>
+      <button class="btn bd bsm" onclick="deleteMat(${m.id})" title="حذف">🗑️</button>
+    </div></td>
+  </tr>`;
+}
+
+function filterMats(q){
+  const type = document.getElementById('mat-filter-type')?.value||'';
+  const query = (q||'').toLowerCase();
+  document.querySelectorAll('#mat-tbody tr').forEach(tr=>{
+    const name = tr.dataset.name||'';
+    const trType = tr.dataset.type||'';
+    const show = name.includes(query) && (!type||trType===type);
+    tr.style.display = show ? '' : 'none';
+  });
+}
+
+async function openMat(id){
+  const m = id ? await dbGet('materials',id) : {};
+  const mtype = m.matType||'raw_material';
+  const subtypes = MAT_SUBTYPES[mtype]||MAT_SUBTYPES.raw_material;
+
+  openModal(id?'✏️ تعديل مادة':'🧪 إضافة مادة جديدة', `
+    <div style="max-height:75vh;overflow-y:auto;padding-left:4px">
+    <div class="tabs">
+      <button class="tab on" data-t="mt-basic">📋 الأساسية</button>
+      <button class="tab" data-t="mt-quality">🔬 الجودة</button>
+      <button class="tab" data-t="mt-storage">🏭 التخزين</button>
+      <button class="tab" data-t="mt-supplier">🤝 المورد</button>
+    </div>
+
+    <div id="mt-basic" class="tp on">
+      <div class="fgr">
+        <div class="fg"><label>اسم المادة (INN/Generic) <span class="req">*</span></label>
+          <input id="mt-name" class="inp" value="${esc(m.name||'')}" placeholder="مثال: Paracetamol"></div>
+        <div class="fg"><label>الاسم بالإنجليزية</label>
+          <input id="mt-nen" class="inp" value="${esc(m.nameEn||'')}"></div>
+        <div class="fg"><label>نوع المادة</label>
+          <select id="mt-type" class="inp" onchange="updateMatSubtypes(this.value)">
+            <option value="raw_material" ${mtype==='raw_material'?'selected':''}>🧪 مادة خام وسواغات</option>
+            <option value="packaging" ${mtype==='packaging'?'selected':''}>📦 مواد تغليف</option>
+          </select></div>
+        <div class="fg"><label>النوع الفرعي <span class="req">*</span></label>
+          <select id="mt-subtype" class="inp">
+            ${subtypes.map(s=>`<option value="${s.v}" ${m.subType===s.v?'selected':''}>${s.l}</option>`).join('')}
+          </select></div>
+        <div class="fg"><label>وحدة القياس الأساسية</label>
+          <select id="mt-unit" class="inp">
+            ${UNITS_MAT.map(u=>`<option ${(m.unit||'كجم')===u?'selected':''}>${u}</option>`).join('')}
+          </select></div>
+        <div class="fg"><label>كود داخلي</label>
+          <input id="mt-code" class="inp" value="${esc(m.internalCode||'')}" placeholder="مثال: RM-001"></div>
+        <div class="fg"><label>رقم CAS</label>
+          <input id="mt-cas" class="inp" value="${esc(m.casNumber||'')}" placeholder="مثال: 103-90-2"></div>
+        <div class="fg"><label>رقم EINECS</label>
+          <input id="mt-einecs" class="inp" value="${esc(m.einecs||'')}" placeholder="مثال: 203-157-5"></div>
+        <div class="fg"><label>الصيغة الكيميائية</label>
+          <input id="mt-formula" class="inp" value="${esc(m.chemFormula||'')}" placeholder="مثال: C8H9NO2"></div>
+        <div class="fg"><label>الوزن الجزيئي (g/mol)</label>
+          <input id="mt-mw" class="inp" type="number" value="${m.molecularWeight||''}"></div>
+        <div class="fg"><label>الرصيد الحالي (${m.unit||'كجم'})</label>
+          <input id="mt-stock" class="inp" type="number" value="${m.currentStock||0}"></div>
+        <div class="fg"><label>حد إعادة الطلب</label>
+          <input id="mt-reorder" class="inp" type="number" value="${m.reorderLevel||0}"></div>
+      </div>
+    </div>
+
+    <div id="mt-quality" class="tp">
+      <div class="fgr">
+        <div class="fg"><label>درجة الجودة (Grade)</label>
+          <select id="mt-grade" class="inp">
+            ${['Pharmacopoeial Grade','BP Grade','USP Grade','EP Grade','IP Grade','Food Grade','Technical Grade','Research Grade'].map(g=>`<option ${m.grade===g?'selected':''}>${g}</option>`).join('')}
+          </select></div>
+        <div class="fg"><label>المرجع الدوائي (Pharmacopeia)</label>
+          <select id="mt-pharma" class="inp">
+            ${PHARMA_REFS.map(r=>`<option ${m.pharmacopeiaRef===r?'selected':''}>${r}</option>`).join('')}
+          </select></div>
+        <div class="fg"><label>الحد الأدنى لـ Assay% <span class="req">*</span></label>
+          <input id="mt-assay" class="inp" type="number" value="${m.assayMin||98}" placeholder="مثال: 98.0"></div>
+        <div class="fg"><label>الحد الأقصى لـ LOD%</label>
+          <input id="mt-lod" class="inp" type="number" value="${m.lodMax||0.5}" placeholder="مثال: 0.5"></div>
+        <div class="fg"><label>المواصفات المعتمدة</label>
+          <input id="mt-specs" class="inp" value="${esc(m.approvedSpecs||'')}" placeholder="رقم مستند المواصفات"></div>
+        <div class="fg"><label>رقم DMF (Drug Master File)</label>
+          <input id="mt-dmf" class="inp" value="${esc(m.dmfNumber||'')}" placeholder="مثال: DMF-12345"></div>
+        <div class="fg"><label>رقم CEP/COS</label>
+          <input id="mt-cep" class="inp" value="${esc(m.cepNumber||'')}"></div>
+        <div class="fg"><label>فترة إعادة الفحص (أشهر)</label>
+          <input id="mt-retest" class="inp" type="number" value="${m.retestMonths||36}"></div>
+        <div class="fg"><label>فترة الصلاحية (أشهر)</label>
+          <input id="mt-expiry" class="inp" type="number" value="${m.expiryMonths||24}"></div>
+        <div class="fg"><label>الحد الأدنى للصلاحية عند الاستلام (%)</label>
+          <input id="mt-minshelf" class="inp" type="number" value="${m.minShelfLife||70}" placeholder="70"></div>
+      </div>
+    </div>
+
+    <div id="mt-storage" class="tp">
+      <div class="fgr">
+        <div class="fg"><label>ظروف التخزين <span class="req">*</span></label>
+          <select id="mt-storage" class="inp">
+            ${STORAGE_CONDS.map(s=>`<option value="${s.v}" ${m.storageCond===s.v?'selected':''}>${s.l}</option>`).join('')}
+          </select></div>
+        <div class="fg"><label>نطاق درجة الحرارة</label>
+          <input id="mt-temp" class="inp" value="${esc(m.tempRange||'15-25°C')}"></div>
+        <div class="fg"><label>نطاق الرطوبة</label>
+          <input id="mt-humidity" class="inp" value="${esc(m.humidityRange||'< 60% RH')}"></div>
+        <div class="fg"><label>تصنيف الخطورة</label>
+          <select id="mt-hazard" class="inp">
+            ${[{v:'none',l:'غير خطر'},{v:'flammable',l:'⚠️ قابل للاشتعال'},{v:'toxic',l:'☠️ سام'},{v:'corrosive',l:'⚗️ آكل'},{v:'oxidizer',l:'🔥 مؤكسد'},{v:'narcotic',l:'💊 خاضع للرقابة'}]
+              .map(h=>`<option value="${h.v}" ${m.hazardClass===h.v?'selected':''}>${h.l}</option>`).join('')}
+          </select></div>
+        <div class="fg"><label>يحتاج Cold Chain؟</label>
+          <select id="mt-coldchain" class="inp">
+            <option value="no" ${!m.coldChain||m.coldChain==='no'?'selected':''}>لا</option>
+            <option value="yes" ${m.coldChain==='yes'?'selected':''}>نعم</option>
+          </select></div>
+        <div class="fg"><label>تعليمات خاصة للتداول</label>
+          <input id="mt-handling" class="inp" value="${esc(m.handlingInstructions||'')}"></div>
+      </div>
+    </div>
+
+    <div id="mt-supplier" class="tp">
+      <div class="fgr">
+        <div class="fg"><label>المورد المعتمد الأساسي</label>
+          <input id="mt-sup1" class="inp" value="${esc(m.approvedSupplier||'')}" placeholder="اسم الشركة الموردة"></div>
+        <div class="fg"><label>المورد البديل</label>
+          <input id="mt-sup2" class="inp" value="${esc(m.altSupplier||'')}"></div>
+        <div class="fg"><label>بلد المنشأ</label>
+          <input id="mt-origin" class="inp" value="${esc(m.countryOfOrigin||'')}"></div>
+        <div class="fg"><label>سعر الوحدة المرجعي (ج.م)</label>
+          <input id="mt-price" class="inp" type="number" value="${m.unitCost||''}"></div>
+        <div class="fg"><label>الحد الأدنى للطلب (MOQ)</label>
+          <input id="mt-moq" class="inp" value="${esc(m.moq||'')}" placeholder="${m.unit||'كجم'}"></div>
+        <div class="fg"><label>مدة التوريد (Lead Time)</label>
+          <input id="mt-lead" class="inp" value="${esc(m.leadTime||'')}" placeholder="مثال: 2-4 أسابيع"></div>
+        <div class="fg"><label>رقم ترخيص المورد (EDA)</label>
+          <input id="mt-supeda" class="inp" value="${esc(m.supplierEdaNo||'')}"></div>
+        <div class="fg"><label>ملاحظات</label>
+          <input id="mt-notes" class="inp" value="${esc(m.notes||'')}"></div>
+      </div>
+    </div>
+    </div>`, [{l:id?'💾 تحديث':'+ إضافة مادة',c:'bp',fn:`saveMat(${id||''})`}], 'mlg');
+}
+
+function updateMatSubtypes(type){
+  const sel = document.getElementById('mt-subtype'); if(!sel) return;
+  const subs = MAT_SUBTYPES[type]||MAT_SUBTYPES.raw_material;
+  sel.innerHTML = subs.map(s=>`<option value="${s.v}">${s.l}</option>`).join('');
+}
+
+async function saveMat(id){
+  const name = document.getElementById('mt-name')?.value?.trim();
+  if(!name){ notif('يرجى كتابة اسم المادة','error'); return; }
+  const d = {
+    name, nameEn:       document.getElementById('mt-nen')?.value?.trim()||'',
+    matType:            document.getElementById('mt-type')?.value||'raw_material',
+    subType:            document.getElementById('mt-subtype')?.value||'excipient',
+    internalCode:       document.getElementById('mt-code')?.value?.trim()||'',
+    casNumber:          document.getElementById('mt-cas')?.value?.trim()||'',
+    einecs:             document.getElementById('mt-einecs')?.value?.trim()||'',
+    chemFormula:        document.getElementById('mt-formula')?.value?.trim()||'',
+    molecularWeight:    document.getElementById('mt-mw')?.value||'',
+    unit:               document.getElementById('mt-unit')?.value||'كجم',
+    currentStock:       +document.getElementById('mt-stock')?.value||0,
+    reorderLevel:       +document.getElementById('mt-reorder')?.value||0,
+    grade:              document.getElementById('mt-grade')?.value||'',
+    pharmacopeiaRef:    document.getElementById('mt-pharma')?.value||'',
+    assayMin:           +document.getElementById('mt-assay')?.value||98,
+    lodMax:             +document.getElementById('mt-lod')?.value||0.5,
+    approvedSpecs:      document.getElementById('mt-specs')?.value?.trim()||'',
+    dmfNumber:          document.getElementById('mt-dmf')?.value?.trim()||'',
+    cepNumber:          document.getElementById('mt-cep')?.value?.trim()||'',
+    retestMonths:       +document.getElementById('mt-retest')?.value||36,
+    expiryMonths:       +document.getElementById('mt-expiry')?.value||24,
+    minShelfLife:       +document.getElementById('mt-minshelf')?.value||70,
+    storageCond:        document.getElementById('mt-storage')?.value||'room_temp',
+    tempRange:          document.getElementById('mt-temp')?.value||'',
+    humidityRange:      document.getElementById('mt-humidity')?.value||'',
+    hazardClass:        document.getElementById('mt-hazard')?.value||'none',
+    coldChain:          document.getElementById('mt-coldchain')?.value||'no',
+    handlingInstructions:document.getElementById('mt-handling')?.value?.trim()||'',
+    approvedSupplier:   document.getElementById('mt-sup1')?.value?.trim()||'',
+    altSupplier:        document.getElementById('mt-sup2')?.value?.trim()||'',
+    countryOfOrigin:    document.getElementById('mt-origin')?.value?.trim()||'',
+    unitCost:           +document.getElementById('mt-price')?.value||0,
+    moq:                document.getElementById('mt-moq')?.value?.trim()||'',
+    leadTime:           document.getElementById('mt-lead')?.value?.trim()||'',
+    supplierEdaNo:      document.getElementById('mt-supeda')?.value?.trim()||'',
+    notes:              document.getElementById('mt-notes')?.value?.trim()||'',
+    status: 'active',
+  };
+  if(id){ await dbUpd('materials',{...d,id}); }
+  else   { await dbIns('materials',d); }
+  await logAudit(id?'تعديل':'إضافة','materials',id||null,name);
+  closeModal(); notif('✅ تم الحفظ','success');
+  PAGES['materials']();
+}
+
+async function deleteMat(id){
+  // تحقق من وجود دفعات
+  const rcpts = await dbAll('materialReceipts','materialId',id);
+  if(rcpts.length){
+    notif(`❌ لا يمكن الحذف — توجد ${rcpts.length} دفعة مرتبطة`,'error'); return;
+  }
+  if(!confirm('حذف هذه المادة؟')) return;
+  await dbDel('materials',id);
+  await logAudit('حذف','materials',id,'');
+  notif('✅ تم الحذف','success');
+  PAGES['materials']();
+}
+
+// ── P08. Material Receipts — استلام الدفعات (GRN) ─────────────────
+PAGES['mat-receipts'] = async function(){
+  const rcpts = await dbAll('materialReceipts');
+  const mats = await dbAll('materials');
+
+  const quarantine = rcpts.filter(r=>r.status==='quarantine').length;
+  const approved = rcpts.filter(r=>r.status==='approved').length;
+  const rejected = rcpts.filter(r=>r.status==='rejected').length;
+  const expiringSoon = rcpts.filter(r=>{
+    const d = daysDiff(r.expiryDate||r.retestDate);
+    return d!==null&&d>=0&&d<90&&r.status==='approved';
+  }).length;
+
+  setPage(`
+    <div class="ph">
+      <div><h1>📦 استلام الدفعات (GRN)</h1>
+        <p>Goods Receipt Note — تسجيل استلام المواد مع الحالة والصلاحية — FEFO متوافق مع GMP</p></div>
+      <div class="ph-act">
+        <button class="btn bs" onclick="runExpiryCheck()">🔄 فحص الصلاحيات</button>
+        <button class="btn bp" onclick="openGRN()">+ استلام دفعة جديدة</button>
+      </div>
+    </div>
+    <div class="sg sg4" style="margin-bottom:14px">
+      <div class="sc"><div class="lb ta">⏳ عزل (Quarantine)</div><div class="vl ta">${quarantine}</div></div>
+      <div class="sc"><div class="lb tc">✅ معتمدة (Approved)</div><div class="vl tc">${approved}</div></div>
+      <div class="sc"><div class="lb tr">❌ مرفوضة</div><div class="vl tr">${rejected}</div></div>
+      <div class="sc"><div class="lb ta">⚠️ تنتهي قريباً</div><div class="vl ta">${expiringSoon}</div></div>
+    </div>
+    <div class="card">
+      <div class="flex jb ac mb12">
+        <div class="ct" style="margin-bottom:0">سجل الاستلامات</div>
+        <div class="flex g8">
+          <input id="grn-search" class="inp" placeholder="🔍 رقم دفعة أو مادة..." style="width:200px"
+            oninput="filterGRN(this.value)">
+          <select id="grn-filter" class="inp" style="width:140px" onchange="filterGRN(document.getElementById('grn-search').value)">
+            <option value="">كل الحالات</option>
+            <option value="quarantine">⏳ عزل</option>
+            <option value="approved">✅ معتمدة</option>
+            <option value="rejected">❌ مرفوضة</option>
+            <option value="retest_due">🔬 إعادة فحص</option>
+            <option value="expired">⏰ منتهية</option>
+          </select>
+        </div>
+      </div>
+      ${!rcpts.length
+        ? `<div class="empty"><div class="em">📦</div><h3>لا توجد دفعات مستلمة</h3>
+           <p>سجّل أول دفعة مادة خام</p>
+           <button class="btn bp" style="margin-top:12px" onclick="openGRN()">+ استلام دفعة</button></div>`
+        : `<div class="tw"><table>
+            <thead><tr>
+              <th>رقم الدفعة (LOT)</th><th>المادة</th><th>تاريخ الاستلام</th>
+              <th>الكمية</th><th>المتبقي</th><th>تاريخ الإعادة/الصلاحية</th>
+              <th>الصلاحية</th><th>الحالة</th><th>المورد</th><th>إجراءات</th>
+            </tr></thead>
+            <tbody id="grn-tbody">
+              ${rcpts.map(r=>{
+                const mat = mats.find(m=>m.id===r.materialId);
+                const st = BATCH_ST[r.status]||{l:r.status,cls:'bg-m'};
+                const expDt = r.retestDate||r.expiryDate;
+                return `<tr data-lot="${(r.batchNumber||'').toLowerCase()}" data-mat="${(mat?.name||'').toLowerCase()}" data-status="${r.status||''}">
+                  <td><code>${esc(r.batchNumber||'—')}</code></td>
+                  <td><strong>${esc(mat?.name||'—')}</strong></td>
+                  <td class="f12">${esc(r.receiptDate||'—')}</td>
+                  <td>${fmt(r.quantity,2)} ${esc(r.unit||mat?.unit||'كجم')}</td>
+                  <td><strong class="${+r.remainingQty===0?'tr':''}">${fmt(r.remainingQty??r.quantity,2)}</strong></td>
+                  <td class="f12">${esc(expDt||'—')}
+                    ${r.retestDate?'<span class="bge bg-p f11" style="margin-right:4px">Retest</span>':''}
+                  </td>
+                  <td>${expBadge(expDt)}</td>
+                  <td><span class="bge ${st.cls}">${st.l}</span></td>
+                  <td class="f12">${esc(r.supplier||'—')}</td>
+                  <td><div class="flex g6">
+                    ${r.status==='quarantine'||r.status==='retest_due'
+                      ? `<button class="btn bp bsm" onclick="openStatusChange(${r.id})">إفراج/رفض</button>`
+                      : `<button class="btn bs bsm" onclick="openStatusChange(${r.id})">تغيير</button>`}
+                    <button class="btn bs bsm" onclick="openGRN(null,${r.id})" title="تعديل">✏️</button>
+                  </div></td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table></div>`
+      }
+    </div>`);
+};
+
+function filterGRN(q){
+  const status = document.getElementById('grn-filter')?.value||'';
+  const query = (q||'').toLowerCase();
+  document.querySelectorAll('#grn-tbody tr').forEach(tr=>{
+    const lot = tr.dataset.lot||'';
+    const mat = tr.dataset.mat||'';
+    const st  = tr.dataset.status||'';
+    const show = (lot.includes(query)||mat.includes(query)) && (!status||st===status);
+    tr.style.display = show?'':'none';
+  });
+}
+
+async function openGRN(matId, editId){
+  const mats = await dbAll('materials');
+  const existing = editId ? await dbGet('materialReceipts',editId) : {};
+  const selMatId = matId || existing.materialId || null;
+
+  openModal(editId?'✏️ تعديل بيانات الدفعة':'📦 استلام دفعة جديدة (GRN)', `
+    <div class="fgr">
+      <div class="fg"><label>المادة <span class="req">*</span></label>
+        <select id="grn-mat" class="inp" ${editId?'disabled':''}>
+          <option value="">اختر مادة...</option>
+          ${mats.map(m=>`<option value="${m.id}" ${(selMatId===m.id)?'selected':''}>${esc(m.name)} (${esc(m.unit||'كجم')})</option>`).join('')}
+        </select></div>
+      <div class="fg"><label>رقم الدفعة (LOT#) <span class="req">*</span></label>
+        <input id="grn-lot" class="inp" value="${esc(existing.batchNumber||'')}" placeholder="مثال: API-2024-001"></div>
+      <div class="fg"><label>الكمية المستلمة <span class="req">*</span></label>
+        <input id="grn-qty" class="inp" type="number" value="${existing.quantity||''}"></div>
+      <div class="fg"><label>تاريخ الاستلام</label>
+        <input id="grn-date" class="inp" type="date" value="${existing.receiptDate||today()}"></div>
+      <div class="fg"><label>تاريخ التصنيع</label>
+        <input id="grn-mfg" class="inp" type="date" value="${existing.mfgDate||''}"></div>
+      <div class="fg"><label>نوع تاريخ الإنتهاء</label>
+        <select id="grn-datetype" class="inp" onchange="updateGRNDateLabel()">
+          <option value="retest" ${(existing.dateType||'retest')==='retest'?'selected':''}>تاريخ إعادة الفحص (Retest Date)</option>
+          <option value="expiry" ${existing.dateType==='expiry'?'selected':''}>تاريخ انتهاء الصلاحية (Expiry)</option>
+        </select></div>
+      <div class="fg"><label id="grn-explabel">تاريخ إعادة الفحص <span class="req">*</span></label>
+        <input id="grn-exp" class="inp" type="date" value="${existing.retestDate||existing.expiryDate||''}"></div>
+      <div class="fg"><label>المورد</label>
+        <input id="grn-sup" class="inp" value="${esc(existing.supplier||'')}" placeholder="اسم المورد"></div>
+      <div class="fg"><label>رقم فاتورة المورد</label>
+        <input id="grn-inv" class="inp" value="${esc(existing.supplierInvoice||'')}"></div>
+      <div class="fg"><label>سعر الوحدة (ج.م)</label>
+        <input id="grn-price" class="inp" type="number" value="${existing.unitPrice||''}"></div>
+      <div class="fg"><label>درجة حرارة النقل (Cold Chain)</label>
+        <input id="grn-temp" class="inp" value="${esc(existing.transportTemp||'')}" placeholder="مثال: 2-8°C — OK"></div>
+      <div class="fg"><label>رقم CoA</label>
+        <input id="grn-coa" class="inp" value="${esc(existing.coaNumber||'')}"></div>
+      <div class="fg"><label>مختبر التحليل (CoA Lab)</label>
+        <input id="grn-coalab" class="inp" value="${esc(existing.coaLab||'')}"></div>
+    </div>
+    <div class="fg" style="margin-top:10px"><label>ملاحظات الاستلام</label>
+      <textarea id="grn-notes" class="inp">${esc(existing.notes||'')}</textarea></div>
+  `, [{l:editId?'💾 تحديث':'📦 تسجيل الاستلام',c:'bp',fn:`saveGRN(${editId||''})`}], 'mlg');
+}
+
+function updateGRNDateLabel(){
+  const type = document.getElementById('grn-datetype')?.value;
+  const lbl = document.getElementById('grn-explabel');
+  if(lbl) lbl.textContent = type==='expiry' ? 'تاريخ انتهاء الصلاحية *' : 'تاريخ إعادة الفحص *';
+}
+
+async function saveGRN(editId){
+  const matId = +document.getElementById('grn-mat')?.value||0;
+  const lot   = document.getElementById('grn-lot')?.value?.trim();
+  const qty   = +document.getElementById('grn-qty')?.value||0;
+  const expDt = document.getElementById('grn-exp')?.value;
+
+  if(!matId||!lot||!qty){ notif('يرجى: اختيار المادة + رقم الدفعة + الكمية','error'); return; }
+  if(!expDt){ notif('يرجى إدخال تاريخ إعادة الفحص أو الصلاحية','error'); return; }
+
+  // فحص تاريخ الصلاحية
+  const daysLeft = daysDiff(expDt);
+  if(daysLeft!==null && daysLeft<0){
+    notif('❌ تاريخ الصلاحية/إعادة الفحص مضى — لا يمكن الاستلام','error'); return;
+  }
+  if(daysLeft!==null && daysLeft<30){
+    if(!confirm(`⚠️ تحذير: الصلاحية تنتهي خلال ${daysLeft} يوم فقط.\nهل تريد الاستمرار؟`)) return;
+  }
+
+  const mat = await dbGet('materials', matId);
+  const dateType = document.getElementById('grn-datetype')?.value||'retest';
+  const d = {
+    materialId:      matId,
+    materialName:    mat?.name||'',
+    batchNumber:     lot,
+    quantity:        qty,
+    remainingQty:    editId ? undefined : qty, // لا نغيّر المتبقي عند التعديل
+    unit:            mat?.unit||'كجم',
+    receiptDate:     document.getElementById('grn-date')?.value||today(),
+    mfgDate:         document.getElementById('grn-mfg')?.value||'',
+    dateType,
+    retestDate:      dateType==='retest' ? expDt : null,
+    expiryDate:      dateType==='expiry' ? expDt : null,
+    supplier:        document.getElementById('grn-sup')?.value?.trim()||'',
+    supplierInvoice: document.getElementById('grn-inv')?.value?.trim()||'',
+    unitPrice:       +document.getElementById('grn-price')?.value||0,
+    transportTemp:   document.getElementById('grn-temp')?.value?.trim()||'',
+    coaNumber:       document.getElementById('grn-coa')?.value?.trim()||'',
+    coaLab:          document.getElementById('grn-coalab')?.value?.trim()||'',
+    notes:           document.getElementById('grn-notes')?.value?.trim()||'',
+    status: editId ? undefined : 'quarantine', // دفعة جديدة = عزل دائماً
+  };
+
+  // أزل undefined
+  Object.keys(d).forEach(k=>d[k]===undefined&&delete d[k]);
+
+  if(editId){
+    const old = await dbGet('materialReceipts',editId);
+    await dbUpd('materialReceipts',{...old,...d,id:editId});
+  } else {
+    await dbIns('materialReceipts',d);
+    // حدّث رصيد المادة
+    if(mat){
+      await dbUpd('materials',{...mat, currentStock:(+mat.currentStock||0)+qty});
+    }
+  }
+
+  await logAudit(editId?'تعديل':'إضافة','materialReceipts',editId||null,`دفعة ${lot} — ${mat?.name||''}`);
+  closeModal(); notif('✅ تم التسجيل — الدفعة في العزل (Quarantine)','success');
+  PAGES['mat-receipts']();
+}
+
+async function openStatusChange(receiptId){
+  const r = await dbGet('materialReceipts',receiptId);
+  if(!r) return;
+  const st = BATCH_ST[r.status]||{l:r.status,next:[]};
+  const mat = await dbGet('materials',r.materialId);
+
+  openModal(`تغيير حالة الدفعة — ${esc(r.batchNumber)}`, `
+    <div class="card" style="margin-bottom:14px">
+      <div class="fg2">
+        <div><div class="tm f11">المادة</div><div class="fw7">${esc(mat?.name||'—')}</div></div>
+        <div><div class="tm f11">الحالة الحالية</div>
+          <span class="bge ${st.cls}">${st.l}</span></div>
+        <div><div class="tm f11">الكمية المتبقية</div>
+          <div class="fw7 tc">${fmt(r.remainingQty??r.quantity,2)} ${esc(r.unit||'كجم')}</div></div>
+        <div><div class="tm f11">تاريخ الصلاحية/الإعادة</div>
+          <div>${esc(r.retestDate||r.expiryDate||'—')} ${expBadge(r.retestDate||r.expiryDate)}</div></div>
+      </div>
+    </div>
+    <div class="fg" style="margin-bottom:12px"><label>الحالة الجديدة <span class="req">*</span></label>
+      <select id="st-new" class="inp">
+        ${st.next.length
+          ? st.next.map(s=>{
+              const n=BATCH_ST[s]||{l:s};
+              return `<option value="${s}">${n.l}</option>`;
+            }).join('')
+          : '<option value="">لا توجد تحويلات مسموحة</option>'
+        }
+      </select></div>
+    <div class="fg"><label>سبب التغيير <span class="req">*</span></label>
+      <textarea id="st-reason" class="inp" placeholder="مثال: اجتازت كل اختبارات QC — Assay 99.2%, LOD 0.3%"></textarea></div>
+  `, st.next.length ? [{l:'✅ تطبيق التغيير',c:'bp',fn:`applyStatusChange(${receiptId})`}] : [], 'mmd');
+}
+
+async function applyStatusChange(receiptId){
+  const newSt = document.getElementById('st-new')?.value;
+  const reason = document.getElementById('st-reason')?.value?.trim();
+  if(!newSt){ notif('يرجى اختيار الحالة الجديدة','error'); return; }
+  if(!reason){ notif('يرجى كتابة سبب التغيير','error'); return; }
+
+  const r = await dbGet('materialReceipts',receiptId);
+  const mat = await dbGet('materials',r.materialId);
+  const oldSt = r.status;
+
+  await dbUpd('materialReceipts',{...r, status:newSt,
+    statusReason:reason, statusChangedBy:USER?.name||'—',
+    statusChangedAt:new Date().toISOString()});
+
+  // لو رُفضت — اطرح الكمية من المخزون
+  if(newSt==='rejected' && mat){
+    const remaining = Math.max(0, (+mat.currentStock||0)-(+r.remainingQty||+r.quantity||0));
+    await dbUpd('materials',{...mat,currentStock:remaining});
+  }
+
+  await logAudit('تغيير_حالة','materialReceipts',receiptId,
+    `${r.batchNumber}: ${oldSt} → ${newSt} | ${reason}`);
+
+  closeModal();
+  notif(`✅ تم تغيير الحالة إلى: ${BATCH_ST[newSt]?.l||newSt}`,'success');
+  PAGES['mat-receipts']();
+}
+
+async function viewMatBatches(matId){
+  const mat = await dbGet('materials',matId);
+  const rcpts = await dbAll('materialReceipts','materialId',matId);
+
+  openModal(`📋 دفعات: ${esc(mat?.name||'—')}`, `
+    <div class="flex jb ac mb12">
+      <span>إجمالي: <strong>${rcpts.length}</strong> دفعة | متاح للصرف: <strong class="tc">${rcpts.filter(r=>r.status==='approved').length}</strong></span>
+    </div>
+    ${!rcpts.length ? '<div class="empty"><div class="em">📦</div><h3>لا توجد دفعات</h3></div>' :
+    `<div class="tw"><table>
+      <thead><tr><th>رقم الدفعة</th><th>تاريخ الاستلام</th><th>الكمية الأصلية</th>
+        <th>المتبقي</th><th>تاريخ الإعادة/الصلاحية</th><th>الصلاحية</th><th>الحالة</th></tr></thead>
+      <tbody>
+        ${rcpts.sort((a,b)=>{
+          const da=a.retestDate||a.expiryDate||'9999';
+          const db=b.retestDate||b.expiryDate||'9999';
+          return da<db?-1:1;
+        }).map(r=>{
+          const st=BATCH_ST[r.status]||{l:r.status,cls:'bg-m'};
+          const expDt=r.retestDate||r.expiryDate;
+          return `<tr>
+            <td><code>${esc(r.batchNumber)}</code></td>
+            <td class="f12">${esc(r.receiptDate||'—')}</td>
+            <td>${fmt(r.quantity,2)} ${esc(r.unit||'كجم')}</td>
+            <td><strong class="${+r.remainingQty===0?'tr':''}">${fmt(r.remainingQty??r.quantity,2)}</strong></td>
+            <td class="f12">${esc(expDt||'—')}</td>
+            <td>${expBadge(expDt)}</td>
+            <td><span class="bge ${st.cls}">${st.l}</span></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table></div>`}
+  `, [], 'mlg');
+}
+
+// FEFO — First Expiry First Out
+async function getFefoLots(materialId, requiredQty){
+  const rcpts = await dbAll('materialReceipts','materialId',materialId);
+  const approved = rcpts.filter(r=>
+    r.status==='approved' && (+r.remainingQty??+r.quantity)>0
+  );
+  // ترتيب FEFO: الأقرب للانتهاء أولاً، ثم FIFO
+  approved.sort((a,b)=>{
+    const da = a.retestDate||a.expiryDate||'9999-12-31';
+    const db = b.retestDate||b.expiryDate||'9999-12-31';
+    if(da!==db) return da<db?-1:1;
+    return (a.receiptDate||'') < (b.receiptDate||'') ? -1 : 1;
+  });
+  let remaining = requiredQty;
+  const selected = [];
+  for(const r of approved){
+    if(remaining<=0) break;
+    const avail = +r.remainingQty ?? +r.quantity;
+    const take = Math.min(avail, remaining);
+    selected.push({...r, takeQty:take});
+    remaining -= take;
+  }
+  return {selected, shortage:Math.max(0,remaining)};
+}
+
+// فحص يومي للصلاحيات
+async function runExpiryCheck(){
+  const rcpts = await dbAll('materialReceipts');
+  const now = new Date(); now.setHours(0,0,0,0);
+  let updated = 0;
+  for(const r of rcpts){
+    if(r.status==='approved'||r.status==='quarantine'){
+      const expDt = r.retestDate||r.expiryDate;
+      if(expDt){
+        const exp = new Date(expDt);
+        if(exp<now && r.status==='approved'){
+          await dbUpd('materialReceipts',{...r,status:'expired',
+            statusReason:'تحديث تلقائي — انتهت الصلاحية',
+            statusChangedAt:new Date().toISOString()});
+          updated++;
+        }
+      }
+    }
+  }
+  notif(updated>0?`✅ تم تحديث ${updated} دفعة منتهية الصلاحية`:'✅ لا توجد دفعات منتهية جديدة','success');
+  if(updated>0) PAGES['mat-receipts']();
+}
+
+// ── P09. Suppliers — الموردون ──────────────────────────────────────
+PAGES['suppliers'] = async function(){
+  const sups = await dbAll('suppliers');
+
+  setPage(`
+    <div class="ph">
+      <div><h1>🤝 الموردون المعتمدون</h1>
+        <p>إدارة قائمة الموردين المعتمدين للمواد الخام والتغليف — Approved Vendor List (AVL)</p></div>
+      <div class="ph-act">
+        <button class="btn bp" onclick="openSupplier()">+ إضافة مورد</button>
+      </div>
+    </div>
+    <div class="sg sg3" style="margin-bottom:14px">
+      <div class="sc"><div class="lb">إجمالي الموردين</div><div class="vl tc">${sups.length}</div></div>
+      <div class="sc"><div class="lb tc">معتمدون</div><div class="vl tc">${sups.filter(s=>s.status==='approved').length}</div></div>
+      <div class="sc"><div class="lb ta">قيد التقييم</div><div class="vl ta">${sups.filter(s=>s.status==='pending').length}</div></div>
+    </div>
+    <div class="card">
+      ${!sups.length
+        ? `<div class="empty"><div class="em">🤝</div><h3>لا يوجد موردون</h3>
+           <p>أضف الموردين المعتمدين للمواد الخام</p>
+           <button class="btn bp" style="margin-top:12px" onclick="openSupplier()">+ إضافة مورد</button></div>`
+        : `<div class="tw"><table>
+            <thead><tr>
+              <th>اسم المورد</th><th>البلد</th><th>المواد المورّدة</th>
+              <th>ترخيص GMP</th><th>تاريخ التقييم</th><th>التقييم</th><th>الحالة</th><th>إجراءات</th>
+            </tr></thead>
+            <tbody>
+              ${sups.map(s=>`<tr>
+                <td><div><strong>${esc(s.name)}</strong>
+                  ${s.nameEn?`<div class="f11 tm">${esc(s.nameEn)}</div>`:''}
+                </div></td>
+                <td>${esc(s.country||'—')}</td>
+                <td class="f12">${esc(s.materials||'—')}</td>
+                <td>${s.gmpCertNo?`<code class="f11">${esc(s.gmpCertNo)}</code>`:
+                  '<span class="tm f11">غير معتمد GMP</span>'}</td>
+                <td class="f12">${esc(s.lastAuditDate||'—')}</td>
+                <td>${renderSupRating(s.rating)}</td>
+                <td><span class="bge ${s.status==='approved'?'bg-g':s.status==='pending'?'bg-a':'bg-r'}">
+                  ${s.status==='approved'?'✅ معتمد':s.status==='pending'?'⏳ قيد التقييم':'❌ موقوف'}
+                </span></td>
+                <td><div class="flex g6">
+                  <button class="btn bs bsm" onclick="openSupplier(${s.id})">✏️</button>
+                  <button class="btn bd bsm" onclick="deleteSupplier(${s.id})">🗑️</button>
+                </div></td>
+              </tr>`).join('')}
+            </tbody>
+          </table></div>`
+      }
+    </div>`);
+};
+
+function renderSupRating(r){
+  if(!r) return '<span class="tm f12">—</span>';
+  const stars = Math.round(+r);
+  return `<span title="${r}/5">${'⭐'.repeat(stars)}${'☆'.repeat(5-stars)}</span>`;
+}
+
+async function openSupplier(id){
+  const s = id ? await dbGet('suppliers',id) : {};
+  openModal(id?'✏️ تعديل مورد':'🤝 إضافة مورد جديد', `
+    <div class="fgr">
+      <div class="fg"><label>اسم الشركة الموردة <span class="req">*</span></label>
+        <input id="sup-name" class="inp" value="${esc(s.name||'')}" placeholder="اسم المورد"></div>
+      <div class="fg"><label>الاسم بالإنجليزية</label>
+        <input id="sup-nen" class="inp" value="${esc(s.nameEn||'')}"></div>
+      <div class="fg"><label>البلد <span class="req">*</span></label>
+        <input id="sup-country" class="inp" value="${esc(s.country||'')}" placeholder="مثال: الهند، ألمانيا، الصين"></div>
+      <div class="fg"><label>المواد التي يورّدها</label>
+        <input id="sup-mats" class="inp" value="${esc(s.materials||'')}" placeholder="مثال: Paracetamol API, Excipients"></div>
+      <div class="fg"><label>رقم ترخيص GMP</label>
+        <input id="sup-gmp" class="inp" value="${esc(s.gmpCertNo||'')}"></div>
+      <div class="fg"><label>جهة اعتماد GMP</label>
+        <select id="sup-gmpauth" class="inp">
+          ${['WHO','EU GMP','FDA','ICH','EDA','PMDA','TGA','ANVISA','أخرى'].map(v=>`<option ${s.gmpAuthority===v?'selected':''}>${v}</option>`).join('')}
+        </select></div>
+      <div class="fg"><label>تاريخ انتهاء شهادة GMP</label>
+        <input id="sup-gmpexp" class="inp" type="date" value="${s.gmpExpiry||''}"></div>
+      <div class="fg"><label>تاريخ آخر تدقيق (Audit)</label>
+        <input id="sup-audit" class="inp" type="date" value="${s.lastAuditDate||''}"></div>
+      <div class="fg"><label>التقييم (1-5)</label>
+        <select id="sup-rating" class="inp">
+          ${[1,2,3,4,5].map(n=>`<option value="${n}" ${+s.rating===n?'selected':''}>⭐ ${n}/5</option>`).join('')}
+        </select></div>
+      <div class="fg"><label>الحالة</label>
+        <select id="sup-status" class="inp">
+          <option value="approved" ${(s.status||'approved')==='approved'?'selected':''}>✅ معتمد</option>
+          <option value="pending" ${s.status==='pending'?'selected':''}>⏳ قيد التقييم</option>
+          <option value="suspended" ${s.status==='suspended'?'selected':''}>❌ موقوف</option>
+        </select></div>
+      <div class="fg"><label>شخص التواصل</label>
+        <input id="sup-contact" class="inp" value="${esc(s.contactPerson||'')}"></div>
+      <div class="fg"><label>البريد الإلكتروني</label>
+        <input id="sup-email" class="inp" type="email" value="${esc(s.email||'')}"></div>
+      <div class="fg"><label>رقم الهاتف</label>
+        <input id="sup-phone" class="inp" value="${esc(s.phone||'')}"></div>
+      <div class="fg"><label>ملاحظات التقييم</label>
+        <input id="sup-notes" class="inp" value="${esc(s.notes||'')}"></div>
+    </div>
+  `, [{l:id?'💾 تحديث':'+ إضافة',c:'bp',fn:`saveSupplier(${id||''})`}], 'mlg');
+}
+
+async function saveSupplier(id){
+  const name = document.getElementById('sup-name')?.value?.trim();
+  if(!name){ notif('يرجى كتابة اسم المورد','error'); return; }
+  const d = {
+    name, nameEn:       document.getElementById('sup-nen')?.value?.trim()||'',
+    country:            document.getElementById('sup-country')?.value?.trim()||'',
+    materials:          document.getElementById('sup-mats')?.value?.trim()||'',
+    gmpCertNo:          document.getElementById('sup-gmp')?.value?.trim()||'',
+    gmpAuthority:       document.getElementById('sup-gmpauth')?.value||'',
+    gmpExpiry:          document.getElementById('sup-gmpexp')?.value||'',
+    lastAuditDate:      document.getElementById('sup-audit')?.value||'',
+    rating:             +document.getElementById('sup-rating')?.value||3,
+    status:             document.getElementById('sup-status')?.value||'approved',
+    contactPerson:      document.getElementById('sup-contact')?.value?.trim()||'',
+    email:              document.getElementById('sup-email')?.value?.trim()||'',
+    phone:              document.getElementById('sup-phone')?.value?.trim()||'',
+    notes:              document.getElementById('sup-notes')?.value?.trim()||'',
+  };
+  if(id){ await dbUpd('suppliers',{...d,id}); }
+  else   { await dbIns('suppliers',d); }
+  await logAudit(id?'تعديل':'إضافة','suppliers',id||null,name);
+  closeModal(); notif('✅ تم الحفظ','success');
+  PAGES['suppliers']();
+}
+
+async function deleteSupplier(id){
+  if(!confirm('حذف هذا المورد؟')) return;
+  await dbDel('suppliers',id);
+  await logAudit('حذف','suppliers',id,'');
+  notif('✅ تم الحذف','success');
+  PAGES['suppliers']();
+}
+
 </script>
 </body>
 </html>
