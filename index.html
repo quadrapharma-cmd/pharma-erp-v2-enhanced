@@ -118,7 +118,7 @@ td{padding:9px 13px;vertical-align:middle}
 .tp{display:none}.tp.on{display:block}
 
 /* ── Modal ── */
-#ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(4px);z-index:1000;align-items:center;justify-content:center;padding:20px}
+#ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(4px);z-index:2500;align-items:center;justify-content:center;padding:20px}
 #ov.open{display:flex}
 .modal{background:var(--card);border:1px solid var(--border2);border-radius:12px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.6);animation:mIn .18s ease}
 @keyframes mIn{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
@@ -604,18 +604,20 @@ function saveNewCo(){
   if(!n){notif('يرجى كتابة اسم الشركة','error');return;}
   const t=document.getElementById('nc-t')?.value||'شركة دوائية';
   const list=getCos();
-  list.push({id:Date.now(),name:n,type:t,color:CO_COLORS[list.length%CO_COLORS.length],createdAt:new Date().toISOString()});
+  const co={id:Date.now(),name:n,type:t,color:CO_COLORS[list.length%CO_COLORS.length],createdAt:new Date().toISOString()};
+  list.push(co);
   saveCos(list); closeModal(); renderCos();
-  notif('✅ تم إنشاء "'+n+'"','success');
+  notif('✅ تم إنشاء "'+n+'" — يرجى الضغط عليها للدخول','success');
 }
 
 async function enterCo(coId){
   const list=getCos(); const co=list.find(c=>c.id===coId); if(!co) return;
   CO_ID=coId;
-  await openIDB(coId);
+  try{ await openIDB(coId); }
+  catch(e){ notif('❌ خطأ في قاعدة البيانات: '+e.message,'error'); return; }
   // Seed COA
   const coa=await dbAll('chartOfAccounts');
-  if(!coa.length){ for(const a of EGY_COA) await dbIns('chartOfAccounts',a); }
+  if(!coa.length){ await Promise.all(EGY_COA.map(a=>dbIns('chartOfAccounts',a))); }
   // Seed tax settings
   const ts=await dbAll('taxSettings');
   if(!ts.length) await dbIns('taxSettings',{...TAX});
@@ -636,7 +638,11 @@ async function enterCo(coId){
 
 const SESS_KEY=()=>'medisniya_sess_'+CO_ID;
 
-function showLogin(){ document.getElementById('lg-sc').classList.add('show'); tryRestore(); }
+function showLogin(){
+  const el=document.getElementById('lg-sc');
+  if(el){ el.classList.add('show'); }
+  tryRestore();
+}
 function hideLogin(){ document.getElementById('lg-sc').classList.remove('show'); }
 
 function tryRestore(){
