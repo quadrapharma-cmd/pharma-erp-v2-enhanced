@@ -1053,6 +1053,7 @@ PAGES['company-info'] = async function(){
           <div class="fg"><label>رقم الحافظة / الملف</label>
             <input id="ci-cr-file" class="inp" value="${esc(s.commercialRegFile||'')}"></div>
         </div>
+        ${docRow('السجل التجاري','commercial-reg')}
       </div>
 
       <div class="card"><div class="ct">🧾 البطاقة الضريبية</div>
@@ -1074,6 +1075,7 @@ PAGES['company-info'] = async function(){
           <div class="fg"><label>رقم بطاقة الاستيراد (إن وُجدت)</label>
             <input id="ci-imp" class="inp" value="${esc(s.importRegNo||'')}"></div>
         </div>
+        ${docRow('البطاقة الضريبية','tax-card')}
       </div>
 
       <div class="card"><div class="ct">🏦 التأمينات والبنوك</div>
@@ -1090,21 +1092,9 @@ PAGES['company-info'] = async function(){
               <option value="no"  ${!s.etaRegistered?'selected':''}>❌ لا — غير مسجلة</option>
             </select></div>
         </div>
+        ${docRow('نموذج التأمينات الاجتماعية','social-ins')}
       </div>
     </div>
-
-
-    <div class="card"><div class="ct">📁 رفع المستندات الرسمية</div>
-      <div style="display:flex;flex-direction:column;gap:4px">
-        ${renderCoDocRow('السجل التجاري',            'commercial-reg')}
-        ${renderCoDocRow('البطاقة الضريبية',          'tax-card')}
-        ${renderCoDocRow('رقم التسجيل الضريبي (TRN)', 'trn-cert')}
-        ${renderCoDocRow('نموذج التأمينات',            'social-ins')}
-        ${renderCoDocRow('صحيفة الاستثمار',           'investment-rec')}
-        ${renderCoDocRow('عقد التأسيس / النظام الأساسي','articles')}
-        ${renderCoDocRow('عقد تعديل النظام الأساسي',   'articles-amend')}
-        ${renderCoDocRow('محضر الجمعية العامة',         'gen-assembly')}
-      </div>
     </div>
 
     <!-- ══ تبويب 3: الشركاء والمديرون ══════════════════════════════ -->
@@ -1208,14 +1198,7 @@ PAGES['company-info'] = async function(){
           <div class="fg"><label>الاستشاري الفني</label>
             <input id="ci-technical" class="inp" value="${esc(s.technicalConsultant||'')}"></div>
         </div>
-      </div>
-
-  
-    <div class="card"><div class="ct">📁 مستندات EDA والترخيص الدوائي</div>
-      <div style="display:flex;flex-direction:column;gap:4px">
-        ${renderCoDocRow('ترخيص EDA / بطاقة Toll', 'eda-lic')}
-        ${renderCoDocRow('شهادة GMP',               'gmp-cert')}
-        ${renderCoDocRow('بطاقة Toll Manufacturer',  'toll-card')}
+        ${docRow('ترخيص EDA / بطاقة Toll','eda-lic')}
       </div>
     </div>
 
@@ -1320,6 +1303,8 @@ PAGES['company-info'] = async function(){
               <input id="ci-prod-syn" class="inp" value="${esc(s.prodMgrSynNo||'')}"></div>
           </div>
         </div>
+        ${docRow('رخصة المصنع من EDA','factory-lic')}
+        ${docRow('شهادة GMP للمصنع','factory-gmp')}
 
         <div class="card">
           <div class="flex jb ac mb12">
@@ -1339,13 +1324,6 @@ PAGES['company-info'] = async function(){
           </div>
         </div>
       </div>
-
-
-        <div class="card"><div class="ct">📁 مستندات المصنع</div>
-          <div style="display:flex;flex-direction:column;gap:4px">
-            ${renderCoDocRow('رخصة المصنع من EDA',  'factory-lic')}
-            ${renderCoDocRow('شهادة GMP للمصنع',    'factory-gmp')}
-          </div>
         </div>
 
       <div id="ci-no-factory-msg" style="display:${mtype==='toll'?'block':'none'}">
@@ -3139,7 +3117,7 @@ async function loadCoDocRows(){
   const map={};
   coDocs.forEach(d=>{ if(!map[d.entityId]) map[d.entityId]=[]; map[d.entityId].push(d); });
   Object.entries(map).forEach(([subId,docs])=>{
-    const row=document.getElementById('cdr-'+subId);
+    const row=document.getElementById('drs-'+subId);
     if(!row) return;
     const last=docs[docs.length-1];
     const ratio=last.originalSize>0?Math.round((1-last.compressedSize/last.originalSize)*100):0;
@@ -3149,6 +3127,17 @@ async function loadCoDocRows(){
       ' <button class="btn bs bsm" onclick="uploadCoDocRow(\''+subId+'\',\''+esc(last.entityName||subId)+'\')">🔄</button>'+
       ' <button class="btn bg bsm" onclick="viewCoDocRow(\''+subId+'\')">📁</button>';
   });
+}
+
+
+// ── docRow: سطر رفع مستند داخل card ─────────────────────────────
+function docRow(label, subId, coSettings){
+  // coSettings: لو موجود نعرض حالة المستند الموجود
+  return '<div class="flex ac jb" style="padding:8px 0;border-top:1px solid var(--border);margin-top:8px">' +
+    '<div><span class="fw7 f12" style="color:var(--muted)">📎 '+esc(label)+'</span>' +
+    '<span id="drs-'+subId+'" style="margin-right:8px;font-size:11px"></span></div>' +
+    '<button class="btn bp bsm" onclick="uploadCoDocRow(\''+subId+'\',\''+label+'\')">رفع المستند</button>' +
+    '</div>';
 }
 
 // Boot
