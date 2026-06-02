@@ -976,425 +976,716 @@ async function loadDB(){
     </div>`;
 }
 
-// ── P02. Company Info ──────────────────────────────────────────
-PAGES['company-info']=async function(){
-  const s=(await dbAll('companySettings'))[0]||{};
+// ── P02. Company Info — مبني على المستندات الحقيقية ───────────────
+PAGES['company-info'] = async function(){
+  const s = (await dbAll('companySettings'))[0] || {};
+  const mtype = s.mfgType || 'toll'; // toll | own | both
+
   setPage(`
     <div class="ph">
-      <div><h1>🏢 بيانات الشركة</h1><p>البيانات الأساسية والهوية القانونية</p></div>
-      <div class="ph-act"><button class="btn bp" onclick="saveCoInfo()">💾 حفظ البيانات</button></div>
-    </div>
-    <div class="tabs">
-      <button class="tab on" data-t="ci-basic">📋 الأساسية</button>
-      <button class="tab" data-t="ci-contact">📞 التواصل</button>
-      <button class="tab" data-t="ci-legal">⚖️ القانونية</button>
-      <button class="tab" data-t="ci-pharma">💊 الدوائية</button>
+      <div><h1>🏢 بيانات الشركة</h1>
+        <p>البيانات القانونية والتجارية والدوائية — مبنية على المستندات الرسمية المصرية</p></div>
+      <div class="ph-act">
+        <button class="btn bp" onclick="saveCoInfo()">💾 حفظ جميع البيانات</button>
+      </div>
     </div>
 
+    <div class="tabs" id="ci-tabs">
+      <button class="tab on"  data-t="ci-basic">📋 أساسية</button>
+      <button class="tab"     data-t="ci-legal">⚖️ قانونية وضريبية</button>
+      <button class="tab"     data-t="ci-partners">👥 الشركاء والمديرون</button>
+      <button class="tab"     data-t="ci-pharma">💊 دوائية EDA</button>
+      <button class="tab"     data-t="ci-factory">🏭 بيانات المصنع</button>
+      <button class="tab"     data-t="ci-contact">📞 تواصل وعنوان</button>
+    </div>
+
+    <!-- ══ تبويب 1: أساسية ══════════════════════════════════════════ -->
     <div id="ci-basic" class="tp on">
-      <div class="card"><div class="ct">📋 البيانات الأساسية</div>
+      <div class="card"><div class="ct">📋 الهوية التجارية</div>
         <div class="fgr">
           <div class="fg"><label>الاسم التجاري بالعربية <span class="req">*</span></label>
-            <input id="ci-nar" class="inp" value="${esc(s.nameAr||'')}" placeholder="شركة النيل للأدوية"></div>
-          <div class="fg"><label>الاسم بالإنجليزية</label>
-            <input id="ci-nen" class="inp" value="${esc(s.nameEn||'')}" placeholder="Nile Pharma Co."></div>
+            <input id="ci-nar" class="inp" value="${esc(s.nameAr||'')}" placeholder="مثال: كوادرا فارم"></div>
+          <div class="fg"><label>الاسم التجاري بالإنجليزية</label>
+            <input id="ci-nen" class="inp" value="${esc(s.nameEn||'')}" placeholder="Quadra Pharm"></div>
+          <div class="fg"><label>الاسم القانوني الكامل (كما في عقد التأسيس)</label>
+            <input id="ci-legal-name" class="inp" value="${esc(s.legalName||'')}" placeholder="كوادرا كونسيومير لتعبئة المكملات الغذائية (ش.ذ.م.م)"></div>
           <div class="fg"><label>الشكل القانوني</label>
             <select id="ci-lf" class="inp">
-              ${['شركة مساهمة (S.A.E)','شركة ذات مسؤولية محدودة (LLC)','مؤسسة فردية','شراكة','فرع أجنبي'].map(v=>`<option ${s.legalForm===v?'selected':''}>${v}</option>`).join('')}
+              ${['شركة ذات مسؤولية محدودة (ش.ذ.م.م)','شركة مساهمة (ش.م.م) S.A.E','شركة توصية بسيطة','مؤسسة فردية','شراكة','فرع شركة أجنبية'].map(v=>`<option ${s.legalForm===v?'selected':''}>${v}</option>`).join('')}
             </select></div>
           <div class="fg"><label>تاريخ التأسيس</label>
             <input id="ci-found" class="inp" type="date" value="${s.foundedDate||''}"></div>
-          <div class="fg"><label>رأس المال المدفوع (ج.م)</label>
-            <input id="ci-cap" class="inp" type="number" value="${s.capitalPaid||''}" placeholder="10000000"></div>
+          <div class="fg"><label>رأس المال المدفوع (جنيه مصري)</label>
+            <input id="ci-cap" class="inp" type="number" value="${s.capitalPaid||''}" placeholder="100000"></div>
           <div class="fg"><label>بداية السنة المالية</label>
             <select id="ci-fy" class="inp">
               <option value="01-01" ${(s.fiscalStart||'01-01')==='01-01'?'selected':''}>يناير</option>
               <option value="07-01" ${s.fiscalStart==='07-01'?'selected':''}>يوليو</option>
             </select></div>
-        </div></div>
+          <div class="fg"><label>نوع النشاط الرئيسي</label>
+            <select id="ci-activity-type" class="inp">
+              ${['تصنيع أدوية','استيراد وتصدير','توزيع وبيع تجزئة','تصنيع مكملات غذائية','تصنيع بالتعاقد (Toll)','متعدد الأنشطة'].map(v=>`<option ${s.activityType===v?'selected':''}>${v}</option>`).join('')}
+            </select></div>
+        </div>
+        <div class="fg" style="margin-top:10px"><label>غرض الشركة (كما في السجل التجاري)</label>
+          <textarea id="ci-purpose" class="inp" rows="3" placeholder="تصنيع وتعبئة وتسويق وبيع الأدوية البشرية والبيطرية...">${esc(s.companyPurpose||'')}</textarea></div>
+      </div>
     </div>
 
-    <div id="ci-contact" class="tp">
-      <div class="card"><div class="ct">📞 بيانات التواصل والعنوان</div>
+    <!-- ══ تبويب 2: قانونية وضريبية ════════════════════════════════ -->
+    <div id="ci-legal" class="tp">
+      <div class="card"><div class="ct">📜 السجل التجاري</div>
         <div class="fgr">
-          <div class="fg"><label>العنوان</label>
-            <input id="ci-addr" class="inp" value="${esc(s.address||'')}" placeholder="الشارع والمنطقة"></div>
+          <div class="fg"><label>رقم السجل التجاري <span class="req">*</span></label>
+            <input id="ci-cr" class="inp" value="${esc(s.commercialRegNo||'')}" placeholder="مثال: 122267"></div>
+          <div class="fg"><label>الرقم الموحد للسجل</label>
+            <input id="ci-cr-unified" class="inp" value="${esc(s.commercialRegUnified||'')}" placeholder="الرقم القومي الموحد للسجل"></div>
+          <div class="fg"><label>تاريخ بداية الإيداع</label>
+            <input id="ci-cr-start" class="inp" type="date" value="${s.commercialRegStart||''}"></div>
+          <div class="fg"><label>تاريخ انتهاء السجل التجاري <span class="req">*</span></label>
+            <input id="ci-crexp" class="inp" type="date" value="${s.commercialRegExpiry||''}"></div>
+          <div class="fg"><label>جهة الإصدار</label>
+            <select id="ci-cr-issuer" class="inp">
+              ${['مكتب سجل تجاري — القاهرة','مكتب سجل تجاري — الجيزة','هيئة الاستثمار والمناطق الحرة','الإدارة المركزية للسجل التجاري','أخرى'].map(v=>`<option ${s.commercialRegIssuer===v?'selected':''}>${v}</option>`).join('')}
+            </select></div>
+          <div class="fg"><label>رقم الحافظة / الملف</label>
+            <input id="ci-cr-file" class="inp" value="${esc(s.commercialRegFile||'')}"></div>
+        </div>
+      </div>
+
+      <div class="card"><div class="ct">🧾 البطاقة الضريبية</div>
+        <div class="fgr">
+          <div class="fg"><label>رقم التسجيل الضريبي (TRN) <span class="req">*</span></label>
+            <input id="ci-trn" class="inp" value="${esc(s.taxRegNo||'')}" placeholder="204-999-359"></div>
+          <div class="fg"><label>رقم البطاقة الضريبية</label>
+            <input id="ci-tax-card" class="inp" value="${esc(s.taxCardNo||'')}" placeholder="159-999-204"></div>
+          <div class="fg"><label>المأمورية الضريبية التابعة لها</label>
+            <input id="ci-tax-office" class="inp" value="${esc(s.taxOffice||'')}" placeholder="مثال: مأمورية الاستثمار"></div>
+          <div class="fg"><label>كود النشاط الضريبي</label>
+            <input id="ci-act-code" class="inp" value="${esc(s.activityCode||'')}" placeholder="مثال: 4772"></div>
+          <div class="fg"><label>تاريخ بداية النشاط الضريبي</label>
+            <input id="ci-tax-start" class="inp" type="date" value="${s.taxStartDate||''}"></div>
+          <div class="fg"><label>تاريخ انتهاء البطاقة الضريبية</label>
+            <input id="ci-tax-exp" class="inp" type="date" value="${s.taxCardExpiry||''}"></div>
+          <div class="fg"><label>رقم تسجيل ضريبة الدخل</label>
+            <input id="ci-itr" class="inp" value="${esc(s.incomeTaxRegNo||'')}"></div>
+          <div class="fg"><label>رقم بطاقة الاستيراد (إن وُجدت)</label>
+            <input id="ci-imp" class="inp" value="${esc(s.importRegNo||'')}"></div>
+        </div>
+      </div>
+
+      <div class="card"><div class="ct">🏦 التأمينات والبنوك</div>
+        <div class="fgr">
+          <div class="fg"><label>رقم التأمينات الاجتماعية</label>
+            <input id="ci-si" class="inp" value="${esc(s.socialInsuranceNo||'')}"></div>
+          <div class="fg"><label>البنك الرئيسي</label>
+            <input id="ci-bank" class="inp" value="${esc(s.mainBank||'')}" placeholder="البنك الأهلي المصري"></div>
+          <div class="fg"><label>المراجع الخارجي (مراقب الحسابات)</label>
+            <input id="ci-aud" class="inp" value="${esc(s.auditorName||'')}"></div>
+          <div class="fg"><label>مسجل في منظومة الفواتير الإلكترونية (ETA)؟</label>
+            <select id="ci-eta" class="inp">
+              <option value="yes" ${s.etaRegistered?'selected':''}>✅ نعم — مسجلة</option>
+              <option value="no"  ${!s.etaRegistered?'selected':''}>❌ لا — غير مسجلة</option>
+            </select></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ تبويب 3: الشركاء والمديرون ══════════════════════════════ -->
+    <div id="ci-partners" class="tp">
+      <div class="card">
+        <div class="flex jb ac mb12">
+          <div class="ct" style="margin-bottom:0">👥 الشركاء وتوزيع الحصص</div>
+          <button class="btn bp bsm" onclick="addPartnerRow()">+ شريك</button>
+        </div>
+        <div class="tw"><table id="partners-tbl">
+          <thead><tr>
+            <th>اسم الشريك</th><th>الجنسية</th><th>عدد الحصص</th>
+            <th>القيمة (ج.م)</th><th>نسبة المشاركة %</th><th>عملة الوفاء</th><th>حذف</th>
+          </tr></thead>
+          <tbody id="partners-body">
+            ${(s.partners||[{name:'',nationality:'مصري',shares:500,value:50000,pct:50,currency:'جنيه مصري'}]).map((p,i)=>`
+            <tr>
+              <td><input class="inp" style="min-width:160px" value="${esc(p.name||'')}" onchange="updatePartner(${i},'name',this.value)"></td>
+              <td><input class="inp" style="min-width:80px" value="${esc(p.nationality||'مصري')}" onchange="updatePartner(${i},'nationality',this.value)"></td>
+              <td><input class="inp" type="number" style="width:80px" value="${p.shares||0}" onchange="updatePartner(${i},'shares',+this.value);calcPartnerTotals()"></td>
+              <td><input class="inp" type="number" style="width:100px" value="${p.value||0}" onchange="updatePartner(${i},'value',+this.value)"></td>
+              <td><input class="inp" type="number" step="0.01" style="width:70px" value="${p.pct||0}" onchange="updatePartner(${i},'pct',+this.value)"></td>
+              <td><select class="inp" style="width:100px" onchange="updatePartner(${i},'currency',this.value)">
+                <option ${(p.currency||'جنيه مصري')==='جنيه مصري'?'selected':''}>جنيه مصري</option>
+                <option ${p.currency==='دولار أمريكي'?'selected':''}>دولار أمريكي</option>
+                <option ${p.currency==='يورو'?'selected':''}>يورو</option>
+              </select></td>
+              <td><button class="btn bd bsm" onclick="removePartner(${i})">🗑️</button></td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>
+        <div id="partners-totals" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
+      </div>
+
+      <div class="card"><div class="ct">🎯 المديرون المفوّضون</div>
+        <div class="flex jb ac mb12" style="margin-bottom:8px">
+          <span class="tm f12">المديرون المفوّضون بالتوقيع وفق النظام الأساسي</span>
+          <button class="btn bp bsm" onclick="addDirectorRow()">+ مدير</button>
+        </div>
+        <div class="tw"><table>
+          <thead><tr><th>الاسم</th><th>الجنسية</th><th>الصفة</th><th>صلاحية التوقيع</th><th>حذف</th></tr></thead>
+          <tbody id="directors-body">
+            ${(s.directors||[]).map((d,i)=>`
+            <tr>
+              <td><input class="inp" style="min-width:160px" value="${esc(d.name||'')}" onchange="updateDirector(${i},'name',this.value)"></td>
+              <td><input class="inp" style="min-width:80px" value="${esc(d.nationality||'مصري')}" onchange="updateDirector(${i},'nationality',this.value)"></td>
+              <td><select class="inp" onchange="updateDirector(${i},'role',this.value)">
+                ${['مدير عام','مدير تنفيذي','مدير إداري','رئيس مجلس الإدارة','شريك مدير'].map(v=>`<option ${d.role===v?'selected':''}>${v}</option>`).join('')}
+              </select></td>
+              <td><select class="inp" onchange="updateDirector(${i},'sigAuth',this.value)">
+                <option ${(d.sigAuth||'منفرد')==='منفرد'?'selected':''}>منفرداً</option>
+                <option ${d.sigAuth==='مشترك'?'selected':''}>مجتمعاً مع الآخر</option>
+              </select></td>
+              <td><button class="btn bd bsm" onclick="removeDirector(${i})">🗑️</button></td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- ══ تبويب 4: بيانات EDA الدوائية ════════════════════════════ -->
+    <div id="ci-pharma" class="tp">
+      <div class="card"><div class="ct">💊 نوع النشاط الدوائي</div>
+        <div class="fg mb12"><label>نموذج التصنيع <span class="req">*</span></label>
+          <div style="display:flex;gap:12px;margin-top:6px">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+              <input type="radio" name="mfg-type" value="own"  ${mtype==='own' ?'checked':''} onchange="toggleMfgType('own')">
+              🏭 لدينا مصنع خاص
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+              <input type="radio" name="mfg-type" value="toll" ${mtype==='toll'?'checked':''} onchange="toggleMfgType('toll')">
+              🤝 Toll Manufacturer (نصنّع لدى الغير)
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+              <input type="radio" name="mfg-type" value="both" ${mtype==='both'?'checked':''} onchange="toggleMfgType('both')">
+              🔄 الاثنان معاً
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- بطاقة EDA للشركة التجارية -->
+      <div class="card"><div class="ct">📋 ترخيص EDA للشركة</div>
+        <div class="fgr">
+          <div class="fg"><label>رقم ترخيص EDA <span class="req">*</span></label>
+            <input id="ci-eda" class="inp" value="${esc(s.edaLicenseNo||'')}" placeholder="Toll/ 57 أو MFG-2024-001"></div>
+          <div class="fg"><label>نوع الترخيص</label>
+            <select id="ci-edatype" class="inp">
+              ${['Toll Manufacturer — قيد التصنيع بالتعاقد','تصنيع (Manufacturing License)','استيراد (Import License)','تصدير (Export License)','توزيع (Distribution License)','تصنيع + استيراد + توزيع'].map(v=>`<option ${s.edaLicenseType===v?'selected':''}>${v}</option>`).join('')}
+            </select></div>
+          <div class="fg"><label>تاريخ أول رخصة (EDA)</label>
+            <input id="ci-eda-first" class="inp" type="date" value="${s.edaFirstLicenseDate||''}"></div>
+          <div class="fg"><label>تاريخ انتهاء ترخيص EDA</label>
+            <input id="ci-edaexp" class="inp" type="date" value="${s.edaLicenseExpiry||''}"></div>
+          <div class="fg"><label>الصيدلاني المسؤول / QP <span class="req">*</span></label>
+            <input id="ci-qp" class="inp" value="${esc(s.qualifiedPerson||'')}" placeholder="اسم الصيدلاني المسؤول"></div>
+          <div class="fg"><label>رقم نقابة الصيادلة للـ QP</label>
+            <input id="ci-qpreg" class="inp" value="${esc(s.qpRegNo||'')}"></div>
+          <div class="fg"><label>رقم ترخيص مزاولة المهنة للـ QP</label>
+            <input id="ci-qp-moh" class="inp" value="${esc(s.qpMohNo||'')}"></div>
+          <div class="fg"><label>الاستشاري الفني</label>
+            <input id="ci-technical" class="inp" value="${esc(s.technicalConsultant||'')}"></div>
+        </div>
+      </div>
+
+      <!-- Toll: المصانع المتعاقدة -->
+      <div id="ci-toll-section" style="display:${mtype==='toll'||mtype==='both'?'block':'none'}">
+        <div class="card">
+          <div class="flex jb ac mb12">
+            <div class="ct" style="margin-bottom:0">🏭 المصانع المتعاقدة (Toll Factories)</div>
+            <button class="btn bp bsm" onclick="addTollFactory()">+ مصنع</button>
+          </div>
+          <div class="tw"><table>
+            <thead><tr><th>اسم المصنع</th><th>العنوان</th><th>المنتجات المصنوعة</th><th>حذف</th></tr></thead>
+            <tbody id="toll-factories-body">
+              ${(s.tollFactories||[]).map((f,i)=>`
+              <tr>
+                <td><input class="inp" style="min-width:180px" value="${esc(f.name||'')}" onchange="updateTollFactory(${i},'name',this.value)"></td>
+                <td><input class="inp" style="min-width:160px" value="${esc(f.address||'')}" onchange="updateTollFactory(${i},'address',this.value)"></td>
+                <td><input class="inp" style="min-width:160px" value="${esc(f.products||'')}" onchange="updateTollFactory(${i},'products',this.value)"></td>
+                <td><button class="btn bd bsm" onclick="removeTollFactory(${i})">🗑️</button></td>
+              </tr>`).join('')}
+            </tbody>
+          </table></div>
+        </div>
+
+        <div class="card">
+          <div class="flex jb ac mb12">
+            <div class="ct" style="margin-bottom:0">🏪 أماكن التخزين المرخصة</div>
+            <button class="btn bp bsm" onclick="addTollStorage()">+ مستودع</button>
+          </div>
+          <div id="toll-storage-list">
+            ${(s.tollStorages||[]).map((st,i)=>`
+            <div style="display:flex;gap:8px;margin-bottom:6px">
+              <input class="inp" style="flex:1" value="${esc(st||'')}" onchange="updateTollStorage(${i},this.value)" placeholder="اسم المستودع أو المصنع">
+              <button class="btn bd bsm" onclick="removeTollStorage(${i})">🗑️</button>
+            </div>`).join('')}
+          </div>
+        </div>
+      </div>
+
+      <!-- الشركات الموزعة -->
+      <div class="card"><div class="ct">🚚 الشركات الموزعة (Whole Sale Distributors)</div>
+        <div class="flex jb ac mb12" style="margin-bottom:8px">
+          <span class="tm f12">كما هو مسجل في بطاقة Toll</span>
+          <button class="btn bp bsm" onclick="addRegisteredDist()">+ موزع</button>
+        </div>
+        <div id="reg-dist-list">
+          ${(s.registeredDistributors||[]).map((d,i)=>`
+          <div style="display:flex;gap:8px;margin-bottom:6px">
+            <input class="inp" style="flex:2" value="${esc(d.name||'')}" onchange="updateRegDist(${i},'name',this.value)" placeholder="اسم الشركة الموزعة">
+            <input class="inp" style="flex:2" value="${esc(d.address||'')}" onchange="updateRegDist(${i},'address',this.value)" placeholder="العنوان">
+            <button class="btn bd bsm" onclick="removeRegDist(${i})">🗑️</button>
+          </div>`).join('')}
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ تبويب 5: بيانات المصنع ═══════════════════════════════════ -->
+    <div id="ci-factory" class="tp">
+      <div id="ci-own-factory" style="display:${mtype==='own'||mtype==='both'?'block':'none'}">
+        <div class="card"><div class="ct">🏭 رخصة مصنع EDA</div>
+          <div class="fgr">
+            <div class="fg"><label>اسم المصنع الرسمي</label>
+              <input id="ci-fac-name" class="inp" value="${esc(s.factoryName||'')}" placeholder="مثال: نرهادو إنترناشيونال للأدوية والمكملات"></div>
+            <div class="fg"><label>رقم رخصة المصنع (Serial EDA)</label>
+              <input id="ci-fac-lic" class="inp" value="${esc(s.factoryLicenseNo||'')}" placeholder="مثال: 00003/2017"></div>
+            <div class="fg"><label>تاريخ أول رخصة للمصنع</label>
+              <input id="ci-fac-first" class="inp" type="date" value="${s.factoryFirstLicense||''}"></div>
+            <div class="fg"><label>عنوان المصنع</label>
+              <input id="ci-fac-addr" class="inp" value="${esc(s.factoryAddress||'')}" placeholder="مثال: قطعة 23-24-25 المنطقة الصناعية السادسة — السادس من أكتوبر"></div>
+            <div class="fg"><label>المدينة الصناعية</label>
+              <select id="ci-fac-city" class="inp">
+                ${['السادس من أكتوبر','مدينة بدر','مدينة السادات','مدينة رمضان','10 رمضان','العبور','برج العرب','القاهرة الجديدة','أخرى'].map(v=>`<option ${s.factoryCity===v?'selected':''}>${v}</option>`).join('')}
+              </select></div>
+            <div class="fg"><label>شهادة GMP — رقمها</label>
+              <input id="ci-gmp" class="inp" value="${esc(s.gmpLicenseNo||'')}"></div>
+            <div class="fg"><label>تاريخ انتهاء شهادة GMP</label>
+              <input id="ci-gmpexp" class="inp" type="date" value="${s.gmpLicenseExpiry||''}"></div>
+            <div class="fg"><label>جهة اعتماد GMP</label>
+              <select id="ci-gmpauth" class="inp">
+                ${['EDA مصر','WHO','EU GMP','FDA USA','PMDA Japan','TGA Australia','أخرى'].map(v=>`<option ${s.gmpAuthority===v?'selected':''}>${v}</option>`).join('')}
+              </select></div>
+          </div>
+        </div>
+
+        <div class="card"><div class="ct">👩‍🔬 المسؤولون الفنيون للمصنع</div>
+          <div class="fgr">
+            <div class="fg"><label>مدير المصنع — الاسم</label>
+              <input id="ci-site-mgr" class="inp" value="${esc(s.siteManager||'')}"></div>
+            <div class="fg"><label>مدير المصنع — رقم نقابة الصيادلة</label>
+              <input id="ci-site-mgr-syn" class="inp" value="${esc(s.siteMgrSynNo||'')}"></div>
+            <div class="fg"><label>مدير المصنع — رقم ترخيص وزارة الصحة</label>
+              <input id="ci-site-mgr-moh" class="inp" value="${esc(s.siteMgrMohNo||'')}"></div>
+            <div class="fg"><label>مدير ضبط الجودة QC — الاسم</label>
+              <input id="ci-qc-mgr" class="inp" value="${esc(s.qcManager||'')}"></div>
+            <div class="fg"><label>مدير QC — رقم نقابة الصيادلة</label>
+              <input id="ci-qc-syn" class="inp" value="${esc(s.qcMgrSynNo||'')}"></div>
+            <div class="fg"><label>مدير QC — رقم ترخيص وزارة الصحة</label>
+              <input id="ci-qc-moh" class="inp" value="${esc(s.qcMgrMohNo||'')}"></div>
+            <div class="fg"><label>مدير الإنتاج — الاسم</label>
+              <input id="ci-prod-mgr" class="inp" value="${esc(s.productionManager||'')}"></div>
+            <div class="fg"><label>مدير الإنتاج — رقم نقابة الصيادلة</label>
+              <input id="ci-prod-syn" class="inp" value="${esc(s.prodMgrSynNo||'')}"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="flex jb ac mb12">
+            <div class="ct" style="margin-bottom:0">⚗️ خطوط الإنتاج المرخصة</div>
+            <button class="btn bp bsm" onclick="addProductionLine()">+ خط إنتاج</button>
+          </div>
+          <div id="prod-lines-list">
+            ${(s.productionLines||[]).map((l,i)=>`
+            <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+              <select class="inp" style="width:200px" onchange="updateProdLine(${i},'form',this.value)">
+                ${Object.entries(DOSAGE_FORMS).map(([k,v])=>`<option value="${k}" ${l.form===k?'selected':''}>${v.i} ${v.l}</option>`).join('')}
+              </select>
+              <input class="inp" style="flex:1" value="${esc(l.notes||'')}" placeholder="ملاحظات — مثال: Solid dosage forms (hard gelatin capsules)" onchange="updateProdLine(${i},'notes',this.value)">
+              <input class="inp" type="date" style="width:140px" value="${l.addedDate||''}" title="تاريخ الإضافة للرخصة" onchange="updateProdLine(${i},'addedDate',this.value)">
+              <button class="btn bd bsm" onclick="removeProdLine(${i})">🗑️</button>
+            </div>`).join('')}
+          </div>
+        </div>
+      </div>
+
+      <div id="ci-no-factory-msg" style="display:${mtype==='toll'?'block':'none'}">
+        <div class="card" style="text-align:center;padding:32px">
+          <div style="font-size:36px;margin-bottom:12px">🤝</div>
+          <div style="font-weight:700;font-size:14px">شركة Toll Manufacturer</div>
+          <div class="tm f12" style="margin-top:6px">بيانات المصانع المتعاقدة موجودة في تبويب "دوائية EDA"</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ تبويب 6: تواصل وعنوان ════════════════════════════════════ -->
+    <div id="ci-contact" class="tp">
+      <div class="card"><div class="ct">📍 العنوان والتواصل</div>
+        <div class="fgr">
+          <div class="fg"><label>عنوان الشركة (المقر الرئيسي)</label>
+            <input id="ci-addr" class="inp" value="${esc(s.address||'')}" placeholder="مثال: ق ب بلوك 15 — عمارة النرجس — حي الواحة"></div>
           <div class="fg"><label>المحافظة</label>
             <select id="ci-gov" class="inp">
-              ${['القاهرة','الجيزة','الإسكندرية','الشرقية','الدقهلية','البحيرة','المنوفية','الغربية','كفر الشيخ','دمياط','بورسعيد','الإسماعيلية','السويس','أسيوط','المنيا','بني سويف','الفيوم','سوهاج','قنا','الأقصر','أسوان','البحر الأحمر','شمال سيناء','جنوب سيناء','مطروح','الوادي الجديد'].map(g=>`<option ${s.governorate===g?'selected':''}>${g}</option>`).join('')}
+              ${['القاهرة','الجيزة','الإسكندرية','الشرقية','الدقهلية','البحيرة','المنوفية','الغربية','كفر الشيخ','دمياط','بورسعيد','الإسماعيلية','السويس','أسيوط','المنيا','بني سويف','الفيوم','سوهاج','قنا','الأقصر','أسوان'].map(g=>`<option ${(s.governorate||'القاهرة')===g?'selected':''}>${g}</option>`).join('')}
             </select></div>
+          <div class="fg"><label>المدينة / الحي</label>
+            <input id="ci-city" class="inp" value="${esc(s.city||'')}" placeholder="مثال: مدينة نصر"></div>
           <div class="fg"><label>هاتف رئيسي</label>
-            <input id="ci-phone" class="inp" type="tel" value="${esc(s.phone||'')}" placeholder="02xxxxxxxx"></div>
+            <input id="ci-phone" class="inp" type="tel" value="${esc(s.phone||'')}" placeholder="025329158"></div>
           <div class="fg"><label>فاكس</label>
             <input id="ci-fax" class="inp" type="tel" value="${esc(s.fax||'')}"></div>
           <div class="fg"><label>البريد الإلكتروني</label>
-            <input id="ci-email" class="inp" type="email" value="${esc(s.email||'')}" placeholder="info@co.com"></div>
+            <input id="ci-email" class="inp" type="email" value="${esc(s.email||'')}" placeholder="info@company.com"></div>
+          <div class="fg"><label>البريد الإلكتروني — الشخص المسؤول في CAPA</label>
+            <input id="ci-capa-email" class="inp" type="email" value="${esc(s.capaEmail||'')}"></div>
           <div class="fg"><label>الموقع الإلكتروني</label>
-            <input id="ci-web" class="inp" value="${esc(s.website||'')}" placeholder="www.company.com"></div>
-        </div></div>
-    </div>
-
-    <div id="ci-legal" class="tp">
-      <div class="card"><div class="ct">⚖️ البيانات الضريبية والقانونية</div>
-        <div class="fgr">
-          <div class="fg"><label>الرقم الضريبي (TRN) <span class="req">*</span></label>
-            <input id="ci-trn" class="inp" value="${esc(s.taxRegNo||'')}" placeholder="123456789"></div>
-          <div class="fg"><label>رقم تسجيل ضريبة الدخل</label>
-            <input id="ci-itr" class="inp" value="${esc(s.incomeTaxRegNo||'')}"></div>
-          <div class="fg"><label>رقم السجل التجاري</label>
-            <input id="ci-cr" class="inp" value="${esc(s.commercialRegNo||'')}"></div>
-          <div class="fg"><label>تاريخ انتهاء السجل التجاري</label>
-            <input id="ci-crexp" class="inp" type="date" value="${s.commercialRegExpiry||''}"></div>
-          <div class="fg"><label>رقم التأمينات الاجتماعية</label>
-            <input id="ci-si" class="inp" value="${esc(s.socialInsuranceNo||'')}"></div>
-          <div class="fg"><label>رقم بطاقة الاستيراد</label>
-            <input id="ci-imp" class="inp" value="${esc(s.importRegNo||'')}"></div>
-          <div class="fg"><label>المراجع الخارجي (Auditor)</label>
-            <input id="ci-aud" class="inp" value="${esc(s.auditorName||'')}"></div>
-          <div class="fg"><label>البنك الرئيسي</label>
-            <input id="ci-bank" class="inp" value="${esc(s.mainBank||'')}" placeholder="البنك الأهلي المصري"></div>
-        </div></div>
-    </div>
-
-    <div id="ci-pharma" class="tp">
-      <div class="card"><div class="ct">💊 البيانات الدوائية والتنظيمية</div>
-        <div class="fgr">
-          <div class="fg"><label>رقم ترخيص EDA <span class="req">*</span></label>
-            <input id="ci-eda" class="inp" value="${esc(s.edaLicenseNo||'')}" placeholder="MFG-2024-001"></div>
-          <div class="fg"><label>تاريخ انتهاء ترخيص EDA</label>
-            <input id="ci-edaexp" class="inp" type="date" value="${s.edaLicenseExpiry||''}"></div>
-          <div class="fg"><label>نوع الترخيص</label>
-            <select id="ci-edatype" class="inp">
-              ${['تصنيع (Manufacturing)','توزيع (Distribution)','استيراد (Import)','تصدير (Export)','CMO'].map(v=>`<option ${s.edaLicenseType===v?'selected':''}>${v}</option>`).join('')}
-            </select></div>
-          <div class="fg"><label>رقم شهادة GMP</label>
-            <input id="ci-gmp" class="inp" value="${esc(s.gmpLicenseNo||'')}"></div>
-          <div class="fg"><label>تاريخ انتهاء GMP</label>
-            <input id="ci-gmpexp" class="inp" type="date" value="${s.gmpLicenseExpiry||''}"></div>
-          <div class="fg"><label>جهة اعتماد GMP</label>
-            <select id="ci-gmpauth" class="inp">
-              ${['EDA مصر','WHO','EU GMP','FDA','ISO 15378','أخرى'].map(v=>`<option ${s.gmpAuthority===v?'selected':''}>${v}</option>`).join('')}
-            </select></div>
-          <div class="fg"><label>الشخص المؤهل QP (صيدلاني مسؤول)</label>
-            <input id="ci-qp" class="inp" value="${esc(s.qualifiedPerson||'')}"></div>
-          <div class="fg"><label>رقم تسجيل نقابة الصيادلة</label>
-            <input id="ci-qpreg" class="inp" value="${esc(s.qpRegNo||'')}"></div>
-        </div>
-        <hr class="divider">
-        <div class="fg2">
-          <div class="fg"><label>مسجل في منظومة الفواتير الإلكترونية (ETA)؟</label>
-            <select id="ci-eta" class="inp">
-              <option value="yes" ${s.etaRegistered?'selected':''}>نعم — مسجلة</option>
-              <option value="no" ${!s.etaRegistered?'selected':''}>لا — غير مسجلة</option>
-            </select></div>
-          <div class="fg"><label>كود النشاط (Activity Code)</label>
-            <input id="ci-act" class="inp" value="${esc(s.activityCode||'')}" placeholder="2100 — تصنيع أدوية"></div>
+            <input id="ci-web" class="inp" value="${esc(s.website||'')}"></div>
+          <div class="fg"><label>هاتف الشخص المسؤول في CAPA</label>
+            <input id="ci-capa-phone" class="inp" value="${esc(s.capaPhone||'')}"></div>
         </div>
       </div>
-      <div class="card"><div class="ct">⏰ تنبيهات انتهاء التراخيص</div>
+
+      <!-- تنبيهات انتهاء التراخيص -->
+      <div class="card"><div class="ct">⏰ تنبيهات انتهاء الوثائق</div>
         ${renderLicAlerts(s)}
       </div>
-    </div>`);
+    </div>
+  `);
+  // Load arrays from DB into memory
+  const _s0=(await dbAll('companySettings'))[0]||{};
+  _partners     = _s0.partners||[];
+  _directors    = _s0.directors||[];
+  _tollFactories= _s0.tollFactories||[];
+  _tollStorages = _s0.tollStorages||[];
+  _regDists     = _s0.registeredDistributors||[];
+  _prodLines    = _s0.productionLines||[];
+  // Init tabs
+  setTimeout(()=>{
+    document.querySelectorAll('#ci-tabs .tab').forEach(tab=>{
+      tab.onclick=()=>{
+        document.querySelectorAll('#ci-tabs .tab').forEach(t=>t.classList.remove('on'));
+        document.querySelectorAll('.tp').forEach(p=>p.classList.remove('on'));
+        tab.classList.add('on');
+        document.getElementById(tab.dataset.t)?.classList.add('on');
+      };
+    });
+    calcPartnerTotals();
+  }, 80);
 };
 
+// ── Toggle Mfg Type ────────────────────────────────────────────────
+function toggleMfgType(type){
+  const toll = document.getElementById('ci-toll-section');
+  const own  = document.getElementById('ci-own-factory');
+  const msg  = document.getElementById('ci-no-factory-msg');
+  if(toll){ toll.style.display = (type==='toll'||type==='both') ? 'block' : 'none'; }
+  if(own) { own.style.display  = (type==='own' ||type==='both') ? 'block' : 'none'; }
+  if(msg) { msg.style.display  = (type==='toll') ? 'block' : 'none'; }
+}
+
+// ── Partners helpers ───────────────────────────────────────────────
+let _partners = [];
+let _directors = [];
+let _tollFactories = [];
+let _tollStorages = [];
+let _regDists = [];
+let _prodLines = [];
+
+async function _loadCompanyArrays(){
+  const s = (await dbAll('companySettings'))[0]||{};
+  _partners     = s.partners||[];
+  _directors    = s.directors||[];
+  _tollFactories= s.tollFactories||[];
+  _tollStorages = s.tollStorages||[];
+  _regDists     = s.registeredDistributors||[];
+  _prodLines    = s.productionLines||[];
+}
+
+function updatePartner(i,key,val){ if(_partners[i]) _partners[i][key]=val; }
+function updateDirector(i,key,val){ if(_directors[i]) _directors[i][key]=val; }
+function updateTollFactory(i,key,val){ if(_tollFactories[i]) _tollFactories[i][key]=val; }
+function updateTollStorage(i,val){ _tollStorages[i]=val; }
+function updateRegDist(i,key,val){ if(_regDists[i]) _regDists[i][key]=val; }
+function updateProdLine(i,key,val){ if(_prodLines[i]) _prodLines[i][key]=val; }
+
+function addPartnerRow(){
+  _partners.push({name:'',nationality:'مصري',shares:0,value:0,pct:0,currency:'جنيه مصري'});
+  _refreshPartnersTable();
+}
+function removePartner(i){ _partners.splice(i,1); _refreshPartnersTable(); }
+function addDirectorRow(){
+  _directors.push({name:'',nationality:'مصري',role:'مدير عام',sigAuth:'منفرد'});
+  _refreshDirectorsTable();
+}
+function removeDirector(i){ _directors.splice(i,1); _refreshDirectorsTable(); }
+function addTollFactory(){
+  _tollFactories.push({name:'',address:'',products:''});
+  _refreshTollFactories();
+}
+function removeTollFactory(i){ _tollFactories.splice(i,1); _refreshTollFactories(); }
+function addTollStorage(){ _tollStorages.push(''); _refreshTollStorages(); }
+function removeTollStorage(i){ _tollStorages.splice(i,1); _refreshTollStorages(); }
+function addRegisteredDist(){ _regDists.push({name:'',address:''}); _refreshRegDists(); }
+function removeRegDist(i){ _regDists.splice(i,1); _refreshRegDists(); }
+function addProductionLine(){
+  _prodLines.push({form:'tablet',notes:'',addedDate:''});
+  _refreshProdLines();
+}
+function removeProdLine(i){ _prodLines.splice(i,1); _refreshProdLines(); }
+
+function calcPartnerTotals(){
+  const rows = document.querySelectorAll('#partners-body tr');
+  let totalShares=0, totalPct=0;
+  rows.forEach(r=>{
+    totalShares += +r.querySelector('input:nth-child(1)')?.value||0;
+    totalPct    += +r.querySelectorAll('input')[3]?.value||0;
+  });
+  const el = document.getElementById('partners-totals');
+  if(el) el.innerHTML = `إجمالي الحصص: <strong>${fmt(totalShares)}</strong> | إجمالي نسبة المشاركة: <strong class="${Math.abs(totalPct-100)<0.01?'tc':'tr'}">${totalPct.toFixed(2)}%</strong> ${Math.abs(totalPct-100)<0.01?'✅':'⚠️ يجب أن يكون 100%'}`;
+}
+
+function _refreshPartnersTable(){
+  const tbody = document.getElementById('partners-body'); if(!tbody) return;
+  tbody.innerHTML = _partners.map((p,i)=>`<tr>
+    <td><input class="inp" style="min-width:160px" value="${esc(p.name||'')}" onchange="updatePartner(${i},'name',this.value)"></td>
+    <td><input class="inp" style="min-width:80px" value="${esc(p.nationality||'مصري')}" onchange="updatePartner(${i},'nationality',this.value)"></td>
+    <td><input class="inp" type="number" style="width:80px" value="${p.shares||0}" onchange="updatePartner(${i},'shares',+this.value);calcPartnerTotals()"></td>
+    <td><input class="inp" type="number" style="width:100px" value="${p.value||0}" onchange="updatePartner(${i},'value',+this.value)"></td>
+    <td><input class="inp" type="number" step="0.01" style="width:70px" value="${p.pct||0}" onchange="updatePartner(${i},'pct',+this.value)"></td>
+    <td><select class="inp" style="width:100px" onchange="updatePartner(${i},'currency',this.value)">
+      <option ${(p.currency||'جنيه مصري')==='جنيه مصري'?'selected':''}>جنيه مصري</option>
+      <option ${p.currency==='دولار أمريكي'?'selected':''}>دولار أمريكي</option>
+    </select></td>
+    <td><button class="btn bd bsm" onclick="removePartner(${i})">🗑️</button></td>
+  </tr>`).join('');
+  calcPartnerTotals();
+}
+
+function _refreshDirectorsTable(){
+  const tbody = document.getElementById('directors-body'); if(!tbody) return;
+  tbody.innerHTML = _directors.map((d,i)=>`<tr>
+    <td><input class="inp" style="min-width:160px" value="${esc(d.name||'')}" onchange="updateDirector(${i},'name',this.value)"></td>
+    <td><input class="inp" style="min-width:80px" value="${esc(d.nationality||'مصري')}" onchange="updateDirector(${i},'nationality',this.value)"></td>
+    <td><select class="inp" onchange="updateDirector(${i},'role',this.value)">
+      ${['مدير عام','مدير تنفيذي','مدير إداري','رئيس مجلس الإدارة','شريك مدير'].map(v=>`<option ${d.role===v?'selected':''}>${v}</option>`).join('')}
+    </select></td>
+    <td><select class="inp" onchange="updateDirector(${i},'sigAuth',this.value)">
+      <option ${(d.sigAuth||'منفرد')==='منفرد'?'selected':''}>منفرداً</option>
+      <option ${d.sigAuth==='مشترك'?'selected':''}>مجتمعاً مع الآخر</option>
+    </select></td>
+    <td><button class="btn bd bsm" onclick="removeDirector(${i})">🗑️</button></td>
+  </tr>`).join('');
+}
+
+function _refreshTollFactories(){
+  const tbody = document.getElementById('toll-factories-body'); if(!tbody) return;
+  tbody.innerHTML = _tollFactories.map((f,i)=>`<tr>
+    <td><input class="inp" style="min-width:180px" value="${esc(f.name||'')}" onchange="updateTollFactory(${i},'name',this.value)"></td>
+    <td><input class="inp" style="min-width:160px" value="${esc(f.address||'')}" onchange="updateTollFactory(${i},'address',this.value)"></td>
+    <td><input class="inp" style="min-width:160px" value="${esc(f.products||'')}" onchange="updateTollFactory(${i},'products',this.value)"></td>
+    <td><button class="btn bd bsm" onclick="removeTollFactory(${i})">🗑️</button></td>
+  </tr>`).join('');
+}
+
+function _refreshTollStorages(){
+  const el = document.getElementById('toll-storage-list'); if(!el) return;
+  el.innerHTML = _tollStorages.map((st,i)=>`
+    <div style="display:flex;gap:8px;margin-bottom:6px">
+      <input class="inp" style="flex:1" value="${esc(st||'')}" onchange="updateTollStorage(${i},this.value)" placeholder="اسم المستودع">
+      <button class="btn bd bsm" onclick="removeTollStorage(${i})">🗑️</button>
+    </div>`).join('');
+}
+
+function _refreshRegDists(){
+  const el = document.getElementById('reg-dist-list'); if(!el) return;
+  el.innerHTML = _regDists.map((d,i)=>`
+    <div style="display:flex;gap:8px;margin-bottom:6px">
+      <input class="inp" style="flex:2" value="${esc(d.name||'')}" onchange="updateRegDist(${i},'name',this.value)" placeholder="اسم الشركة الموزعة">
+      <input class="inp" style="flex:2" value="${esc(d.address||'')}" onchange="updateRegDist(${i},'address',this.value)" placeholder="العنوان">
+      <button class="btn bd bsm" onclick="removeRegDist(${i})">🗑️</button>
+    </div>`).join('');
+}
+
+function _refreshProdLines(){
+  const el = document.getElementById('prod-lines-list'); if(!el) return;
+  el.innerHTML = _prodLines.map((l,i)=>`
+    <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+      <select class="inp" style="width:200px" onchange="updateProdLine(${i},'form',this.value)">
+        ${Object.entries(DOSAGE_FORMS).map(([k,v])=>`<option value="${k}" ${l.form===k?'selected':''}>${v.i} ${v.l}</option>`).join('')}
+      </select>
+      <input class="inp" style="flex:1" value="${esc(l.notes||'')}" placeholder="ملاحظات" onchange="updateProdLine(${i},'notes',this.value)">
+      <input class="inp" type="date" style="width:140px" value="${l.addedDate||''}" onchange="updateProdLine(${i},'addedDate',this.value)">
+      <button class="btn bd bsm" onclick="removeProdLine(${i})">🗑️</button>
+    </div>`).join('');
+}
+
+// ── renderLicAlerts ────────────────────────────────────────────────
 function renderLicAlerts(s){
-  const items=[
-    {l:'ترخيص EDA',       exp:s.edaLicenseExpiry},
-    {l:'شهادة GMP',       exp:s.gmpLicenseExpiry},
-    {l:'السجل التجاري',   exp:s.commercialRegExpiry},
+  const items = [
+    {l:'السجل التجاري',         exp:s.commercialRegExpiry},
+    {l:'البطاقة الضريبية',       exp:s.taxCardExpiry},
+    {l:'ترخيص EDA',              exp:s.edaLicenseExpiry},
+    {l:'شهادة GMP',              exp:s.gmpLicenseExpiry},
+    {l:'رخصة مصنع EDA',         exp:s.factoryLicenseExpiry},
   ];
-  const rows=items.filter(i=>i.exp).map(i=>`
+  const rows = items.filter(i=>i.exp).map(i=>`
     <div class="flex ac jb" style="padding:8px 0;border-bottom:1px solid var(--border)">
       <span class="f13">${i.l}</span>
       <div class="flex ac g8"><span class="tm f12">${i.exp}</span>${expBadge(i.exp)}</div>
     </div>`);
-  return rows.length?rows.join(''):'<div class="tm f12">لم يتم إدخال تواريخ انتهاء التراخيص بعد</div>';
+  return rows.length
+    ? rows.join('')
+    : '<div class="tm f12">لم يتم إدخال تواريخ انتهاء الوثائق بعد</div>';
 }
 
+// ── saveCoInfo — الحفظ الكامل ─────────────────────────────────────
 async function saveCoInfo(){
-  const v=id=>document.getElementById(id)?.value?.trim()||'';
-  const d={
-    nameAr:v('ci-nar'), nameEn:v('ci-nen'),
-    legalForm:v('ci-lf'), foundedDate:v('ci-found'),
-    capitalPaid:v('ci-cap'), fiscalStart:v('ci-fy'),
-    address:v('ci-addr'), governorate:v('ci-gov'),
-    phone:v('ci-phone'), fax:v('ci-fax'), email:v('ci-email'), website:v('ci-web'),
-    taxRegNo:v('ci-trn'), incomeTaxRegNo:v('ci-itr'),
-    commercialRegNo:v('ci-cr'), commercialRegExpiry:v('ci-crexp'),
-    socialInsuranceNo:v('ci-si'), importRegNo:v('ci-imp'),
-    auditorName:v('ci-aud'), mainBank:v('ci-bank'),
-    edaLicenseNo:v('ci-eda'), edaLicenseExpiry:v('ci-edaexp'),
-    edaLicenseType:v('ci-edatype'), gmpLicenseNo:v('ci-gmp'),
-    gmpLicenseExpiry:v('ci-gmpexp'), gmpAuthority:v('ci-gmpauth'),
-    qualifiedPerson:v('ci-qp'), qpRegNo:v('ci-qpreg'),
-    etaRegistered:v('ci-eta')==='yes', activityCode:v('ci-act'),
+  await _loadCompanyArrays();
+  const v = id => document.getElementById(id)?.value?.trim()||'';
+  const mtype = document.querySelector('input[name="mfg-type"]:checked')?.value || 'toll';
+
+  // جمع بيانات الشركاء من الجدول
+  const partnerRows = document.querySelectorAll('#partners-body tr');
+  const partners = Array.from(partnerRows).map(r=>{
+    const inputs = r.querySelectorAll('input');
+    const sel    = r.querySelector('select');
+    return {
+      name:        inputs[0]?.value?.trim()||'',
+      nationality: inputs[1]?.value?.trim()||'مصري',
+      shares:      +inputs[2]?.value||0,
+      value:       +inputs[3]?.value||0,
+      pct:         +inputs[4]?.value||0,
+      currency:    sel?.value||'جنيه مصري',
+    };
+  });
+
+  // جمع المديرين
+  const dirRows = document.querySelectorAll('#directors-body tr');
+  const directors = Array.from(dirRows).map(r=>{
+    const inputs = r.querySelectorAll('input');
+    const sels   = r.querySelectorAll('select');
+    return {
+      name:        inputs[0]?.value?.trim()||'',
+      nationality: inputs[1]?.value?.trim()||'',
+      role:        sels[0]?.value||'مدير عام',
+      sigAuth:     sels[1]?.value||'منفرد',
+    };
+  });
+
+  // جمع خطوط الإنتاج
+  const lineEls = document.querySelectorAll('#prod-lines-list > div');
+  const productionLines = Array.from(lineEls).map(el=>{
+    const sel   = el.querySelector('select');
+    const inputs= el.querySelectorAll('input');
+    return { form:sel?.value||'tablet', notes:inputs[0]?.value?.trim()||'', addedDate:inputs[1]?.value||'' };
+  });
+
+  const d = {
+    nameAr:               v('ci-nar'),
+    nameEn:               v('ci-nen'),
+    legalName:            v('ci-legal-name'),
+    legalForm:            v('ci-lf'),
+    foundedDate:          v('ci-found'),
+    capitalPaid:          v('ci-cap'),
+    fiscalStart:          v('ci-fy'),
+    activityType:         v('ci-activity-type'),
+    companyPurpose:       document.getElementById('ci-purpose')?.value?.trim()||'',
+    // قانونية
+    commercialRegNo:      v('ci-cr'),
+    commercialRegUnified: v('ci-cr-unified'),
+    commercialRegStart:   v('ci-cr-start'),
+    commercialRegExpiry:  v('ci-crexp'),
+    commercialRegIssuer:  v('ci-cr-issuer'),
+    commercialRegFile:    v('ci-cr-file'),
+    taxRegNo:             v('ci-trn'),
+    taxCardNo:            v('ci-tax-card'),
+    taxOffice:            v('ci-tax-office'),
+    activityCode:         v('ci-act-code'),
+    taxStartDate:         v('ci-tax-start'),
+    taxCardExpiry:        v('ci-tax-exp'),
+    incomeTaxRegNo:       v('ci-itr'),
+    importRegNo:          v('ci-imp'),
+    socialInsuranceNo:    v('ci-si'),
+    mainBank:             v('ci-bank'),
+    auditorName:          v('ci-aud'),
+    etaRegistered:        v('ci-eta')==='yes',
+    // شركاء ومديرون
+    partners,
+    directors,
+    // EDA دوائية
+    mfgType:              mtype,
+    edaLicenseNo:         v('ci-eda'),
+    edaLicenseType:       v('ci-edatype'),
+    edaFirstLicenseDate:  v('ci-eda-first'),
+    edaLicenseExpiry:     v('ci-edaexp'),
+    qualifiedPerson:      v('ci-qp'),
+    qpRegNo:              v('ci-qpreg'),
+    qpMohNo:              v('ci-qp-moh'),
+    technicalConsultant:  v('ci-technical'),
+    tollFactories:        _tollFactories,
+    tollStorages:         _tollStorages,
+    registeredDistributors: _regDists,
+    // بيانات المصنع
+    factoryName:          v('ci-fac-name')||'',
+    factoryLicenseNo:     v('ci-fac-lic')||'',
+    factoryFirstLicense:  v('ci-fac-first')||'',
+    factoryAddress:       v('ci-fac-addr')||'',
+    factoryCity:          v('ci-fac-city')||'',
+    gmpLicenseNo:         v('ci-gmp')||'',
+    gmpLicenseExpiry:     v('ci-gmpexp')||'',
+    gmpAuthority:         v('ci-gmpauth')||'EDA مصر',
+    siteManager:          v('ci-site-mgr')||'',
+    siteMgrSynNo:         v('ci-site-mgr-syn')||'',
+    siteMgrMohNo:         v('ci-site-mgr-moh')||'',
+    qcManager:            v('ci-qc-mgr')||'',
+    qcMgrSynNo:           v('ci-qc-syn')||'',
+    qcMgrMohNo:           v('ci-qc-moh')||'',
+    productionManager:    v('ci-prod-mgr')||'',
+    prodMgrSynNo:         v('ci-prod-syn')||'',
+    productionLines,
+    // تواصل
+    address:              v('ci-addr'),
+    governorate:          v('ci-gov'),
+    city:                 v('ci-city'),
+    phone:                v('ci-phone'),
+    fax:                  v('ci-fax'),
+    email:                v('ci-email'),
+    capaEmail:            v('ci-capa-email'),
+    capaPhone:            v('ci-capa-phone'),
+    website:              v('ci-web'),
   };
-  if(!d.nameAr){notif('يرجى كتابة الاسم التجاري','error');return;}
-  const ex=await dbAll('companySettings');
+
+  if(!d.nameAr){ notif('يرجى كتابة الاسم التجاري','error'); return; }
+
+  const ex = await dbAll('companySettings');
   if(ex.length) await dbUpd('companySettings',{...ex[0],...d});
-  else await dbIns('companySettings',d);
-  // Update sidebar
-  document.getElementById('s-name').textContent=d.nameAr;
-  // Update company list
-  const list=getCos(); const co=list.find(c=>c.id===CO_ID);
-  if(co){co.name=d.nameAr; saveCos(list);}
-  await logAudit('تعديل','companySettings',null,'تحديث بيانات الشركة');
-  notif('✅ تم حفظ بيانات الشركة','success');
+  else          await dbIns('companySettings',d);
+
+  document.getElementById('s-name').textContent = d.nameAr;
+  const list = getCos(); const co = list.find(c=>c.id===CO_ID);
+  if(co){ co.name=d.nameAr; saveCos(list); }
+
+  await logAudit('تعديل','companySettings',null,'تحديث بيانات الشركة الكاملة');
+  notif('✅ تم حفظ بيانات الشركة كاملة','success');
 }
 
-// ── P03. Drug Registration — التسجيل الدوائي ──────────────────
-PAGES['drug-reg']=async function(){
-  const regs=await dbAll('drugRegistrations');
-  const prods=await dbAll('products');
-  const expired=regs.filter(r=>{ const d=daysDiff(r.expiryDate); return d!==null&&d<0; }).length;
-  const expiringSoon=regs.filter(r=>{ const d=daysDiff(r.expiryDate); return d!==null&&d>=0&&d<90; }).length;
-  setPage(`
-    <div class="ph">
-      <div><h1>📋 التسجيل الدوائي</h1>
-        <p>إدارة تراخيص المنتجات لدى هيئة الدواء المصرية (EDA) — قانون 151/2019</p></div>
-      <div class="ph-act">
-        <button class="btn bp" onclick="openDrugReg()">+ تسجيل جديد</button>
-      </div>
-    </div>
-    <div class="sg sg4" style="margin-bottom:14px">
-      <div class="sc"><div class="lb">إجمالي التسجيلات</div><div class="vl tc">${regs.length}</div></div>
-      <div class="sc"><div class="lb tc">سارية</div><div class="vl tc">${regs.filter(r=>r.status==='active').length}</div></div>
-      <div class="sc"><div class="lb ta">تنتهي خلال 90 يوم</div><div class="vl ta">${expiringSoon}</div></div>
-      <div class="sc"><div class="lb tr">منتهية</div><div class="vl tr">${expired}</div></div>
-    </div>
-    <div class="card">
-      ${!regs.length?`<div class="empty"><div class="em">📋</div><h3>لا توجد تسجيلات دوائية</h3><p>أضف أول تسجيل للبدء</p></div>`:
-      `<div class="tw"><table>
-        <thead><tr><th>رقم التسجيل</th><th>المنتج</th><th>جهة التسجيل</th><th>النوع</th>
-          <th>تاريخ التسجيل</th><th>تاريخ الانتهاء</th><th>الصلاحية</th><th>الحالة</th><th>إجراءات</th></tr></thead>
-        <tbody>
-          ${regs.map(r=>{
-            const p=prods.find(x=>x.id===r.productId);
-            const stMap={active:'bg-g',renewal:'bg-a',expired:'bg-r',suspended:'bg-m'};
-            const stL={active:'✅ سارية',renewal:'⏳ تجديد',expired:'❌ منتهية',suspended:'⏸️ موقوفة'};
-            return `<tr>
-              <td><code>${esc(r.registrationNumber||'—')}</code></td>
-              <td><strong>${esc(p?.name||r.productName||'—')}</strong></td>
-              <td>${esc(r.authority||'EDA مصر')}</td>
-              <td><span class="bge bg-b f11">${esc(r.regType||'—')}</span></td>
-              <td>${esc(r.registrationDate||'—')}</td>
-              <td>${esc(r.expiryDate||'—')}</td>
-              <td>${expBadge(r.expiryDate)}</td>
-              <td><span class="bge ${stMap[r.status]||'bg-m'}">${stL[r.status]||r.status}</span></td>
-              <td><div class="flex g6">
-                <button class="btn bs bsm" onclick="openDrugReg(${r.id})">✏️</button>
-                <button class="btn bd bsm" onclick="delDrugReg(${r.id})">🗑️</button>
-              </div></td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table></div>`}
-    </div>`);
-};
-
-async function openDrugReg(id){
-  const r=id?await dbGet('drugRegistrations',id):{};
-  const prods=await dbAll('products');
-  openModal(id?'تعديل تسجيل دوائي':'تسجيل دوائي جديد',`
-    <div class="fgr">
-      <div class="fg"><label>المنتج <span class="req">*</span></label>
-        <select id="dr-prod" class="inp">
-          <option value="">اختر منتج...</option>
-          ${prods.map(p=>`<option value="${p.id}" ${r.productId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}
-        </select></div>
-      <div class="fg"><label>رقم التسجيل <span class="req">*</span></label>
-        <input id="dr-num" class="inp" value="${esc(r.registrationNumber||'')}" placeholder="30/12345"></div>
-      <div class="fg"><label>جهة التسجيل</label>
-        <select id="dr-auth" class="inp">
-          ${['EDA مصر','WHO','EU','FDA','GCC','أخرى'].map(v=>`<option ${r.authority===v?'selected':''}>${v}</option>`).join('')}
-        </select></div>
-      <div class="fg"><label>نوع التسجيل</label>
-        <select id="dr-type" class="inp">
-          ${['تسجيل جديد (New)','تجديد (Renewal)','تعديل (Variation)','تسجيل موازي'].map(v=>`<option ${r.regType===v?'selected':''}>${v}</option>`).join('')}
-        </select></div>
-      <div class="fg"><label>تاريخ التسجيل</label>
-        <input id="dr-date" class="inp" type="date" value="${r.registrationDate||today()}"></div>
-      <div class="fg"><label>تاريخ الانتهاء <span class="req">*</span></label>
-        <input id="dr-exp" class="inp" type="date" value="${r.expiryDate||''}"></div>
-      <div class="fg"><label>رقم الملف الفني (Dossier No.)</label>
-        <input id="dr-dos" class="inp" value="${esc(r.dossierNo||'')}" placeholder="CTD / ACTD رقم"></div>
-      <div class="fg"><label>الحالة</label>
-        <select id="dr-st" class="inp">
-          <option value="active" ${(r.status||'active')==='active'?'selected':''}>✅ سارية</option>
-          <option value="renewal" ${r.status==='renewal'?'selected':''}>⏳ تجديد</option>
-          <option value="expired" ${r.status==='expired'?'selected':''}>❌ منتهية</option>
-          <option value="suspended" ${r.status==='suspended'?'selected':''}>⏸️ موقوفة</option>
-        </select></div>
-    </div>
-    <div class="fg" style="margin-top:10px"><label>ملاحظات</label>
-      <textarea id="dr-notes" class="inp">${esc(r.notes||'')}</textarea></div>`,
-    [{l:id?'💾 تحديث':'+ إضافة',c:'bp',fn:`saveDrugReg(${id||''})`}]);
-}
-
-async function saveDrugReg(id){
-  const prodId=+document.getElementById('dr-prod')?.value||null;
-  const num=(document.getElementById('dr-num')?.value||'').trim();
-  if(!prodId||!num){notif('يرجى اختيار المنتج ورقم التسجيل','error');return;}
-  const prods=await dbAll('products');
-  const p=prods.find(x=>x.id===prodId);
-  const d={productId:prodId,productName:p?.name||'',
-    registrationNumber:num,
-    authority:document.getElementById('dr-auth')?.value||'EDA مصر',
-    regType:document.getElementById('dr-type')?.value||'تسجيل جديد',
-    registrationDate:document.getElementById('dr-date')?.value||today(),
-    expiryDate:document.getElementById('dr-exp')?.value||'',
-    dossierNo:document.getElementById('dr-dos')?.value?.trim()||'',
-    status:document.getElementById('dr-st')?.value||'active',
-    notes:document.getElementById('dr-notes')?.value?.trim()||'',
-  };
-  if(id){ await dbUpd('drugRegistrations',{...d,id}); }
-  else   { await dbIns('drugRegistrations',d); }
-  await logAudit(id?'تعديل':'إضافة','drugRegistrations',id,'تسجيل '+num);
-  closeModal(); notif('✅ تم الحفظ','success');
-  PAGES['drug-reg']();
-}
-
-async function delDrugReg(id){
-  if(!confirm('حذف هذا التسجيل الدوائي؟')) return;
-  await dbDel('drugRegistrations',id);
-  await logAudit('حذف','drugRegistrations',id,'');
-  notif('✅ تم الحذف','success');
-  PAGES['drug-reg']();
-}
-
-// ── P04. Companies ─────────────────────────────────────────────
-PAGES['companies']=function(){
-  const list=getCos();
-  setPage(`
-    <div class="ph">
-      <div><h1>🏢 إدارة الشركات</h1><p>تعدد الشركات — كل شركة ببيانات مستقلة تماماً في IndexedDB</p></div>
-      <div class="ph-act"><button class="btn bp" onclick="openNewCo()">+ شركة جديدة</button></div>
-    </div>
-    <div class="card">
-      ${!list.length?`<div class="empty"><div class="em">🏢</div><h3>لا توجد شركات أخرى</h3></div>`:
-      `<div class="tw"><table>
-        <thead><tr><th>الشركة</th><th>النوع</th><th>تاريخ الإنشاء</th><th>الحالة</th><th>إجراءات</th></tr></thead>
-        <tbody>
-          ${list.map(co=>`<tr>
-            <td><div class="flex ac g8">
-              <div style="width:30px;height:30px;border-radius:8px;background:${co.color};display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:14px">${(co.name||'?')[0]}</div>
-              <strong>${esc(co.name)}</strong></div></td>
-            <td>${esc(co.type||'شركة دوائية')}</td>
-            <td>${new Date(co.createdAt||Date.now()).toLocaleDateString('ar-EG')}</td>
-            <td>${co.id===CO_ID?'<span class="bge bg-g">✅ الحالية</span>':'<span class="bge bg-m">—</span>'}</td>
-            <td><div class="flex g6">
-              ${co.id!==CO_ID?`<button class="btn bs bsm" onclick="switchCo(${co.id})">تبديل</button>`:''}
-              ${co.id!==CO_ID?`<button class="btn bd bsm" onclick="deleteCo(${co.id})">حذف</button>`:''}
-            </div></td>
-          </tr>`).join('')}
-        </tbody></table></div>`}
-    </div>`);
-};
-
-function switchCo(id){
-  if(!confirm('تبديل إلى هذه الشركة؟')) return;
-  CO_ID=null; USER=null; IDB=null;
-  document.getElementById('co-sc').classList.add('show');
-  renderCos(); enterCo(id);
-}
-
-function deleteCo(id){
-  const c=getCos().find(x=>x.id===id);
-  if(!confirm(`حذف "${c?.name}"؟ سيتم حذف جميع بياناتها.`)) return;
-  indexedDB.deleteDatabase('medisniya_'+id);
-  saveCos(getCos().filter(x=>x.id!==id));
-  PAGES['companies']();
-  notif('✅ تم الحذف','success');
-}
-
-// ── P05. Diagnostics ──────────────────────────────────────────
-PAGES['diagnostics']=async function(){
-  setPage(`
-    <div class="ph">
-      <div><h1>🔧 فحص النظام وإصلاحه</h1><p>System Diagnostics — فحص شامل وإصلاح تلقائي</p></div>
-      <div class="ph-act"><button class="btn bp" onclick="go('diagnostics')">🔄 إعادة الفحص</button></div>
-    </div>
-    <div id="diag-out"><div class="empty"><div class="em">🔍</div><h3>جاري الفحص...</h3></div></div>`);
-  await runDiag();
-};
-
-async function runDiag(){
-  const tests=[
-    {l:'قاعدة البيانات (IndexedDB)', run:async()=>{
-      const ok=!!IDB; return {ok,msg:ok?'متصلة وتعمل':'غير متصلة'};
-    }},
-    {l:'بيانات الشركة', run:async()=>{
-      const s=(await dbAll('companySettings'))[0];
-      const ok=!!(s?.nameAr&&s?.edaLicenseNo);
-      return {ok,msg:ok?'البيانات مكتملة':'بيانات الشركة ناقصة',link:'company-info'};
-    }},
-    {l:'مستخدم admin نشط', run:async()=>{
-      const ok=(await dbAll('appUsers')).some(u=>u.role==='admin'&&u.active!==false);
-      return {ok,msg:ok?'يوجد admin نشط':'لا يوجد admin'};
-    }},
-    {l:'دليل الحسابات المصري', run:async()=>{
-      const c=(await dbAll('chartOfAccounts')).length;
-      return {ok:c>=40,msg:`${c} حساب مُهيأ`};
-    }},
-    {l:'إعدادات الضرائب', run:async()=>{
-      const ok=(await dbAll('taxSettings')).length>0;
-      return {ok,msg:ok?'إعدادات الضرائب موجودة':'ستُنشأ تلقائياً عند الحاجة',link:'tax-settings'};
-    }},
-    {l:'التسجيلات الدوائية', run:async()=>{
-      const regs=await dbAll('drugRegistrations');
-      const exp=regs.filter(r=>{ const d=daysDiff(r.expiryDate); return d!==null&&d<0; }).length;
-      return {ok:exp===0,msg:exp?`⚠️ ${exp} تسجيل منتهي الصلاحية`:`${regs.length} تسجيل، كلها سارية`,link:exp?'drug-reg':null};
-    }},
-  ];
-  const res=await Promise.all(tests.map(async t=>({...t,...(await t.run())})));
-  const passed=res.filter(r=>r.ok).length;
-  const pct=Math.round(passed/res.length*100);
-  const el=document.getElementById('diag-out'); if(!el) return;
-  el.innerHTML=`
-    <div class="card" style="margin-bottom:14px">
-      <div class="flex jb ac" style="margin-bottom:10px">
-        <span class="fw7">صحة النظام</span>
-        <span class="fw9" style="font-size:22px;color:${pct===100?'var(--green)':pct>=60?'var(--amber)':'var(--red)'}">${pct}%</span>
-      </div>
-      <div style="height:8px;background:var(--bg3);border-radius:4px;overflow:hidden">
-        <div style="height:100%;width:${pct}%;background:${pct===100?'var(--green)':pct>=60?'var(--amber)':'var(--red)'};border-radius:4px;transition:.5s"></div>
-      </div>
-    </div>
-    <div class="card">
-      ${res.map(r=>`<div class="flex ac jb" style="padding:10px 0;border-bottom:1px solid var(--border)">
-        <div>
-          <div class="flex ac g8 mb8"><span>${r.ok?'✅':'❌'}</span><span class="fw7 f13">${r.l}</span></div>
-          <div class="tm f12">${r.msg}</div>
-        </div>
-        ${r.link&&!r.ok?`<button class="btn bs bsm" onclick="go('${r.link}')">إصلاح</button>`:''}
-      </div>`).join('')}
-    </div>
-    <div class="card">
-      <div class="ct">🗄️ إحصائيات قاعدة البيانات</div>
-      <div id="diag-db-stats" style="font-size:11px;color:var(--muted)">جاري التحميل...</div>
-    </div>`;
-  // Load DB counts
-  const counts=await Promise.all(TABLES.map(async t=>({t,c:(await dbAll(t)).length})));
-  const dbEl=document.getElementById('diag-db-stats');
-  if(dbEl) dbEl.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:5px">
-    ${counts.filter(x=>x.c>0).map(x=>`<div style="padding:4px 8px;background:var(--bg3);border-radius:5px;display:flex;justify-content:space-between"><span>${x.t}</span><strong>${x.c}</strong></div>`).join('')}
-    ${counts.every(x=>x.c===0)?'<div class="tm">لا توجد بيانات بعد</div>':''}
-  </div>`;
-}
-
-// ── P06. Company Legal (page 2 of company section) ─────────────
-PAGES['company-legal']=async function(){
-  // Redirect to company-info on legal tab
+// ── P06. Company Legal redirect ────────────────────────────────────
+PAGES['company-legal'] = async function(){
   await PAGES['company-info']();
   setTimeout(()=>{
-    const tabs=document.querySelectorAll('.tabs .tab');
-    const panes=document.querySelectorAll('.tp');
-    tabs.forEach(t=>t.classList.remove('on'));
-    panes.forEach(p=>p.classList.remove('on'));
-    tabs[2]?.classList.add('on');
-    document.getElementById('ci-legal')?.classList.add('on');
-  },100);
+    const tabs = document.querySelectorAll('#ci-tabs .tab');
+    if(tabs[1]){ tabs[1].click(); }
+  },120);
 };
+
+
+;
 
 // ══════════════════════════════════════════════
 // SECTION 8 — BOOT
@@ -3379,6 +3670,128 @@ async function deleteSupplier(id){
   notif('✅ تم الحذف','success');
   PAGES['suppliers']();
 }
+// ── P03. Drug Registration — التسجيل الدوائي ──────────────────
+PAGES['drug-reg']=async function(){
+  const regs=await dbAll('drugRegistrations');
+  const prods=await dbAll('products');
+  const expired=regs.filter(r=>{ const d=daysDiff(r.expiryDate); return d!==null&&d<0; }).length;
+  const expiringSoon=regs.filter(r=>{ const d=daysDiff(r.expiryDate); return d!==null&&d>=0&&d<90; }).length;
+  setPage(`
+    <div class="ph">
+      <div><h1>📋 التسجيل الدوائي</h1>
+        <p>إدارة تراخيص المنتجات لدى هيئة الدواء المصرية (EDA) — قانون 151/2019</p></div>
+      <div class="ph-act">
+        <button class="btn bp" onclick="openDrugReg()">+ تسجيل جديد</button>
+      </div>
+    </div>
+    <div class="sg sg4" style="margin-bottom:14px">
+      <div class="sc"><div class="lb">إجمالي التسجيلات</div><div class="vl tc">${regs.length}</div></div>
+      <div class="sc"><div class="lb tc">سارية</div><div class="vl tc">${regs.filter(r=>r.status==='active').length}</div></div>
+      <div class="sc"><div class="lb ta">تنتهي خلال 90 يوم</div><div class="vl ta">${expiringSoon}</div></div>
+      <div class="sc"><div class="lb tr">منتهية</div><div class="vl tr">${expired}</div></div>
+    </div>
+    <div class="card">
+      ${!regs.length?`<div class="empty"><div class="em">📋</div><h3>لا توجد تسجيلات دوائية</h3><p>أضف أول تسجيل للبدء</p></div>`:
+      `<div class="tw"><table>
+        <thead><tr><th>رقم التسجيل</th><th>المنتج</th><th>جهة التسجيل</th><th>النوع</th>
+          <th>تاريخ التسجيل</th><th>تاريخ الانتهاء</th><th>الصلاحية</th><th>الحالة</th><th>إجراءات</th></tr></thead>
+        <tbody>
+          ${regs.map(r=>{
+            const p=prods.find(x=>x.id===r.productId);
+            const stMap={active:'bg-g',renewal:'bg-a',expired:'bg-r',suspended:'bg-m'};
+            const stL={active:'✅ سارية',renewal:'⏳ تجديد',expired:'❌ منتهية',suspended:'⏸️ موقوفة'};
+            return `<tr>
+              <td><code>${esc(r.registrationNumber||'—')}</code></td>
+              <td><strong>${esc(p?.name||r.productName||'—')}</strong></td>
+              <td>${esc(r.authority||'EDA مصر')}</td>
+              <td><span class="bge bg-b f11">${esc(r.regType||'—')}</span></td>
+              <td>${esc(r.registrationDate||'—')}</td>
+              <td>${esc(r.expiryDate||'—')}</td>
+              <td>${expBadge(r.expiryDate)}</td>
+              <td><span class="bge ${stMap[r.status]||'bg-m'}">${stL[r.status]||r.status}</span></td>
+              <td><div class="flex g6">
+                <button class="btn bs bsm" onclick="openDrugReg(${r.id})">✏️</button>
+                <button class="btn bd bsm" onclick="delDrugReg(${r.id})">🗑️</button>
+              </div></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table></div>`}
+    </div>`);
+};
+
+async function openDrugReg(id){
+  const r=id?await dbGet('drugRegistrations',id):{};
+  const prods=await dbAll('products');
+  openModal(id?'تعديل تسجيل دوائي':'تسجيل دوائي جديد',`
+    <div class="fgr">
+      <div class="fg"><label>المنتج <span class="req">*</span></label>
+        <select id="dr-prod" class="inp">
+          <option value="">اختر منتج...</option>
+          ${prods.map(p=>`<option value="${p.id}" ${r.productId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}
+        </select></div>
+      <div class="fg"><label>رقم التسجيل <span class="req">*</span></label>
+        <input id="dr-num" class="inp" value="${esc(r.registrationNumber||'')}" placeholder="30/12345"></div>
+      <div class="fg"><label>جهة التسجيل</label>
+        <select id="dr-auth" class="inp">
+          ${['EDA مصر','WHO','EU','FDA','GCC','أخرى'].map(v=>`<option ${r.authority===v?'selected':''}>${v}</option>`).join('')}
+        </select></div>
+      <div class="fg"><label>نوع التسجيل</label>
+        <select id="dr-type" class="inp">
+          ${['تسجيل جديد (New)','تجديد (Renewal)','تعديل (Variation)','تسجيل موازي'].map(v=>`<option ${r.regType===v?'selected':''}>${v}</option>`).join('')}
+        </select></div>
+      <div class="fg"><label>تاريخ التسجيل</label>
+        <input id="dr-date" class="inp" type="date" value="${r.registrationDate||today()}"></div>
+      <div class="fg"><label>تاريخ الانتهاء <span class="req">*</span></label>
+        <input id="dr-exp" class="inp" type="date" value="${r.expiryDate||''}"></div>
+      <div class="fg"><label>رقم الملف الفني (Dossier No.)</label>
+        <input id="dr-dos" class="inp" value="${esc(r.dossierNo||'')}" placeholder="CTD / ACTD رقم"></div>
+      <div class="fg"><label>الحالة</label>
+        <select id="dr-st" class="inp">
+          <option value="active" ${(r.status||'active')==='active'?'selected':''}>✅ سارية</option>
+          <option value="renewal" ${r.status==='renewal'?'selected':''}>⏳ تجديد</option>
+          <option value="expired" ${r.status==='expired'?'selected':''}>❌ منتهية</option>
+          <option value="suspended" ${r.status==='suspended'?'selected':''}>⏸️ موقوفة</option>
+        </select></div>
+    </div>
+    <div class="fg" style="margin-top:10px"><label>ملاحظات</label>
+      <textarea id="dr-notes" class="inp">${esc(r.notes||'')}</textarea></div>`,
+    [{l:id?'💾 تحديث':'+ إضافة',c:'bp',fn:`saveDrugReg(${id||''})`}]);
+}
+
+async function saveDrugReg(id){
+  const prodId=+document.getElementById('dr-prod')?.value||null;
+  const num=(document.getElementById('dr-num')?.value||'').trim();
+  if(!prodId||!num){notif('يرجى اختيار المنتج ورقم التسجيل','error');return;}
+  const prods=await dbAll('products');
+  const p=prods.find(x=>x.id===prodId);
+  const d={productId:prodId,productName:p?.name||'',
+    registrationNumber:num,
+    authority:document.getElementById('dr-auth')?.value||'EDA مصر',
+    regType:document.getElementById('dr-type')?.value||'تسجيل جديد',
+    registrationDate:document.getElementById('dr-date')?.value||today(),
+    expiryDate:document.getElementById('dr-exp')?.value||'',
+    dossierNo:document.getElementById('dr-dos')?.value?.trim()||'',
+    status:document.getElementById('dr-st')?.value||'active',
+    notes:document.getElementById('dr-notes')?.value?.trim()||'',
+  };
+  if(id){ await dbUpd('drugRegistrations',{...d,id}); }
+  else   { await dbIns('drugRegistrations',d); }
+  await logAudit(id?'تعديل':'إضافة','drugRegistrations',id,'تسجيل '+num);
+  closeModal(); notif('✅ تم الحفظ','success');
+  PAGES['drug-reg']();
+}
+
+async function delDrugReg(id){
+  if(!confirm('حذف هذا التسجيل الدوائي؟')) return;
+  await dbDel('drugRegistrations',id);
+  await logAudit('حذف','drugRegistrations',id,'');
+  notif('✅ تم الحذف','success');
+  PAGES['drug-reg']();
+}
+
+
+
 
 </script>
 </body>
