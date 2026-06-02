@@ -1969,6 +1969,17 @@ async function openProduct(id){
         <textarea id="p-pkgnotes" class="inp">${esc(p.packagingNotes||'')}</textarea></div>
     </div>
     </div>`, [{l:id?'💾 تحديث':'+ إضافة منتج',c:'bp',fn:`saveProduct(${id||''})`}], 'mlg');
+  // Inject inline docs section
+  setTimeout(()=>{
+    const mb=document.getElementById('m-body');
+    if(mb&&!mb.querySelector('#inline-docs-section')){
+      const div=document.createElement('div');
+      div.id='inline-docs-section';
+      div.innerHTML='<hr style="border-color:var(--border);margin:12px 0"><div class="tm f12">📎 جاري تحميل المرفقات...</div>';
+      mb.appendChild(div);
+    }
+    if(id) loadInlineDocs('product',String(id),p?.name||'');
+  },80);
 }
 
 async function saveProduct(id){
@@ -2836,6 +2847,138 @@ function filterDocs(q){
 }
 
 
+
+// ══════════════════════════════════════════════════════════════
+// INLINE DOCUMENT SECTIONS — يعمل مع كل modal
+// ══════════════════════════════════════════════════════════════
+
+async function loadInlineDocs(entityType, entityId, entityName){
+  const el = document.getElementById('inline-docs-section');
+  if(!el) return;
+  if(!entityId){ el.innerHTML='<div class="tm f12">💾 احفظ البيانات أولاً لرفع المستندات</div>'; return; }
+  const docs = await getEntityDocs(entityType, String(entityId));
+  const expiring = docs.some(d=>{ const dd=daysDiff(d.expiryDate); return dd!==null&&dd>=0&&dd<90; });
+  let html = '<div class="flex jb ac" style="margin-bottom:8px">';
+  html += `<span class="fw7 f12">📎 المرفقات ${docs.length?'<span class="bge bg-b" style="font-size:9px">'+docs.length+'</span>':''}${expiring?'<span class="bge bg-a" style="font-size:9px;margin-right:4px">⚠️</span>':''}</span>`;
+  html += `<button class="btn bp bsm" onclick="inlineDocUpload('${entityType}','${entityId}','${esc(entityName||'')}')">+ رفع</button></div>`;
+  if(!docs.length){
+    html += '<div class="tm f12" style="padding:6px 0">لا توجد مرفقات بعد</div>';
+  } else {
+    docs.forEach(d=>{
+      const cfg=DOC_TYPES[d.docType]||DOC_TYPES.other;
+      const isImg=d.fileType?.startsWith('image/');
+      const ratio=d.originalSize>0?Math.round((1-d.compressedSize/d.originalSize)*100):0;
+      html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">';
+      html += isImg
+        ? `<img src="${d.data}" style="width:28px;height:28px;object-fit:cover;border-radius:4px;flex-shrink:0">`
+        : `<span style="font-size:18px;flex-shrink:0">${cfg.icon}</span>`;
+      html += `<div style="flex:1;min-width:0"><div class="fw7 f12" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(d.name)}</div>`;
+      html += `<div class="tm" style="font-size:10px">${fmtBytes(d.compressedSize)}${ratio>5?' −'+ratio+'%':''} ${d.expiryDate?expBadge(d.expiryDate):''}</div></div>`;
+      html += `<div class="flex g6" style="flex-shrink:0">`;
+      html += `<button class="btn bs bsm" onclick="viewDoc(${d.id})">👁️</button>`;
+      html += `<button class="btn bd bsm" onclick="inlineDelDoc(${d.id},'${entityType}','${entityId}','${esc(entityName||'')}')">🗑️</button>`;
+      html += '</div></div>';
+    });
+  }
+  el.innerHTML = html;
+}
+
+function inlineDocUpload(entityType, entityId, entityName){
+  window._inlineCtx = {entityType, entityId, entityName};
+  openModal('📎 رفع مستند — '+esc(entityName||entityType),
+    '<div class="fgr">' +
+    '<div class="fg"><label>نوع المستند</label><select id="idu-t" class="inp">' +
+    Object.entries(DOC_TYPES).map(([k,v])=>'<option value="'+k+'">'+v.icon+' '+v.label+'</option>').join('') +
+    '</select></div>' +
+    '<div class="fg"><label>الاسم / الوصف <span class="req">*</span></label>' +
+    '<input id="idu-n" class="inp" placeholder="مثال: قرار EDA رقم التسجيل / CoA دفعة"></div>' +
+    '<div class="fg"><label>رقم المرجع</label><input id="idu-r" class="inp" placeholder="رقم الوثيقة"></div>' +
+    '<div class="fg"><label>الجهة المُصدِرة</label><input id="idu-i" class="inp" placeholder="EDA / WHO / المورد"></div>' +
+    '<div class="fg"><label>تاريخ الإصدار</label><input id="idu-d" class="inp" type="date" value="'+today()+'"></div>' +
+    '<div class="fg"><label>تاريخ الانتهاء</label><input id="idu-e" class="inp" type="date"></div>' +
+    '</div>' +
+    '<div class="fg" style="margin-top:10px"><label>الملف <span class="req">*</span></label>' +
+    '<div id="idu-zone" onclick="document.getElementById(\'idu-file\').click()" ' +
+    'style="border:2px dashed var(--border2);border-radius:9px;padding:22px;text-align:center;cursor:pointer;background:var(--bg3)" ' +
+    'ondragover="this.style.borderColor=\'var(--green)\';event.preventDefault()" ' +
+    'ondragleave="this.style.borderColor=\'var(--border2)\'" ' +
+    'ondrop="handleIDrop(event)">' +
+    '<div style="font-size:26px;margin-bottom:5px">📎</div>' +
+    '<div class="fw7 f13">اسحب أو اضغط للاختيار</div>' +
+    '<div class="tm" style="font-size:11px;margin-top:3px">PDF • صور • Word • Excel — حتى 25MB</div></div>' +
+    '<input id="idu-file" type="file" style="display:none" ' +
+    'accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx,.csv" ' +
+    'onchange="handleIFile(this)">' +
+    '</div>' +
+    '<div id="idu-prog" style="display:none;margin-top:10px">' +
+    '<div class="f12 tm" id="idu-lbl">جاري المعالجة...</div>' +
+    '<div style="height:5px;background:var(--bg3);border-radius:3px;overflow:hidden;margin-top:4px">' +
+    '<div id="idu-bar" style="height:100%;width:0%;background:var(--green);transition:width .3s;border-radius:3px"></div></div></div>'
+  ,[],'mmd');
+}
+
+function handleIDrop(e){
+  e.preventDefault();
+  document.getElementById('idu-zone').style.borderColor='var(--border2)';
+  const f=e.dataTransfer?.files?.[0];
+  if(f) processIDU(f);
+}
+
+function handleIFile(inp){
+  const f=inp.files?.[0];
+  if(f) processIDU(f);
+}
+
+async function processIDU(file){
+  const ctx=window._inlineCtx; if(!ctx) return;
+  const name=(document.getElementById('idu-n')?.value||'').trim();
+  if(!name){notif('يرجى كتابة اسم المستند','error');return;}
+  const prog=document.getElementById('idu-prog');
+  const lbl=document.getElementById('idu-lbl');
+  const bar=document.getElementById('idu-bar');
+  if(prog)prog.style.display='block';
+  if(bar)bar.style.width='30%';
+  try{
+    const res=await processFile(file);
+    if(bar)bar.style.width='75%';
+    if(lbl)lbl.textContent='جاري الحفظ...';
+    await dbIns('documents',{
+      entityType:ctx.entityType, entityId:String(ctx.entityId), entityName:ctx.entityName||'',
+      docType:   document.getElementById('idu-t')?.value||'other',
+      name,
+      refNumber: document.getElementById('idu-r')?.value?.trim()||'',
+      issuer:    document.getElementById('idu-i')?.value?.trim()||'',
+      issuedDate:document.getElementById('idu-d')?.value||'',
+      expiryDate:document.getElementById('idu-e')?.value||'',
+      fileName:  file.name, fileType:res.type||file.type,
+      originalSize:res.originalSize, compressedSize:res.compressedSize,
+      data:res.data, uploadedBy:USER?.name||'—', uploadedAt:new Date().toISOString(),
+    });
+    if(bar)bar.style.width='100%';
+    const saved=fmtBytes(res.compressedSize);
+    const ratio=res.originalSize>0?Math.round((1-res.compressedSize/res.originalSize)*100):0;
+    if(lbl){lbl.textContent='✅ '+saved+(ratio>0?' (وُفِّر '+ratio+'%)':'');lbl.style.color='var(--green)';}
+    await logAudit('رفع_مستند','documents',null,name+'('+ctx.entityType+')');
+    notif('✅ "'+name+'" — '+saved,'success');
+    setTimeout(async()=>{
+      closeModal();
+      await loadInlineDocs(ctx.entityType,ctx.entityId,ctx.entityName);
+    },1200);
+  }catch(err){
+    if(bar)bar.style.width='0%';
+    if(lbl){lbl.textContent='❌ '+err.message;lbl.style.color='var(--red)';}
+    notif('❌ '+err.message,'error');
+  }
+}
+
+async function inlineDelDoc(id,entityType,entityId,entityName){
+  const d=await dbGet('documents',id);
+  if(!confirm('حذف "'+( d?.name||'المستند')+'"؟')) return;
+  await dbDel('documents',id);
+  notif('✅ تم الحذف','success');
+  await loadInlineDocs(entityType,entityId,entityName);
+}
+
 // Boot
 (function boot(){
   document.getElementById('co-sc').classList.add('show');
@@ -3116,6 +3259,17 @@ async function openMat(id){
       </div>
     </div>
     </div>`, [{l:id?'💾 تحديث':'+ إضافة مادة',c:'bp',fn:`saveMat(${id||''})`}], 'mlg');
+  // Inject inline docs section
+  setTimeout(()=>{
+    const mb=document.getElementById('m-body');
+    if(mb&&!mb.querySelector('#inline-docs-section')){
+      const div=document.createElement('div');
+      div.id='inline-docs-section';
+      div.innerHTML='<hr style="border-color:var(--border);margin:12px 0"><div class="tm f12">📎 جاري تحميل المرفقات...</div>';
+      mb.appendChild(div);
+    }
+    if(id) loadInlineDocs('material',String(id),m?.name||'');
+  },80);
 }
 
 function updateMatSubtypes(type){
@@ -3325,6 +3479,17 @@ async function openGRN(matId, editId){
     <div class="fg" style="margin-top:10px"><label>ملاحظات الاستلام</label>
       <textarea id="grn-notes" class="inp">${esc(existing.notes||'')}</textarea></div>
   `, [{l:editId?'💾 تحديث':'📦 تسجيل الاستلام',c:'bp',fn:`saveGRN(${editId||''})`}], 'mlg');
+  // Inject inline docs section
+  setTimeout(()=>{
+    const mb=document.getElementById('m-body');
+    if(mb&&!mb.querySelector('#inline-docs-section')){
+      const div=document.createElement('div');
+      div.id='inline-docs-section';
+      div.innerHTML='<hr style="border-color:var(--border);margin:12px 0"><div class="tm f12">📎 جاري تحميل المرفقات...</div>';
+      mb.appendChild(div);
+    }
+    if(editId) loadInlineDocs('materialReceipt',String(editId),existing?.batchNumber||'');
+  },80);
 }
 
 function updateGRNDateLabel(){
@@ -3638,6 +3803,17 @@ async function openSupplier(id){
         <input id="sup-notes" class="inp" value="${esc(s.notes||'')}"></div>
     </div>
   `, [{l:id?'💾 تحديث':'+ إضافة',c:'bp',fn:`saveSupplier(${id||''})`}], 'mlg');
+  // Inject inline docs section
+  setTimeout(()=>{
+    const mb=document.getElementById('m-body');
+    if(mb&&!mb.querySelector('#inline-docs-section')){
+      const div=document.createElement('div');
+      div.id='inline-docs-section';
+      div.innerHTML='<hr style="border-color:var(--border);margin:12px 0"><div class="tm f12">📎 جاري تحميل المرفقات...</div>';
+      mb.appendChild(div);
+    }
+    if(id) loadInlineDocs('supplier',String(id),s?.name||'');
+  },80);
 }
 
 async function saveSupplier(id){
@@ -3760,6 +3936,17 @@ async function openDrugReg(id){
     <div class="fg" style="margin-top:10px"><label>ملاحظات</label>
       <textarea id="dr-notes" class="inp">${esc(r.notes||'')}</textarea></div>`,
     [{l:id?'💾 تحديث':'+ إضافة',c:'bp',fn:`saveDrugReg(${id||''})`}]);
+  // Inject inline docs section
+  setTimeout(()=>{
+    const mb=document.getElementById('m-body');
+    if(mb&&!mb.querySelector('#inline-docs-section')){
+      const div=document.createElement('div');
+      div.id='inline-docs-section';
+      div.innerHTML='<hr style="border-color:var(--border);margin:12px 0"><div class="tm f12">📎 جاري تحميل المرفقات...</div>';
+      mb.appendChild(div);
+    }
+    if(id) loadInlineDocs('drugRegistration',String(id),r?.registrationNumber||'');
+  },80);
 }
 
 async function saveDrugReg(id){
