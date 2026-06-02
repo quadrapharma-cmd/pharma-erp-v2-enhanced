@@ -377,12 +377,12 @@ const DEPTS = [
 // ── أدوار المستخدمين ──────────────────────────────────────────────
 const ROLES = {
   admin:      {l:'مدير النظام',    pages:'all'},
-  finance:    {l:'مدير مالي',     pages:['dashboard','journal','finance','reports','tax','expenses','assets','trialbalance']},
-  production: {l:'مدير إنتاج',    pages:['dashboard','production','materials','bom','quality','warehouse','inventory']},
-  sales:      {l:'مبيعات',        pages:['dashboard','sales','distributors','invoices','receivables']},
+  finance:    {l:'مدير مالي',     pages:['dashboard','journal','finance','reports','tax','expenses','assets','trialbalance','documents']},
+  production: {l:'مدير إنتاج',    pages:['dashboard','production','materials','bom','quality','warehouse','inventory','documents']},
+  sales:      {l:'مبيعات',        pages:['dashboard','sales','distributors','invoices','receivables','documents']},
   warehouse:  {l:'مستودع',        pages:['dashboard','warehouse','inventory','materials','expiry']},
   accountant: {l:'محاسب',         pages:['dashboard','journal','finance','expenses','tax','trialbalance']},
-  qc:         {l:'ضبط الجودة',    pages:['dashboard','quality','materials','production','deviations','capa']},
+  qc:         {l:'ضبط الجودة',    pages:['dashboard','quality','materials','production','deviations','capa','documents']},
   viewer:     {l:'مشاهدة فقط',   pages:['dashboard'], readonly:true},
 };
 
@@ -491,7 +491,7 @@ const TABLES = [
   'purchaseOrders','taxLines','payrollRuns',
   'employees','leaveRequests','appraisals',
   'qualityChecks','deviations','capa','stabilityStudies','equipment',
-  'savedReports','cycleCounts','cmos',
+  'savedReports','cycleCounts','cmos','documents',
 ];
 
 function openIDB(coId){
@@ -746,6 +746,7 @@ const NAV=[
   {id:'users',          l:'المستخدمون',            i:'👤', s:'الإعدادات'},
   {id:'audit-log',      l:'سجل التدقيق',           i:'📋', s:'الإعدادات'},
   {id:'diagnostics',    l:'فحص وإصلاح النظام',    i:'🔧', s:'الإعدادات'},
+  {id:'documents',      l:'مركز المستندات',       i:'📁', s:'الإعدادات'},
   {id:'companies',      l:'الشركات المتعددة',      i:'🏢', s:'الإعدادات'},
 ];
 
@@ -2034,6 +2035,514 @@ async function deleteBOM(id){
 }
 
 
+// ══════════════════════════════════════════
+// SECTION 11 — DOCUMENT MANAGEMENT SYSTEM
+// ══════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════════════════
+// SECTION 11 — DOCUMENT MANAGEMENT SYSTEM
+// PDFs + Images + Office files — Compress & Store in IndexedDB
+// Attachable everywhere: company, materials, products, suppliers,
+// employees, quality, batches, production orders...
+// ══════════════════════════════════════════════════════════════════
+
+// ── Document Types & Config ────────────────────────────────────────
+const DOC_TYPES = {
+  pdf:    { label:'PDF Document',      icon:'📄', accept:'.pdf',                        maxMB:20  },
+  image:  { label:'Image / Photo',     icon:'🖼️', accept:'.jpg,.jpeg,.png,.gif,.webp',  maxMB:10  },
+  word:   { label:'Word Document',     icon:'📝', accept:'.doc,.docx',                  maxMB:10  },
+  excel:  { label:'Excel Spreadsheet', icon:'📊', accept:'.xls,.xlsx,.csv',             maxMB:10  },
+  other:  { label:'Other File',        icon:'📎', accept:'*',                            maxMB:5   },
+};
+
+// Entity types that can have documents attached
+const DOC_ENTITIES = {
+  company:          { label:'بيانات الشركة',      icon:'🏢' },
+  material:         { label:'مادة خام',            icon:'🧪' },
+  materialReceipt:  { label:'دفعة مواد (GRN)',     icon:'📦' },
+  product:          { label:'منتج دوائي',          icon:'💊' },
+  supplier:         { label:'مورد',                icon:'🤝' },
+  drugRegistration: { label:'تسجيل دوائي',         icon:'📋' },
+  employee:         { label:'موظف',                icon:'👤' },
+  productionOrder:  { label:'أمر إنتاج',           icon:'🏭' },
+  qualityCheck:     { label:'فحص جودة',            icon:'🔬' },
+  deviation:        { label:'انحراف',              icon:'⚠️' },
+  capa:             { label:'CAPA',                icon:'🔧' },
+  equipment:        { label:'معدة',                icon:'⚙️' },
+  distributor:      { label:'موزع',                icon:'🚚' },
+  asset:            { label:'أصل ثابت',            icon:'🏗️' },
+};
+
+// ── Compression Engine ─────────────────────────────────────────────
+
+// Compress image using Canvas API
+async function compressImage(file, maxWidthPx=1600, qualityJpeg=0.72){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = ()=>{
+      URL.revokeObjectURL(url);
+      let {width:w, height:h} = img;
+      // Downscale if too large
+      if(w > maxWidthPx){ h = Math.round(h*maxWidthPx/w); w=maxWidthPx; }
+      const canvas = document.createElement('canvas');
+      canvas.width=w; canvas.height=h;
+      const ctx = canvas.getContext('2d');
+      // White background for transparency
+      ctx.fillStyle='#ffffff';
+      ctx.fillRect(0,0,w,h);
+      ctx.drawImage(img,0,0,w,h);
+      // PNG → JPEG for size reduction
+      const outType = file.type==='image/png' ? 'image/jpeg' : file.type||'image/jpeg';
+      canvas.toBlob(blob=>{
+        if(!blob) return reject(new Error('Compression failed'));
+        const reader = new FileReader();
+        reader.onload = e => resolve({
+          data: e.target.result, // base64
+          type: outType,
+          originalSize: file.size,
+          compressedSize: blob.size,
+          width:w, height:h
+        });
+        reader.readAsDataURL(blob);
+      }, outType, qualityJpeg);
+    };
+    img.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error('Image load failed')); };
+    img.src = url;
+  });
+}
+
+// Read file as base64
+async function fileToBase64(file){
+  return new Promise((resolve,reject)=>{
+    const r = new FileReader();
+    r.onload  = e => resolve(e.target.result);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+}
+
+// Process any file — compress images, store others as-is
+async function processFile(file){
+  const isImage = file.type.startsWith('image/');
+  const isPDF   = file.type==='application/pdf';
+  const maxBytes = 25*1024*1024; // 25MB hard limit
+
+  if(file.size > maxBytes){
+    throw new Error(`الملف كبير جداً (${(file.size/1024/1024).toFixed(1)}MB). الحد الأقصى 25MB`);
+  }
+
+  if(isImage){
+    // Compress images aggressively
+    const quality = file.size > 2*1024*1024 ? 0.65 : 0.78;
+    const maxW    = file.size > 5*1024*1024 ? 1200 : 1800;
+    return await compressImage(file, maxW, quality);
+  } else {
+    // PDF & Office: store as-is (no compression possible)
+    const data = await fileToBase64(file);
+    return {
+      data,
+      type: file.type || 'application/octet-stream',
+      originalSize: file.size,
+      compressedSize: file.size,
+    };
+  }
+}
+
+function fmtBytes(bytes){
+  if(bytes < 1024)    return bytes+'B';
+  if(bytes < 1024**2) return (bytes/1024).toFixed(1)+'KB';
+  return (bytes/1024/1024).toFixed(1)+'MB';
+}
+
+// ── Core Document Functions ────────────────────────────────────────
+
+// Upload dialog — works for any entity
+async function openDocUpload(entityType, entityId, entityName){
+  const docType = document.getElementById ? null : null; // will be set in modal
+  openModal(`📎 رفع مستند — ${esc(entityName||entityType)}`,`
+    <div class="fgr">
+      <div class="fg"><label>نوع المستند</label>
+        <select id="du-doctype" class="inp" onchange="updateDocAccept(this.value)">
+          <option value="">اختر النوع...</option>
+          ${Object.entries(DOC_TYPES).map(([k,v])=>`<option value="${k}">${v.icon} ${v.label}</option>`).join('')}
+        </select></div>
+      <div class="fg"><label>اسم / وصف المستند <span class="req">*</span></label>
+        <input id="du-name" class="inp" placeholder="مثال: شهادة GMP 2024 / CoA دفعة 001"></div>
+      <div class="fg"><label>تاريخ الإصدار</label>
+        <input id="du-issued" class="inp" type="date" value="${today()}"></div>
+      <div class="fg"><label>تاريخ الانتهاء</label>
+        <input id="du-expiry" class="inp" type="date"></div>
+      <div class="fg"><label>الجهة المُصدِرة</label>
+        <input id="du-issuer" class="inp" placeholder="مثال: EDA / WHO / المورد"></div>
+      <div class="fg"><label>رقم المرجع / الشهادة</label>
+        <input id="du-ref" class="inp" placeholder="مثال: GMP-2024-001"></div>
+    </div>
+    <div class="fg" style="margin-top:12px">
+      <label>الملف <span class="req">*</span></label>
+      <div id="du-dropzone" onclick="document.getElementById('du-file').click()"
+        style="border:2px dashed var(--border2);border-radius:10px;padding:28px;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg3)"
+        ondragover="this.style.borderColor='var(--green)';event.preventDefault()"
+        ondragleave="this.style.borderColor='var(--border2)'"
+        ondrop="handleDocDrop(event,'${entityType}','${entityId}','${esc(entityName||'')}')">
+        <div style="font-size:32px;margin-bottom:8px">📎</div>
+        <div style="font-weight:700;font-size:13px">اسحب الملف هنا أو اضغط للاختيار</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">PDF • صور • Word • Excel — حتى 25MB</div>
+      </div>
+      <input id="du-file" type="file" style="display:none"
+        accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx,.csv"
+        onchange="handleDocFile(this,'${entityType}','${entityId}','${esc(entityName||'')}')">
+    </div>
+    <div id="du-progress" style="display:none;margin-top:12px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px" id="du-progress-label">جاري المعالجة...</div>
+      <div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden">
+        <div id="du-progress-bar" style="height:100%;width:0%;background:var(--green);transition:width .3s;border-radius:3px"></div>
+      </div>
+    </div>
+    <div id="du-preview" style="display:none;margin-top:12px"></div>
+  `,[], 'mlg');
+}
+
+function updateDocAccept(type){
+  const cfg = DOC_TYPES[type];
+  const inp = document.getElementById('du-file');
+  if(inp&&cfg) inp.accept = cfg.accept;
+}
+
+function handleDocDrop(e, entityType, entityId, entityName){
+  e.preventDefault();
+  const zone = document.getElementById('du-dropzone');
+  if(zone) zone.style.borderColor='var(--border2)';
+  const file = e.dataTransfer?.files?.[0];
+  if(file) processDocUpload(file, entityType, entityId, entityName);
+}
+
+function handleDocFile(input, entityType, entityId, entityName){
+  const file = input.files?.[0];
+  if(file) processDocUpload(file, entityType, entityId, entityName);
+}
+
+async function processDocUpload(file, entityType, entityId, entityName){
+  const name  = document.getElementById('du-name')?.value?.trim();
+  if(!name){ notif('يرجى كتابة اسم/وصف المستند','error'); return; }
+
+  const prog  = document.getElementById('du-progress');
+  const label = document.getElementById('du-progress-label');
+  const bar   = document.getElementById('du-progress-bar');
+  const prev  = document.getElementById('du-preview');
+
+  if(prog) prog.style.display='block';
+  if(label) label.textContent='جاري المعالجة والضغط...';
+  if(bar)   bar.style.width='30%';
+
+  try{
+    const result = await processFile(file);
+    if(bar)   bar.style.width='70%';
+    if(label) label.textContent='جاري الحفظ...';
+
+    const isImage = file.type.startsWith('image/');
+    const saved   = fmtBytes(result.compressedSize);
+    const orig    = fmtBytes(result.originalSize);
+    const ratio   = result.originalSize>0 ? Math.round((1-result.compressedSize/result.originalSize)*100) : 0;
+
+    const doc = {
+      entityType,
+      entityId:   String(entityId),
+      entityName: entityName||'',
+      docType:    document.getElementById('du-doctype')?.value||'other',
+      name,
+      issuedDate: document.getElementById('du-issued')?.value||'',
+      expiryDate: document.getElementById('du-expiry')?.value||'',
+      issuer:     document.getElementById('du-issuer')?.value?.trim()||'',
+      refNumber:  document.getElementById('du-ref')?.value?.trim()||'',
+      fileName:   file.name,
+      fileType:   result.type||file.type,
+      originalSize:    result.originalSize,
+      compressedSize:  result.compressedSize,
+      data:       result.data, // base64
+      uploadedBy: USER?.name||'—',
+      uploadedAt: new Date().toISOString(),
+    };
+
+    await dbIns('documents', doc);
+    if(bar)   bar.style.width='100%';
+    if(label) label.textContent=`✅ تم الحفظ — ${saved}${ratio>0?' (وُفِّر '+ratio+'%)':''}`;
+
+    // Preview
+    if(prev){
+      prev.style.display='block';
+      if(isImage){
+        prev.innerHTML=`<div style="text-align:center">
+          <img src="${result.data}" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:11px;color:var(--muted);margin-top:6px">${orig} → ${saved}${ratio>0?' (−'+ratio+'%)':''}</div>
+        </div>`;
+      } else {
+        const icon = DOC_TYPES[doc.docType]?.icon||'📎';
+        prev.innerHTML=`<div style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bg3);border-radius:8px">
+          <span style="font-size:28px">${icon}</span>
+          <div><div style="font-weight:700;font-size:13px">${esc(file.name)}</div>
+          <div style="font-size:11px;color:var(--muted)">${orig}${ratio>0?' → '+saved+' (−'+ratio+'%)':''}</div></div>
+        </div>`;
+      }
+    }
+
+    await logAudit('رفع_مستند','documents',null,`${name} (${entityType}: ${entityName})`);
+    notif(`✅ تم رفع "${name}" — ${saved}`,'success');
+
+    // Auto-close after 2s
+    setTimeout(()=>{ closeModal(); }, 1800);
+
+  } catch(err){
+    if(bar)   bar.style.width='0%';
+    if(label){ label.textContent='❌ '+err.message; label.style.color='var(--red)'; }
+    notif('❌ '+err.message,'error');
+  }
+}
+
+// Get all docs for an entity
+async function getEntityDocs(entityType, entityId){
+  const all = await dbAll('documents');
+  return all.filter(d=>d.entityType===entityType && String(d.entityId)===String(entityId));
+}
+
+// Show docs panel (embeddable in any page)
+async function showDocsPanel(entityType, entityId, entityName){
+  const docs = await getEntityDocs(entityType, entityId);
+
+  openModal(`📁 مستندات — ${esc(entityName||entityType)}`,`
+    <div class="flex jb ac mb12">
+      <span class="f12 tm">${docs.length} مستند مرفق</span>
+      <button class="btn bp bsm" onclick="closeModal();setTimeout(()=>openDocUpload('${entityType}','${entityId}','${esc(entityName||'')}'),150)">
+        + رفع مستند جديد
+      </button>
+    </div>
+    ${!docs.length
+      ? `<div class="empty"><div class="em">📁</div><h3>لا توجد مستندات</h3>
+         <p>ارفع أول مستند لهذا العنصر</p></div>`
+      : `<div style="display:flex;flex-direction:column;gap:8px">
+          ${docs.map(d=>{
+            const cfg = DOC_TYPES[d.docType]||DOC_TYPES.other;
+            const isImg = d.fileType?.startsWith('image/');
+            const expBadgeHtml = d.expiryDate ? expBadge(d.expiryDate) : '';
+            const ratio = d.originalSize>0 ? Math.round((1-d.compressedSize/d.originalSize)*100) : 0;
+            return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;align-items:center;gap:12px">
+              ${isImg
+                ? `<img src="${d.data}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0">`
+                : `<div style="width:48px;height:48px;background:var(--card);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">${cfg.icon}</div>`
+              }
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(d.name)}</div>
+                <div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(d.fileName)} • ${fmtBytes(d.compressedSize)}${ratio>5?' (−'+ratio+'%)':''}</div>
+                <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">
+                  ${d.refNumber?`<code style="font-size:10px">${esc(d.refNumber)}</code>`:''}
+                  ${d.issuer?`<span class="bge bg-b" style="font-size:9px">${esc(d.issuer)}</span>`:''}
+                  ${d.issuedDate?`<span class="tm" style="font-size:10px">📅 ${esc(d.issuedDate)}</span>`:''}
+                  ${expBadgeHtml}
+                </div>
+              </div>
+              <div style="display:flex;gap:6px;flex-shrink:0">
+                <button class="btn bs bsm" onclick="viewDoc(${d.id})" title="عرض">👁️</button>
+                <button class="btn bs bsm" onclick="downloadDoc(${d.id})" title="تحميل">⬇️</button>
+                <button class="btn bd bsm" onclick="deleteDoc(${d.id},event)" title="حذف">🗑️</button>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`
+    }
+  `,[], 'mlg');
+}
+
+// View document (full screen)
+async function viewDoc(id){
+  const d = await dbGet('documents', id);
+  if(!d){ notif('المستند غير موجود','error'); return; }
+  const isImg = d.fileType?.startsWith('image/');
+  const isPDF = d.fileType==='application/pdf';
+
+  openModal(`👁️ ${esc(d.name)}`,`
+    <div style="text-align:center">
+      ${isImg
+        ? `<img src="${d.data}" style="max-width:100%;max-height:70vh;border-radius:8px;border:1px solid var(--border)">`
+        : isPDF
+          ? `<iframe src="${d.data}" style="width:100%;height:65vh;border:none;border-radius:8px"></iframe>`
+          : `<div style="padding:40px;background:var(--bg3);border-radius:10px">
+              <div style="font-size:48px;margin-bottom:12px">${DOC_TYPES[d.docType]?.icon||'📎'}</div>
+              <div style="font-weight:700;font-size:15px">${esc(d.fileName)}</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:6px">${fmtBytes(d.compressedSize)}</div>
+              <div style="margin-top:16px;font-size:12px;color:var(--amber)">⚠️ لا يمكن عرض هذا النوع مباشرة — استخدم التحميل</div>
+            </div>`
+      }
+      <div style="margin-top:10px;font-size:11px;color:var(--muted)">
+        رُفع بواسطة ${esc(d.uploadedBy)} — ${new Date(d.uploadedAt).toLocaleDateString('ar-EG')}
+      </div>
+    </div>
+  `,[{l:'⬇️ تحميل',c:'bp',fn:`downloadDoc(${id})`}],'mlg');
+}
+
+// Download document
+async function downloadDoc(id){
+  const d = await dbGet('documents', id);
+  if(!d){ notif('المستند غير موجود','error'); return; }
+  const a = document.createElement('a');
+  a.href     = d.data;
+  a.download = d.fileName||d.name;
+  a.click();
+  notif(`⬇️ جاري تحميل "${d.name}"`, 'success');
+}
+
+// Delete document
+async function deleteDoc(id, event){
+  if(event) event.stopPropagation();
+  const d = await dbGet('documents', id);
+  if(!confirm(`حذف "${d?.name||'المستند'}"؟`)) return;
+  await dbDel('documents', id);
+  await logAudit('حذف_مستند','documents',id,'');
+  notif('✅ تم الحذف','success');
+  // Refresh panel
+  if(d) showDocsPanel(d.entityType, d.entityId, d.entityName);
+}
+
+// Quick attach button — renders a small button for any page
+function docAttachBtn(entityType, entityId, entityName, docsCount=0){
+  return `<button class="btn bs bsm" onclick="showDocsPanel('${entityType}','${entityId}','${esc(entityName||'')}')" title="المستندات">
+    📁 ${docsCount>0?`<span class="bge bg-b" style="font-size:9px;padding:1px 5px">${docsCount}</span>`:'مستندات'}
+  </button>`;
+}
+
+// ── P12. Documents Hub — مركز المستندات ──────────────────────────
+PAGES['documents'] = async function(){
+  const docs = await dbAll('documents');
+  const expiring = docs.filter(d=>{
+    const dd = daysDiff(d.expiryDate);
+    return dd!==null && dd>=0 && dd<90;
+  });
+  const expired = docs.filter(d=>{
+    const dd = daysDiff(d.expiryDate);
+    return dd!==null && dd<0;
+  });
+
+  // Group by entity type
+  const byType = {};
+  docs.forEach(d=>{
+    if(!byType[d.entityType]) byType[d.entityType]=[];
+    byType[d.entityType].push(d);
+  });
+
+  // Total storage
+  const totalBytes = docs.reduce((s,d)=>s+(d.compressedSize||0),0);
+  const savedBytes = docs.reduce((s,d)=>s+(d.originalSize-d.compressedSize||0),0);
+
+  setPage(`
+    <div class="ph">
+      <div><h1>📁 مركز المستندات</h1>
+        <p>جميع المستندات المرفقة في النظام — PDFs، صور، ملفات Office</p></div>
+      <div class="ph-act">
+        <button class="btn bp" onclick="openDocUpload('company','1','الشركة')">+ رفع مستند</button>
+      </div>
+    </div>
+
+    <div class="sg sg4" style="margin-bottom:14px">
+      <div class="sc">
+        <div class="lb">إجمالي المستندات</div>
+        <div class="vl tc">${docs.length}</div>
+        <div class="sb">حجم: ${fmtBytes(totalBytes)}</div>
+      </div>
+      <div class="sc">
+        <div class="lb">مساحة وُفِّرت</div>
+        <div class="vl tc">${fmtBytes(savedBytes)}</div>
+        <div class="sb">بفضل الضغط</div>
+      </div>
+      <div class="sc">
+        <div class="lb ta">⚠️ تنتهي خلال 90 يوم</div>
+        <div class="vl ta">${expiring.length}</div>
+      </div>
+      <div class="sc">
+        <div class="lb tr">❌ منتهية الصلاحية</div>
+        <div class="vl tr">${expired.length}</div>
+      </div>
+    </div>
+
+    ${expiring.length||expired.length ? `
+    <div class="card" style="border-color:rgba(255,165,2,.3);margin-bottom:14px">
+      <div class="ct ta">⚠️ مستندات تحتاج انتباه</div>
+      ${[...expired,...expiring].map(d=>`
+        <div class="flex ac jb" style="padding:8px 0;border-bottom:1px solid var(--border)">
+          <div>
+            <span style="font-size:13px;font-weight:700">${esc(d.name)}</span>
+            <span class="tm f11" style="margin-right:8px">${DOC_ENTITIES[d.entityType]?.icon||'📎'} ${esc(d.entityName||d.entityType)}</span>
+          </div>
+          <div class="flex ac g8">
+            ${expBadge(d.expiryDate)}
+            <button class="btn bs bsm" onclick="viewDoc(${d.id})">عرض</button>
+          </div>
+        </div>`).join('')}
+    </div>` : ''}
+
+    <div class="card">
+      <div class="flex jb ac mb12">
+        <div class="ct" style="margin-bottom:0">كل المستندات</div>
+        <div class="flex g8">
+          <input id="doc-search" class="inp" placeholder="🔍 بحث..." style="width:180px"
+            oninput="filterDocs(this.value)">
+          <select id="doc-filter" class="inp" style="width:160px"
+            onchange="filterDocs(document.getElementById('doc-search').value)">
+            <option value="">كل الأنواع</option>
+            ${Object.entries(DOC_ENTITIES).map(([k,v])=>`<option value="${k}">${v.icon} ${v.label}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      ${!docs.length
+        ? `<div class="empty"><div class="em">📁</div><h3>لا توجد مستندات بعد</h3>
+           <p>ارفع المستندات من أي صفحة في النظام أو من هنا مباشرة</p></div>`
+        : `<div class="tw"><table>
+            <thead><tr>
+              <th>المستند</th><th>النوع</th><th>مرفق بـ</th><th>المرجع</th>
+              <th>تاريخ الإصدار</th><th>تاريخ الانتهاء</th><th>الحجم</th><th>إجراءات</th>
+            </tr></thead>
+            <tbody id="doc-tbody">
+              ${docs.map(d=>{
+                const cfg = DOC_TYPES[d.docType]||DOC_TYPES.other;
+                const ent = DOC_ENTITIES[d.entityType]||{icon:'📎',label:d.entityType};
+                const isImg = d.fileType?.startsWith('image/');
+                const ratio = d.originalSize>0?Math.round((1-d.compressedSize/d.originalSize)*100):0;
+                return `<tr data-name="${(d.name||'').toLowerCase()}" data-etype="${d.entityType}">
+                  <td><div class="flex ac g8">
+                    ${isImg
+                      ? `<img src="${d.data}" style="width:36px;height:36px;object-fit:cover;border-radius:5px;border:1px solid var(--border);flex-shrink:0">`
+                      : `<span style="font-size:22px">${cfg.icon}</span>`}
+                    <div><div class="fw7 f13">${esc(d.name)}</div>
+                    <div class="tm f11">${esc(d.fileName)}</div></div>
+                  </div></td>
+                  <td><span class="bge bg-b f11">${cfg.icon} ${cfg.label}</span></td>
+                  <td><span class="f12">${ent.icon} ${esc(d.entityName||d.entityType)}</span></td>
+                  <td>${d.refNumber?`<code class="f11">${esc(d.refNumber)}</code>`:'<span class="tm">—</span>'}</td>
+                  <td class="f12">${esc(d.issuedDate||'—')}</td>
+                  <td>${d.expiryDate?expBadge(d.expiryDate):'<span class="tm f11">—</span>'}</td>
+                  <td class="f12">${fmtBytes(d.compressedSize)}${ratio>5?`<span class="tc f11"> −${ratio}%</span>`:''}</td>
+                  <td><div class="flex g6">
+                    <button class="btn bs bsm" onclick="viewDoc(${d.id})">👁️</button>
+                    <button class="btn bs bsm" onclick="downloadDoc(${d.id})">⬇️</button>
+                    <button class="btn bd bsm" onclick="deleteDoc(${d.id},event)">🗑️</button>
+                  </div></td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table></div>`
+      }
+    </div>`);
+};
+
+function filterDocs(q){
+  const etype = document.getElementById('doc-filter')?.value||'';
+  const query=(q||'').toLowerCase();
+  document.querySelectorAll('#doc-tbody tr').forEach(tr=>{
+    const name=tr.dataset.name||'';
+    const et=tr.dataset.etype||'';
+    tr.style.display=(name.includes(query)&&(!etype||et===etype))?'':'none';
+  });
+}
+
+
 // Boot
 (function boot(){
   document.getElementById('co-sc').classList.add('show');
@@ -2172,6 +2681,7 @@ function matRow(m, rcpts){
       <button class="btn bs bsm" onclick="openMat(${m.id})" title="تعديل">✏️</button>
       <button class="btn bs bsm" onclick="openGRN(${m.id})" title="استلام دفعة">📦</button>
       <button class="btn bs bsm" onclick="viewMatBatches(${m.id})" title="الدفعات">📋</button>
+      <button class="btn bs bsm" onclick="showDocsPanel('material',String(m.id),m.name||'')" title="مستندات">📁</button>
       <button class="btn bd bsm" onclick="deleteMat(${m.id})" title="حذف">🗑️</button>
     </div></td>
   </tr>`;
