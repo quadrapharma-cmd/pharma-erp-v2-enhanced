@@ -174,13 +174,201 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg3);padding:1px 6p
 #ai-fab:hover{transform:scale(1.08)}
 #ai-panel{display:none;position:fixed;bottom:76px;left:20px;width:320px;height:440px;background:var(--card);border:1px solid var(--border2);border-radius:14px;box-shadow:0 16px 48px rgba(0,0,0,.6);z-index:800;flex-direction:column;overflow:hidden}
 
-@media(max-width:768px){
-  #sidebar{width:54px}
   .n-lbl,.n-sec,.s-txt{display:none}
   .sg4{grid-template-columns:1fr 1fr}
   .sg3{grid-template-columns:1fr 1fr}
   .fg2,.fg3{grid-template-columns:1fr}
 }
+
+/* ═══════════════════════════════════════════════════════
+   RESPONSIVE SYSTEM — Mobile / Tablet / Desktop
+   320px  → 767px   = Mobile
+   768px  → 1199px  = Tablet
+   1200px+          = Desktop (default)
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Overlay للـ sidebar في mobile/tablet ────────────────── */
+#sb-overlay{
+  display:none;
+  position:fixed;inset:0;
+  background:rgba(0,0,0,.5);
+  z-index:999;
+  backdrop-filter:blur(2px);
+}
+#sb-overlay.show{display:block}
+
+/* ── Bottom nav للـ mobile ───────────────────────────────── */
+#bottom-nav{
+  display:none;
+  position:fixed;bottom:0;left:0;right:0;
+  height:58px;
+  background:var(--bg2);
+  border-top:1px solid var(--border2);
+  z-index:900;
+  flex-direction:row;
+  align-items:center;
+  justify-content:space-around;
+  padding:0 4px;
+}
+
+/* ─────────────────────────────────────────────────────────
+   TABLET  768px – 1199px
+   ───────────────────────────────────────────────────────── */
+@media(max-width:1199px){
+  :root{ --sidebar:200px; }
+
+  #page{ padding:16px }
+
+  .sg4{ grid-template-columns:repeat(2,1fr) }
+
+  .fgr{ grid-template-columns:repeat(auto-fill,minmax(180px,1fr)) }
+
+  .ph h1{ font-size:18px }
+
+  /* جدول — scroll أفقي */
+  .tw{ overflow-x:auto }
+  table{ min-width:600px }
+}
+
+/* ─────────────────────────────────────────────────────────
+   MOBILE  < 768px
+   ───────────────────────────────────────────────────────── */
+@media(max-width:767px){
+  :root{ --sidebar:260px; --topbar:50px; }
+
+  /* ── Shell layout ─────────────────────────────────────── */
+  #shell{ position:relative }
+
+  /* Sidebar → drawer من اليمين */
+  #sidebar{
+    position:fixed;
+    top:0;right:0;bottom:0;
+    width:var(--sidebar) !important;
+    transform:translateX(100%);
+    transition:transform .25s cubic-bezier(.4,0,.2,1);
+    z-index:1000;
+    box-shadow:-4px 0 24px rgba(0,0,0,.4);
+  }
+  #sidebar.open{
+    transform:translateX(0);
+  }
+  #sb-overlay.show{ display:block }
+
+  /* Main يأخذ كامل العرض */
+  #main{ width:100%; margin:0 }
+
+  /* ── Topbar ───────────────────────────────────────────── */
+  #topbar{
+    padding:0 12px;
+    gap:6px;
+    height:var(--topbar);
+  }
+  /* إخفاء بعض عناصر الـ topbar */
+  #topbar .tb-btn:not(:first-child):not(#alert-btn){ display:none }
+  .tb-bread #tb-sec{ display:none }
+  .tb-bread #tb-pg{ font-size:14px }
+
+  /* User chip → مختصر */
+  .usr-chip>div{ display:none }
+  .usr-chip{ padding:4px }
+
+  /* ── Page ─────────────────────────────────────────────── */
+  #page{
+    padding:12px;
+    padding-bottom:70px; /* مساحة لـ bottom nav */
+  }
+
+  /* ── Page Header ──────────────────────────────────────── */
+  .ph{
+    flex-direction:column;
+    gap:10px;
+    margin-bottom:14px;
+  }
+  .ph h1{ font-size:17px }
+  .ph-act{ width:100%; justify-content:flex-end }
+
+  /* ── Stats Grid ───────────────────────────────────────── */
+  .sg4,.sg3{ grid-template-columns:repeat(2,1fr); gap:8px }
+  .sg2{ grid-template-columns:1fr 1fr; gap:8px }
+  .sc{ padding:12px 14px }
+  .sc .vl{ font-size:22px }
+
+  /* ── Cards ────────────────────────────────────────────── */
+  .card{ padding:14px; margin-bottom:10px }
+
+  /* ── Forms ────────────────────────────────────────────── */
+  .fgr,.fg2{ grid-template-columns:1fr }
+  .inp{ font-size:16px } /* يمنع zoom في iOS */
+
+  /* ── Tabs ─────────────────────────────────────────────── */
+  .tabs{
+    overflow-x:auto;
+    flex-wrap:nowrap;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+    padding-bottom:2px;
+  }
+  .tabs::-webkit-scrollbar{ display:none }
+  .tab{ white-space:nowrap; padding:8px 12px; font-size:12px }
+
+  /* ── Table ────────────────────────────────────────────── */
+  .tw{ overflow-x:auto; -webkit-overflow-scrolling:touch }
+  table{ min-width:550px }
+  th,td{ padding:8px 10px }
+
+  /* ── Modal ────────────────────────────────────────────── */
+  #ov{ padding:0; align-items:flex-end }
+  .modal{
+    border-radius:16px 16px 0 0;
+    max-height:92vh;
+    width:100% !important;
+    max-width:100% !important;
+    animation:slideUp .25s cubic-bezier(.4,0,.2,1);
+  }
+  .mb{ padding:16px }
+  .mh{ padding:14px 16px }
+  .mf{ padding:12px 16px }
+
+  /* ── Buttons ──────────────────────────────────────────── */
+  .btn{ min-height:40px }
+  .btn.bsm{ min-height:34px }
+
+  /* ── Bottom nav ───────────────────────────────────────── */
+  #bottom-nav{ display:flex }
+  #ai-fab{ bottom:68px }
+  #ai-panel{ bottom:126px }
+
+  /* ── Co-selector ──────────────────────────────────────── */
+  .co-grid{ grid-template-columns:1fr 1fr; gap:10px }
+  .co-logo h1{ font-size:24px }
+
+  /* ── Login ────────────────────────────────────────────── */
+  .lg-box{ padding:24px 20px; margin:16px }
+}
+
+/* ─────────────────────────────────────────────────────────
+   SMALL MOBILE  < 380px
+   ───────────────────────────────────────────────────────── */
+@media(max-width:380px){
+  .sg4,.sg3,.sg2{ grid-template-columns:1fr }
+  .co-grid{ grid-template-columns:1fr }
+  .ph h1{ font-size:15px }
+}
+
+/* ── Animation للـ modal على mobile ─────────────────────── */
+@keyframes slideUp{
+  from{ transform:translateY(100%) }
+  to  { transform:translateY(0) }
+}
+
+.bn-item{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2px;flex:1;padding:6px 4px;cursor:pointer;
+  color:var(--muted);transition:color .15s;
+}
+.bn-item:active,.bn-item.on{ color:var(--green) }
+.bn-icon{ font-size:18px;line-height:1 }
+.bn-lbl{ font-size:10px;font-weight:600;white-space:nowrap }
 </style>
 </head>
 <body>
@@ -248,6 +436,33 @@ code{font-family:var(--mono);font-size:12px;background:var(--bg3);padding:1px 6p
       </div>
     </div>
     <div id="page"></div>
+  </div>
+</div>
+
+<!-- Sidebar overlay (mobile) -->
+<div id="sb-overlay" onclick="closeSidebar()"></div>
+
+<!-- Bottom nav (mobile) -->
+<div id="bottom-nav">
+  <div class="bn-item" onclick="go('dashboard')" id="bn-dashboard">
+    <div class="bn-icon">⊞</div>
+    <div class="bn-lbl">الرئيسية</div>
+  </div>
+  <div class="bn-item" onclick="go('company-info')" id="bn-company">
+    <div class="bn-icon">⌂</div>
+    <div class="bn-lbl">الشركة</div>
+  </div>
+  <div class="bn-item" onclick="go('drug-reg')" id="bn-drug">
+    <div class="bn-icon">✦</div>
+    <div class="bn-lbl">التسجيل</div>
+  </div>
+  <div class="bn-item" onclick="go('materials')" id="bn-mat">
+    <div class="bn-icon">⬡</div>
+    <div class="bn-lbl">المواد</div>
+  </div>
+  <div class="bn-item" onclick="toggleSidebar()" id="bn-more">
+    <div class="bn-icon">⋯</div>
+    <div class="bn-lbl">المزيد</div>
   </div>
 </div>
 
@@ -794,7 +1009,13 @@ function go(id){
   fn ? fn() : comingSoon(id);
 }
 
-function toggleSB(){ document.getElementById('sidebar').classList.toggle('collapsed'); }
+function toggleSB(){
+  if(window.innerWidth < 768){
+    toggleSidebar();
+  } else {
+    document.getElementById('sidebar').classList.toggle('collapsed');
+  }
+}
 
 // ══════════════════════════════════════════════
 // SECTION 6 — UI HELPERS
@@ -2034,7 +2255,36 @@ async function initApp(){
   go('dashboard');
 }
 
-// Boot
+
+// ── Mobile sidebar functions ─────────────────────────────────
+function openSidebar(){
+  document.getElementById('sidebar')?.classList.add('open');
+  document.getElementById('sb-overlay')?.classList.add('show');
+  document.body.style.overflow='hidden';
+}
+function closeSidebar(){
+  document.getElementById('sidebar')?.classList.remove('open');
+  document.getElementById('sb-overlay')?.classList.remove('show');
+  document.body.style.overflow='';
+}
+function toggleSidebar(){
+  const sb=document.getElementById('sidebar');
+  if(sb?.classList.contains('open')) closeSidebar();
+  else openSidebar();
+}
+
+// تحديث bottom nav active state
+function updateBottomNav(pageId){
+  document.querySelectorAll('.bn-item').forEach(el=>el.classList.remove('on'));
+  const map={dashboard:'bn-dashboard','company-info':'bn-company','drug-reg':'bn-drug',materials:'bn-mat'};
+  const target=document.getElementById(map[pageId]);
+  if(target) target.classList.add('on');
+}
+
+// Close sidebar on nav click (mobile)
+const _origGo = typeof go === 'function' ? go : null;
+
+// ── Boot
 (function boot(){
   document.getElementById('co-sc').classList.add('show');
   renderCos();
